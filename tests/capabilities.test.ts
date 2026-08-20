@@ -41,9 +41,11 @@ describe("creator setup inspection", () => {
       join(subtitleRoot, "scripts", "review_subtitles.py"),
       join(coverRoot, "scripts", "generate_oil_cover.py"),
       join(bin, "ego-browser"),
+      join(bin, "openscreen"),
     ];
     await Promise.all(files.map((path) => writeFile(path, "")));
     await chmod(join(bin, "ego-browser"), 0o755);
+    await chmod(join(bin, "openscreen"), 0o755);
 
     const result = await inspectCreatorSetup({
       libraryRoot,
@@ -60,6 +62,10 @@ describe("creator setup inspection", () => {
     expect(result.capabilities.subtitleSkill.state).toBe("ready");
     expect(result.capabilities.coverSkill.state).toBe("ready");
     expect(result.capabilities.publishSync.path).toBe(join(bin, "ego-browser"));
+    expect(result.capabilities.openScreen).toMatchObject({
+      state: "ready",
+      path: join(bin, "openscreen"),
+    });
     expect(result.capabilities.screenStudio.state).toBe("unsupported");
     expect(result.capabilities.editingSkill.state).toBe("ready");
     expect(result.capabilities.editingSkill.path).toBe(join(root, "skills", "screen-studio-editor"));

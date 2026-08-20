@@ -916,8 +916,10 @@ export class OilCreatorService extends TypertRemoteService {
     signal.throwIfAborted();
     const item = await this.find(request.id);
     if (item === undefined) throw new Error(`content not found: ${request.id}`);
-    if (item.studioPath === undefined) throw new Error("no Screen Studio project bound");
-    if (process.platform !== "darwin") throw new Error("Screen Studio is only supported on macOS");
+    if (item.studioPath === undefined) throw new Error("no recording project bound");
+    if (item.studioPath.toLowerCase().endsWith(".screenstudio") && process.platform !== "darwin") {
+      throw new Error("Screen Studio is only supported on macOS");
+    }
     await openExternalPath(item.studioPath);
     return this.getContent({ id: request.id }, signal);
   }
@@ -1016,11 +1018,24 @@ function envForGenerateStep(
 
 async function resolveStudioPath(path: string): Promise<string> {
   const info = await stat(path).catch(() => undefined);
-  if (info === undefined) throw new Error("Screen Studio project missing");
-  if (path.endsWith(".screenstudio")) return path;
+  if (info === undefined) throw new Error("recording project missing");
+  const lowerPath = path.toLowerCase();
+  if (lowerPath.endsWith(".screenstudio")) return path;
+  if (info.isFile() && lowerPath.endsWith(".openscreen")) return path;
   const project = join(path, "project.json");
   if (await pathExists(project)) return path;
-  throw new Error("not a Screen Studio project");
+  if (info.isDirectory()) {
+    const openScreenProjects = (await readdir(path).catch(() => []))
+      .filter((name) => name.toLowerCase().endsWith(".openscreen"))
+      .sort();
+    if (openScreenProjects.length === 1 && openScreenProjects[0] !== undefined) {
+      return join(path, openScreenProjects[0]);
+    }
+    if (openScreenProjects.length > 1) {
+      throw new Error("multiple OpenScreen projects found; bind the .openscreen file path explicitly");
+    }
+  }
+  throw new Error("not a supported recording project");
 }
 
 const JOB_FIELDS = ["burn", "subtitleJob", "coverJob"] as const;

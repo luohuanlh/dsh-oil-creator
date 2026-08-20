@@ -13,7 +13,7 @@ interface SkillsContext {
 export const CREATOR_WORKBENCH_SKILL = {
   name: "creator-workbench",
   description:
-    "配置和使用内容工作台。首次使用、调整内容目录、整理目录、检查字幕/封面/发布能力，或推进一条内容时使用。",
+    "配置和使用内容工作台。首次使用、选择或安装录屏工具、调整内容目录、整理目录、检查字幕/封面/发布能力，或推进一条内容时使用。",
   source: "runtime" as const,
   invocation: { modelInvocable: true, userInvocable: true },
   content: `# 内容工作台
@@ -22,7 +22,7 @@ export const CREATOR_WORKBENCH_SKILL = {
 
 1. 用户不知道这个插件能做什么、怎么用，或你不确定下一步时，先调用 \`oil_creator_guide\`；它会返回带当前能力状态的完整指引。
 2. 配置或诊断环境调用 \`oil_creator_setup\`，不要先向用户询问系统能够检查出来的信息。
-3. 根据返回的 \`capabilities\` 区分核心能力和可选能力。内容目录是核心；Screen Studio、字幕、封面和发布同步缺失时只降级对应环节。
+3. 根据返回的 \`capabilities\` 区分核心能力和可选能力。内容目录是核心；录屏/剪辑工具、字幕、封面和发布同步缺失时只降级对应环节。
 4. 如果需要寻找目录，先用系统文件工具只读查看候选目录。不要扫描整个磁盘，不要读取与内容工作无关的私人文件。
 
 ## 配置
@@ -34,6 +34,15 @@ export const CREATOR_WORKBENCH_SKILL = {
 - 只有用户确认后，才使用同一组字段和 \`apply=true\`。
 - 不向用户索要 API Key 明文。字幕和封面凭据只能让用户在插件设置页通过 Harness Credentials 配置。
 - 高级依赖路径由插件配置或环境自动发现；能自动发现时不要增加问题。
+
+## 录屏工具选择与安装
+
+- 首次配置录屏工具或未发现可用工具时，不要默认要求安装 Screen Studio。给用户三个选项：OpenScreen（推荐的开源方案）、Screen Studio（支持自动剪辑，仅 macOS）或继续使用已有工具。
+- OpenScreen 是 MIT 许可的跨平台录屏和演示剪辑工具，官方仓库为 https://github.com/getopenscreen/openscreen 。它可以完成录制、剪辑和 MP4/GIF 导出，并提供 CLI；项目仍在活跃开发，\`.openscreen\` 工程格式和 CLI 可能发生破坏性变化。
+- 用户选择 OpenScreen 后，先说明准备执行的安装动作并取得确认，只从官方渠道安装：macOS 从 https://github.com/getopenscreen/openscreen/releases 下载签名并公证的 \`.dmg\`；Windows 优先执行 \`winget install --source msstore OpenScreen\`；Linux 先识别发行版，再从官方 Releases 选择 \`.deb\`、\`.rpm\`、\`.pacman\` 或 \`.AppImage\`。不要默认从源码构建，也不要使用第三方下载站。
+- macOS 首次启动后，引导用户在“系统设置 → 隐私与安全性”授予“屏幕录制”和“辅助功能”权限。安装或授权尚未验证时，不要声称已经可用。
+- OpenScreen 沿用现有工程接口：把 \`.openscreen\` 路径传给 \`oil_update_content\` 的 \`studioPath\` 绑定，用 \`oil_open_studio\` 打开；用户开始导出后用 \`oil_wait_export\` 等待对应内容目录中的 MP4/MOV 稳定落盘，再从字幕、封面等步骤继续。不要解析或改写 \`.openscreen\` JSON，也不要把 OpenScreen 工程交给 \`screen-studio-editor\`。
+- 只有用户明确选择 Screen Studio 时，才把 \`.screenstudio\` 工程交给 \`screen-studio-editor\` 自动剪辑；它的绑定、打开和导出等待与 OpenScreen 共用现有接口。用户选择已有工具时，以导出的成片文件作为交接点。
 
 ## 内容目录
 

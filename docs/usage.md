@@ -4,11 +4,11 @@ DeepSeek Harness 打开后，左侧切到「内容」，中间是一条片子的
 
 ## 对话工具能不能走完整条片子
 
-不能。片子的正文在影片目录的文件夹里，对话用系统自带的列文件、读文件、写文件去看和改。`oil_*` 只做文件做不到的事：按约定建文件夹、绑工程、等导出、生成或烧录字幕、生成封面、标记发布、同步已发布数据。它们不负责录屏、剪时间线、从 Screen Studio 导出成片、写四平台发布包、把视频上传到创作者后台，也不负责公众号成稿。
+不能。片子的正文在影片目录的文件夹里，对话用系统自带的列文件、读文件、写文件去看和改。`oil_*` 只做文件做不到的事：按约定建文件夹、绑工程、等导出、生成或烧录字幕、生成封面、标记发布、同步已发布数据。它们不负责录屏、剪时间线、从 OpenScreen / Screen Studio 导出成片、写四平台发布包、把视频上传到创作者后台，也不负责公众号成稿。
 
 人仍然要自己完成这几件：
 
-- 在 Screen Studio 里录制，并亲手导出 MP4
+- 在 OpenScreen（推荐）或 Screen Studio 里录制，并亲手导出 MP4/MOV
 - 在字幕预览里确认专有名词后再烧录
 - 看封面标题和错别字，决定要不要再生成
 - 在各平台点最终「发表」
@@ -46,7 +46,7 @@ DeepSeek Harness 打开后，左侧切到「内容」，中间是一条片子的
 | `oil_creator_setup` | 只读检查环境，或先预览、确认后保存目录和启用平台 |
 | `oil_create_content` | 按今天的日期新建文件夹 |
 | `oil_update_content` | 标记待录制、绑定工程、改某一平台的发布标记 |
-| `oil_open_studio` | 打开已绑定的 Screen Studio 工程 |
+| `oil_open_studio` | 打开已绑定的 `.openscreen` 或 `.screenstudio` 工程 |
 | `oil_wait_export` | 等到文件夹里出现稳定的 MP4 / MOV |
 | `oil_generate_subtitles` | 转录、自动校对、排版；立刻返回；完成后打开预览，出现 `subtitle-transcript.json`，不烧录 |
 | `oil_open_subtitle_preview` | 在浏览器打开字幕预览编辑器 |
@@ -64,9 +64,9 @@ DeepSeek Harness 打开后，左侧切到「内容」，中间是一条片子的
 
 对应工具是 `oil_create_content`。选题写进这一期的 `topic.md`，脚本写进 `script.md`，也可以之后在中间「脚本」页自己改。
 
-录制用 Screen Studio。录完把 `.screenstudio` 工程绑到这一期，可以说：「把刚才的工程绑到这条，然后打开。」检查器里也可以点绑定或打开。
+录制优先使用开源跨平台的 OpenScreen，也保留 Screen Studio。录完把 `.openscreen` 或 `.screenstudio` 工程绑到这一期，可以说：「把刚才的工程绑到这条，然后打开。」检查器的目录选择器可选择只包含一个 `.openscreen` 文件的目录；对话工具也可直接传工程文件路径。
 
-剪辑在对话里喊 `screen-studio-editor`，对照绑定的工程清理停顿和误讲。工作台只负责打开工程，不替你改时间线。预览满意后，在 Screen Studio 里亲手导出 MP4，导出目标就是这一期的文件夹。
+OpenScreen 工程在 OpenScreen 中剪辑；`.screenstudio` 工程仍可在对话里喊 `screen-studio-editor` 清理停顿和误讲。工作台只负责打开工程，不替你改时间线。预览满意后，在对应工具里亲手导出 MP4/MOV，导出目标就是这一期的文件夹。
 
 导出开始后说：「等这条的成片落盘，落盘后生成字幕和封面。」`oil_wait_export` 会等到文件大小稳定。成片到了再用 `oil_generate_subtitles` 出字幕稿并打开预览；用户确认后再 `oil_burn_subtitles`。封面用 `oil_generate_cover`，调用前先按 oil-cover 提炼主标题传入 `title`。生成后要在对话里核对标题和错别字，不对就再说一次生成。
 
@@ -83,7 +83,7 @@ DeepSeek Harness 打开后，左侧切到「内容」，中间是一条片子的
 常见说法：
 
 - 「这条还缺什么，缺的就做。」
-- 「绑定这个工程：`~/Screen Studio Projects/...`」
+- 「绑定这个工程：`~/OpenScreen Projects/demo.openscreen`」
 - 「生成字幕，完了打开预览。」
 - 「字幕我看过了，烧进去。」
 - 「再生成一版封面。」
@@ -99,6 +99,6 @@ DeepSeek Harness 打开后，左侧切到「内容」，中间是一条片子的
 
 ## 设置和目录
 
-第一次用先让 AI 检查环境，再确认影片目录。字幕、封面、Screen Studio 和 Ego Lite 都是可选能力，缺少时不会影响片库和脚本管理。字幕和封面没有 Key 时，对应按钮会提示去设置里填写。有成片后，检查器里可以生成字幕稿并打开预览，确认后再烧录；封面也可以在检查器里生成，不用再走对话。
+第一次用先让 AI 检查环境，再确认影片目录。字幕、封面、OpenScreen、Screen Studio 和 Ego Lite 都是可选能力，缺少时不会影响片库和脚本管理。字幕和封面没有 Key 时，对应按钮会提示去设置里填写。有成片后，检查器里可以生成字幕稿并打开预览，确认后再烧录；封面也可以在检查器里生成，不用再走对话。
 
 文件夹名被连字符弄乱时，可以说：「预览整理影片目录。」确认后再让它真正重命名。`oil_organize_library` 默认只预览，不会删文件。

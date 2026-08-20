@@ -22,5 +22,14 @@ describe("creator-workbench skill", () => {
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("候选内容目录不存在时");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("用户确认后");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("最终发表必须由用户明确确认");
+    expect(CREATOR_WORKBENCH_SKILL.description).toContain("选择或安装录屏工具");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("OpenScreen（推荐的开源方案）");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("https://github.com/getopenscreen/openscreen/releases");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("winget install --source msstore OpenScreen");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("把 `.openscreen` 路径传给 `oil_update_content`");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("`oil_open_studio` 打开");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("`oil_wait_export` 等待");
+    expect(CREATOR_WORKBENCH_SKILL.content).not.toContain("不是现有 Screen Studio 集成的等价后端");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("只有用户明确选择 Screen Studio 时");
   });
 });

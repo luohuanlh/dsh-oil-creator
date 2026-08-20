@@ -3,3 +3,6 @@ lib
 .DS_Store
 assets/readme/hero.png
 assets/readme/source/
+
+# Serena 本地项目配置
+/.serena/

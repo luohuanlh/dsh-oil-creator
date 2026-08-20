@@ -74,6 +74,37 @@ async function screenStudioCapability(
   return capability("missing", false, "未发现 Screen Studio；绑定工程、自动剪辑（screen-studio-editor）不可用。");
 }
 
+async function openScreenCapability(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  home: string,
+): Promise<CreatorCapability> {
+  const command = platform === "win32" ? "Openscreen" : "openscreen";
+  const executable = await findExecutable(command, env, platform, home);
+  if (executable !== undefined) {
+    return capability("ready", false, "已发现 OpenScreen，可绑定、打开工程并衔接导出成片。", executable);
+  }
+  if (platform === "darwin") {
+    const candidates = [
+      join(home, "Applications", "Openscreen.app"),
+      join(home, "Applications", "OpenScreen.app"),
+    ];
+    if (home === homedir()) {
+      candidates.unshift("/Applications/Openscreen.app", "/Applications/OpenScreen.app");
+    }
+    for (const path of candidates) {
+      if (await access(path).then(() => true, () => false)) {
+        return capability("ready", false, "已发现 OpenScreen，可绑定、打开工程并衔接导出成片。", path);
+      }
+    }
+  }
+  return capability(
+    "missing",
+    false,
+    "未发现 OpenScreen；可从官方 Releases 安装，片库和其他能力不受影响。",
+  );
+}
+
 async function subtitleCapability(
   path: string,
   platform: NodeJS.Platform,
@@ -186,6 +217,9 @@ function egoCapability(found: { path: string; kind: "cli" | "app" } | undefined)
 function recommendationsOf(capabilities: CreatorCapabilities): string[] {
   const recommendations: string[] = [];
   if (capabilities.library.state !== "ready") recommendations.push("先选择一个可读写的内容目录。");
+  if (capabilities.openScreen.state !== "ready" && capabilities.screenStudio.state !== "ready") {
+    recommendations.push("录屏与剪辑：优先安装 OpenScreen（https://github.com/getopenscreen/openscreen/releases），也可继续使用已有工具。");
+  }
   if (capabilities.screenStudio.state === "missing") recommendations.push("需要录屏和自动剪辑时再安装 Screen Studio（screen.studio，仅 macOS）。");
   if (capabilities.subtitleSkill.state !== "ready") {
     const installedPath = capabilities.subtitleSkill.path;
@@ -222,6 +256,7 @@ export async function inspectCreatorSetup(
   const findSkillDir = options.findSkillDir ?? ((name: string) => defaultFindSkillDir(name, home));
   const capabilities: CreatorCapabilities = {
     library: await libraryCapability(options.libraryRoot),
+    openScreen: await openScreenCapability(platform, env, home),
     screenStudio: await screenStudioCapability(platform, home),
     subtitleSkill: await subtitleCapability(options.subtitleSkillDir, platform),
     subtitleCredential: credentialCapability(options.settings.secrets.subtitle, "字幕"),

@@ -32,6 +32,7 @@ const EMPTY_PROFILE: CreatorProfile = { enabledPlatforms: [...PUBLISH_PLATFORMS]
 
 const CAPABILITY_ROWS: ReadonlyArray<{ id: keyof CreatorCapabilities; label: CreatorKey }> = [
   { id: "library", label: "settings.capability.library" },
+  { id: "openScreen", label: "settings.capability.openScreen" },
   { id: "screenStudio", label: "settings.capability.screenStudio" },
   { id: "subtitleSkill", label: "settings.capability.subtitle" },
   { id: "coverSkill", label: "settings.capability.cover" },

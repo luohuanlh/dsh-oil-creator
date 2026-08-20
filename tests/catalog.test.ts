@@ -240,6 +240,19 @@ describe("folderDateMs", () => {
 });
 
 describe("scanLibrary", () => {
+  it("自动识别内容目录中的 OpenScreen 工程", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dsh-oil-openscreen-"));
+    const folder = join(root, "2026-08-20_demo");
+    const projectPath = join(folder, "demo.openscreen");
+    await mkdir(folder);
+    await writeFile(projectPath, "{}\n");
+
+    const items = await scanLibrary(root, emptyOverlay());
+
+    expect(items[0]?.studioPath).toBe(projectPath);
+    expect(items[0]?.workflow).toBe("cut");
+  });
+
   it("reads one content folder", async () => {
     const root = await mkdtemp(join(tmpdir(), "dsh-oil-creator-"));
     const folder = join(root, "2026-01-23_demo");

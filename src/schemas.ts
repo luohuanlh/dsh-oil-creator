@@ -243,6 +243,7 @@ const capabilitySchema = z.object({
 export const capabilitiesResultSchema = z.object({
   capabilities: z.object({
     library: capabilitySchema,
+    openScreen: capabilitySchema,
     screenStudio: capabilitySchema,
     subtitleSkill: capabilitySchema,
     subtitleCredential: capabilitySchema,

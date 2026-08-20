@@ -8,7 +8,7 @@
 </p>
 
 > [!NOTE]
-> 当前兼容 Node.js 22.19+、DeepSeek Harness `0.1.0-rc.6` / `0.1.0-rc.7`。核心片库可独立使用；Screen Studio、字幕、封面、公众号和发布能力均可按需安装。
+> 当前兼容 Node.js 22.19+、DeepSeek Harness `0.1.0-rc.6` / `0.1.0-rc.7`。核心片库可独立使用；OpenScreen、Screen Studio、字幕、封面、公众号和发布能力均可按需安装。
 
 ## 一条片子，就是一个文件夹
 
@@ -36,7 +36,7 @@
 | 阶段 | AI 与插件可以做什么 | 仍由人确认什么 |
 | --- | --- | --- |
 | 选题与脚本 | 新建规范目录，读写 `topic.md` / `script.md`，遵守长期脚本规则 | 选题方向和最终表达 |
-| 录制与剪辑 | 绑定并打开 Screen Studio 工程，等待导出文件稳定落盘 | 录制、时间线剪辑和导出 |
+| 录制与剪辑 | 绑定并打开 OpenScreen / Screen Studio 工程，等待导出文件稳定落盘 | 录制、时间线剪辑和导出 |
 | 字幕与封面 | 启动字幕工作流，打开预览，烧录字幕，生成三种画幅封面 | 专有名词、标题和错别字 |
 | 发布 | 把本地材料交给 `video-publisher` 准备多平台草稿 | 各平台最终“发表”按钮 |
 | 数据回收 | 通过 Ego Browser 同步已发布作品的播放、赞、评和链接 | 登录状态和异常匹配结果 |
@@ -86,7 +86,7 @@ npx @deepseek-ai/dsh plugin --profile web add --allow-build=dsh-oil-creator gith
 内置 `creator-workbench` Skill 会先调用只读的 `oil_creator_setup`：
 
 1. 寻找已有的内容目录。
-2. 检查 Screen Studio、字幕、封面和 Ego Browser 等可选能力。
+2. 检查 OpenScreen、Screen Studio、字幕、封面和 Ego Browser 等可选能力。
 3. 只报告凭据是否已配置，不把 API Key 读回对话。
 4. 先预览配置变化，得到确认后才保存。
 
@@ -98,7 +98,7 @@ npx @deepseek-ai/dsh plugin --profile web add --allow-build=dsh-oil-creator gith
 
 > 今天做一期 DeepSeek Harness 安装上手。新建内容目录，把选题写进笔记，再给我一个脚本初稿。
 
-随后继续说“绑定刚才的 Screen Studio 工程”“等待成片后生成字幕和封面”或“这条还缺什么”。工作台会根据文件夹里的真实产物推进阶段。
+随后继续说“绑定刚才的 OpenScreen 工程”“等待成片后生成字幕和封面”或“这条还缺什么”。工作台会根据文件夹里的真实产物推进阶段。
 
 ## 核心能力
 
@@ -118,6 +118,7 @@ npx @deepseek-ai/dsh plugin --profile web add --allow-build=dsh-oil-creator gith
 
 | 能力 | 可选依赖 | 说明 |
 | --- | --- | --- |
+| 开源录屏与剪辑 | [OpenScreen](https://github.com/getopenscreen/openscreen/releases) | 推荐的跨平台方案；支持 `.openscreen` 绑定、打开和导出等待 |
 | 字幕转录、排版、预览和烧录 | [oil-subtitle](https://github.com/oil-oil/oil-subtitle) + `DASHSCOPE_API_KEY` | 首次 clone 后必须运行 `bash ~/.agents/skills/oil-subtitle/setup.sh`；Key 在[百炼控制台](https://bailian.console.aliyun.com)申请 |
 | 三画幅封面 | [oil-cover](https://github.com/oil-oil/oil-cover) + `ZENMUX_API_KEY` | Key 在 [ZenMux](https://zenmux.ai) 申请 |
 | Screen Studio 自动剪辑 | [screen-studio-editor](https://github.com/oil-oil/screen-studio-editor) | 仅 macOS；录制和导出仍在 Screen Studio 完成 |

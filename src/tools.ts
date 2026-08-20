@@ -145,13 +145,13 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
   ctx.tools.register(defineTool({
     name: "oil_update_content",
     description:
-      "Write overlay-only marks for one episode: readyToRecord, bind a Screen Studio project, "
+      "Write overlay-only marks for one episode: readyToRecord, bind an OpenScreen or Screen Studio project, "
       + "or set a platform publish status. To change topic.md or script.md, write those files "
       + "in the episode folder with the built-in file tools.",
     parameters: {
       id: { type: "string", required: true, description: "Folder id." },
       readyToRecord: { type: "boolean", description: "True moves idle content to 待录制." },
-      studioPath: { type: "string", description: "Bind a .screenstudio project to this episode." },
+      studioPath: { type: "string", description: "Bind a .openscreen or .screenstudio project to this episode." },
       publishPlatform: {
         type: "string",
         enum: PUBLISH_PLATFORMS,
@@ -307,7 +307,7 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
   ctx.tools.register(defineTool({
     name: "oil_open_studio",
     description:
-      "Open the bound Screen Studio project for this episode so the user can review and export.",
+      "Open the bound OpenScreen or Screen Studio project for this episode so the user can review and export.",
     parameters: {
       id: { type: "string", required: true, description: "Folder id." },
     },
@@ -315,10 +315,10 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
       schema: JSON_VALUE,
       render: (_args, value) => {
         const record = value as { title?: string; id?: string };
-        return compactText("Open Studio", record.title || record.id || "");
+        return compactText("Open project", record.title || record.id || "");
       },
     },
-    presentCall: (args) => present("Open Studio", args),
+    presentCall: (args) => present("Open project", args),
     execute: async (args, exec) => {
       if (args.id === "") throw new Error("id is required");
       return asJson(await service.openStudio({ id: args.id }, signalOf(exec)));
@@ -328,7 +328,7 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
   ctx.tools.register(defineTool({
     name: "oil_wait_export",
     description:
-      "Start watching the episode folder for a finished MP4/MOV (Screen Studio export) and return immediately. "
+      "Start watching the episode folder for a finished MP4/MOV export and return immediately. "
       + "When the file is stable, the folder has the video and waitingForExport clears. "
       + "If the wait times out, waitingForExport stays and exportTimedOut is true. "
       + "Do not block this call. After starting, poll files or getContent instead of waiting here.",

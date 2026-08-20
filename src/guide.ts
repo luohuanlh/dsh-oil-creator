@@ -67,6 +67,7 @@ export function creatorGuideText(status: CreatorSetupStatus): string {
     "",
     "## 当前能力状态",
     capabilityLine("内容目录（核心）", capabilities.library),
+    capabilityLine("OpenScreen 工程", capabilities.openScreen),
     capabilityLine("Screen Studio 工程", capabilities.screenStudio),
     capabilityLine("字幕工作流 oil-subtitle", capabilities.subtitleSkill),
     capabilityLine("字幕凭据 DASHSCOPE_API_KEY", capabilities.subtitleCredential),
@@ -99,13 +100,18 @@ export function creatorGuideText(status: CreatorSetupStatus): string {
     ...coverLines(capabilities),
     "",
     "## 录制与剪辑",
-    "- Screen Studio 是录制和自动剪辑的共同前提（仅 macOS）：录制和导出成片由用户在 Screen Studio 里亲手完成；剪辑走外部 skill screen-studio-editor，它操作的是 .screenstudio 工程。",
+    "- OpenScreen 是推荐的开源跨平台方案，Screen Studio 是保留的 macOS 深度集成。两者都沿用 studioPath 绑定、oil_open_studio 打开和 oil_wait_export 等待 MP4/MOV 落盘；录制、剪辑和导出仍由用户确认并执行。",
+    capabilities.openScreen.state === "ready"
+      ? "- 当前已发现 OpenScreen。用 oil_update_content 绑定 .openscreen 工程，oil_open_studio 打开；导出目标设为对应内容目录，再用 oil_wait_export 等待成片落盘。"
+      : "- 当前未发现 OpenScreen。用户选择开源方案时，从 https://github.com/getopenscreen/openscreen/releases 安装；安装属于外部变更，先说明动作并取得确认。",
     capabilities.screenStudio.state === "ready"
-      ? "- 当前已发现 Screen Studio。用 oil_update_content 把工程绑到对应一集，oil_open_studio 打开，oil_wait_export 等待成片落盘。"
-      : "- 当前没有可用的 Screen Studio：绑定工程、自动剪辑（screen-studio-editor）和等待导出都不可用。告诉用户需要先装 Screen Studio 并用它录制；如果用户用其他工具剪片，把成片文件放进这一集的文件夹即可跳过这一环节。",
-    capabilities.editingSkill.state === "ready"
+      ? "- 当前已发现 Screen Studio。用 oil_update_content 绑定 .screenstudio 工程；需要时可继续使用 screen-studio-editor 自动剪辑。"
+      : "- 当前没有可用的 Screen Studio：screen-studio-editor 自动剪辑不可用；可改用 OpenScreen 或已有工具，把成片导出到这一集的文件夹即可跳过这一环节。",
+    capabilities.editingSkill.state === "ready" && capabilities.screenStudio.state === "ready"
       ? "- 已发现 screen-studio-editor，用户要求清理时间线时直接使用。"
-      : "- 缺 screen-studio-editor：征得用户同意后执行 `git clone https://github.com/oil-oil/screen-studio-editor ~/.agents/skills/screen-studio-editor`；没有它时剪辑由用户自己完成。",
+      : capabilities.editingSkill.state === "ready"
+        ? "- 已发现 screen-studio-editor，但它只操作 .screenstudio；OpenScreen 工程由用户在 OpenScreen 中剪辑。"
+        : "- 缺 screen-studio-editor：它只影响 Screen Studio 自动剪辑；使用 OpenScreen 时不需要安装。",
     "",
     "## 自动发布与数据回收",
     "- 这两项都依赖 Ego Browser（PATH 里的 ego-browser 命令）和已登录的各平台创作者后台。",

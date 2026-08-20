@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -99,6 +99,139 @@ function item(folderPath: string, videoRaw: string): ContentSummary {
     coverJob: emptyBurn(),
   };
 }
+
+describe("OilCreatorService.bindStudio", () => {
+  it("通过现有 studioPath 接口绑定 OpenScreen 工程", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-service-openscreen-"));
+    const projectPath = join(folder, "demo.openscreen");
+    await writeFile(projectPath, "{}\n");
+    const overlayItem: OverlayItem = {};
+    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
+    const probe = service as unknown as {
+      patchItem: (
+        id: string,
+        patch: (item: OverlayItem) => void,
+        signal: AbortSignal,
+      ) => Promise<ContentDetail>;
+    };
+    probe.patchItem = async (_id, patch) => {
+      patch(overlayItem);
+      return undefined as never;
+    };
+
+    await service.bindStudio(
+      { id: "2026-08-20_demo", path: projectPath },
+      new AbortController().signal,
+    );
+
+    expect(overlayItem.studioPath).toBe(projectPath);
+  });
+
+  it("通过现有目录选择器绑定文件夹内的 OpenScreen 工程", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-service-openscreen-dir-"));
+    const projectPath = join(folder, "demo.openscreen");
+    await writeFile(projectPath, "{}\n");
+    const overlayItem: OverlayItem = {};
+    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
+    const probe = service as unknown as {
+      patchItem: (
+        id: string,
+        patch: (item: OverlayItem) => void,
+        signal: AbortSignal,
+      ) => Promise<ContentDetail>;
+    };
+    probe.patchItem = async (_id, patch) => {
+      patch(overlayItem);
+      return undefined as never;
+    };
+
+    await service.bindStudio(
+      { id: "2026-08-20_demo", path: folder },
+      new AbortController().signal,
+    );
+
+    expect(overlayItem.studioPath).toBe(projectPath);
+  });
+
+  it("在非 macOS 系统通过现有打开接口启动 OpenScreen 工程", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-service-open-openscreen-"));
+    const projectPath = join(folder, "demo.openscreen");
+    const openedPath = join(folder, "opened.txt");
+    const bin = join(folder, "bin");
+    await mkdir(bin);
+    await writeFile(projectPath, "{}\n");
+    await writeFile(
+      join(bin, "xdg-open"),
+      `#!/bin/sh\nprintf '%s' "$1" > '${openedPath}'\n`,
+    );
+    await chmod(join(bin, "xdg-open"), 0o755);
+
+    const bound = item(folder, join(folder, "demo.mp4"));
+    bound.studioPath = projectPath;
+    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
+    const probe = service as unknown as {
+      find: () => Promise<ContentSummary>;
+      getContent: () => Promise<ContentDetail>;
+    };
+    probe.find = async () => bound;
+    probe.getContent = async () => undefined as never;
+    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${bin}:${previousPath ?? ""}`;
+
+    try {
+      await service.openStudio({ id: bound.id }, new AbortController().signal);
+      expect(await readFile(openedPath, "utf8")).toBe(projectPath);
+    } finally {
+      platform.mockRestore();
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
+
+  it("OpenScreen 导出的 MP4 稳定落盘后清除等待状态", async () => {
+    vi.useFakeTimers();
+    const folder = await mkdtemp(join(tmpdir(), "oil-service-openscreen-export-"));
+    const projectPath = join(folder, "demo.openscreen");
+    await writeFile(projectPath, "{}\n");
+    const bound = item(folder, join(folder, "missing.mp4"));
+    delete bound.videoRaw;
+    bound.studioPath = projectPath;
+    const overlayItem: OverlayItem = { studioPath: projectPath };
+    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
+    const probe = service as unknown as {
+      exportWaiters: Map<string, AbortController>;
+      find: () => Promise<ContentSummary>;
+      patchItem: (
+        id: string,
+        patch: (item: OverlayItem) => void,
+        signal: AbortSignal,
+      ) => Promise<ContentDetail>;
+      getContent: () => Promise<ContentDetail>;
+    };
+    probe.exportWaiters = new Map();
+    probe.find = async () => bound;
+    probe.patchItem = async (_id, patch) => {
+      patch(overlayItem);
+      return undefined as never;
+    };
+    probe.getContent = async () => undefined as never;
+
+    try {
+      await writeFile(join(folder, "demo.mp4"), "video");
+      await service.waitForExport({ id: bound.id, timeoutMs: 20_000 }, new AbortController().signal);
+      expect(overlayItem.waitingForExport).toBe(true);
+      for (let tick = 0; tick < 6; tick += 1) {
+        await readFile(projectPath);
+        await vi.advanceTimersByTimeAsync(2_000);
+      }
+      expect(overlayItem.waitingForExport).toBeUndefined();
+      expect(overlayItem.exportTimedOut).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("OilCreatorService.startSubtitleGenerate", () => {
   it("always prepares subtitles without resolving or injecting the cover credential", async () => {

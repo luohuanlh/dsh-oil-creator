@@ -125,6 +125,7 @@ export interface CreatorCapability {
 
 export interface CreatorCapabilities {
   library: CreatorCapability;
+  openScreen: CreatorCapability;
   screenStudio: CreatorCapability;
   subtitleSkill: CreatorCapability;
   subtitleCredential: CreatorCapability;

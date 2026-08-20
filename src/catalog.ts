@@ -263,7 +263,8 @@ async function scanFolder(
       : folderDate;
 
   const overlayItem = overlay.items[folderName];
-  const studioInFolder = names.find((name) => name.endsWith(".screenstudio"));
+  const studioInFolder = names.find((name) => name.toLowerCase().endsWith(".screenstudio"))
+    ?? names.find((name) => name.toLowerCase().endsWith(".openscreen"));
   const studioPath = overlayItem?.studioPath
     ?? (studioInFolder === undefined ? undefined : join(folderPath, studioInFolder));
 

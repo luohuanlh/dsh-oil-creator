@@ -8,6 +8,7 @@ function capability(state: CreatorCapability["state"], detail = ""): CreatorCapa
 }
 
 function statusOf(overrides: {
+  openScreen?: CreatorCapability;
   publishSync?: CreatorCapability;
   scriptRules?: string;
   enabledPlatforms?: Array<"xiaohongshu" | "douyin" | "bilibili" | "wechat">;
@@ -28,6 +29,7 @@ function statusOf(overrides: {
     },
     capabilities: {
       library: capability("ready"),
+      openScreen: overrides.openScreen ?? capability("ready"),
       screenStudio: capability("ready"),
       subtitleSkill: capability("ready"),
       subtitleCredential: capability("ready"),
@@ -107,6 +109,20 @@ describe("creatorGuideText", () => {
     expect(guide).toContain("screen-studio-editor");
     expect(guide).toContain("当前没有可用的 Screen Studio");
     expect(guide).toContain("跳过这一环节");
+  });
+
+  it("在 Screen Studio 缺失时沿现有接口使用 OpenScreen", () => {
+    const status = statusOf({ openScreen: capability("ready", "已发现 OpenScreen。") });
+    status.capabilities.screenStudio = capability("missing", "未发现 Screen Studio。");
+
+    const guide = creatorGuideText(status);
+
+    expect(guide).toContain("当前已发现 OpenScreen");
+    expect(guide).toContain(".openscreen");
+    expect(guide).toContain("oil_update_content");
+    expect(guide).toContain("oil_open_studio");
+    expect(guide).toContain("oil_wait_export");
+    expect(guide).not.toContain("绑定工程、自动剪辑（screen-studio-editor）和等待导出都不可用");
   });
 
   it("covers article transcription without requiring Screen Studio", () => {
