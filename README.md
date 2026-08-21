@@ -1,184 +1,90 @@
-<p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="dsh-oil-creator：让 AI 和本地内容目录一起工作">
-</p>
+# dsh-oil-creator
 
-<p align="center">
-  <strong>DeepSeek Harness 上的本地内容工作台。</strong><br>
-  从选题、脚本、录屏工程到字幕、封面和发布状态，一条片子始终对应一个本地文件夹。
-</p>
+![内容工作台](assets/readme/hero.svg)
 
-> [!NOTE]
-> 当前兼容 Node.js 22.19+、DeepSeek Harness `0.1.0-rc.6` / `0.1.0-rc.7`。核心片库可独立使用；OpenScreen、Screen Studio、字幕、封面、公众号和发布能力均可按需安装。
+一个面向本地创作者的 AI 分发工作台：在 Harness 中选择本地素材和平台，由当前会话的 AI 生成平台变体，再让 Ego Browser 只保存草稿。工作台不会替你点击最终发布。
 
-## 一条片子，就是一个文件夹
+## 工作流
 
-插件不建立封闭的内容数据库。正文和产物仍是普通文件，任何编辑器和 AI 文件工具都能读取：
+概览只显示封面、状态和时间等预览信息。实际操作分别放在“视频”和“图文”页，每页只有两步：
+
+1. **选择内容文件**：视频页选择本地视频和可选字幕；图文页选择 Markdown 和封面，并在当前页预览。
+2. **选择平台并创建草稿**：同一区域显示 Ego 登录状态和草稿状态；点击一次后，Harness AI 生成并冻结平台字段，Ego Browser 上传、填表和保存。只有通过远端回读的平台才显示草稿成功；只达到投稿页 `READY` 的平台会显示“页面已备，尚未远端保存”。
+
+设置页只显示四项环境状态：
+
+- 内容目录
+- 自动发布
+- 公众号图文
+- Ego Browser
+
+## 平台边界
+
+账号目录参考 `dsh-context-flow` 并补充音频平台，包含 B站、抖音、小红书、视频号、快手、头条号、百家号、企鹅号、网易号、一点号、大鱼号、顶端新闻、雪球号、东方财富号、同顺号、搜狐号、微博、知乎、维科网、老虎财经、富途牛牛、微信公众号、网易云音乐、喜马拉雅听，共 24 个入口。
+
+当前可选择的页面适配器为：B站、抖音、小红书、视频号（视频），以及微信公众号（文章 + 封面）。证据等级分别为：B站已完成真实“远端保存 + id 回读”；微信公众号、抖音、小红书和视频号的运行接线已实现并有本地契约测试，但仍待逐平台真实账号回归。后三个视频平台即使运行成功也只写入 `READY` 中间态，不会伪造远端草稿。其他平台只能绑定账号。
+
+## 内容目录约定
+
+推荐结构：
 
 ```text
-~/Movies/视频项目/
-└── 2026-08-19_DeepSeek Harness 上手/
-    ├── topic.md
-    ├── script.md
-    ├── DeepSeek Harness 上手.mp4
-    ├── DeepSeek Harness 上手.srt
-    ├── DeepSeek Harness 上手_subtitled.mp4
-    ├── DeepSeek Harness 上手_3x4.png
-    ├── DeepSeek Harness 上手_4x3.png
-    ├── DeepSeek Harness 上手_16x9.png
-    ├── publish-package.json
+内容目录/
+└── 2026-08-21_示例标题/
+    ├── .oil-content.json
+    ├── take-a.mp4
+    ├── take-b.mov
+    ├── subtitle.srt
+    ├── cover.png
     └── 公众号文章/
+        └── 示例标题.md
 ```
 
-插件只把工程绑定、手写发布标记、同步到的播放数据和生成任务等工作台状态存进 `~/.dsh-oil-creator/overlay.json`，不会把正文复制一份藏起来。
+从侧边栏新建内容时，先单选视频、音频或图文；默认选择视频。工作台只在新目录写入 `.oil-content.json` 保存这个类型，不会生成或移动素材。原始素材仍以磁盘文件夹为准，用户不需要手写 `publish-package.json`；AI 平台变体与本次素材选择会原子冻结到 `.oil-distribution.json`，重试复用同一份内容。
 
-## 一条片子如何向前推进
-
-| 阶段 | AI 与插件可以做什么 | 仍由人确认什么 |
-| --- | --- | --- |
-| 选题与脚本 | 新建规范目录，读写 `topic.md` / `script.md`，遵守长期脚本规则 | 选题方向和最终表达 |
-| 录制与剪辑 | 绑定并打开 OpenScreen / Screen Studio 工程，等待导出文件稳定落盘 | 录制、时间线剪辑和导出 |
-| 字幕与封面 | 启动字幕工作流，打开预览，烧录字幕，生成三种画幅封面 | 专有名词、标题和错别字 |
-| 发布 | 把本地材料交给 `video-publisher` 准备多平台草稿 | 各平台最终“发表”按钮 |
-| 数据回收 | 通过 Ego Browser 同步已发布作品的播放、赞、评和链接 | 登录状态和异常匹配结果 |
-
-工作台不会假装替人完成录制、剪辑或最终发布。它负责把每一步需要的文件、状态和下一步动作放在同一个上下文里。
-
-## 开始使用
-
-### 1. 安装插件
-
-使用 DeepSeek Harness 自带的插件管理命令：
+## 安装
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add github:oil-oil/dsh-oil-creator
+dsh plugin --profile web add dsh-oil-creator
 ```
 
-重启 `web` profile 后即可使用。插件会登记到配置里，不需要手改 Harness 配置。已经全局安装 `dsh` 时，可以去掉命令里的 `npx @deepseek-ai/dsh`。
-
-Harness 从 GitHub 安装时生成的构建包包含 README 引用的最终 `assets/readme/hero.svg`，不会包含 `assets/readme/source/` 下的源素材。
-
-<details>
-<summary>从源码安装</summary>
+卸载：
 
 ```bash
-git clone https://github.com/oil-oil/dsh-oil-creator.git
-cd dsh-oil-creator
-pnpm install --frozen-lockfile
-pnpm build
-npx @deepseek-ai/dsh plugin --profile web add "$PWD"
-npx @deepseek-ai/dsh web
+dsh plugin --profile web remove dsh-oil-creator
 ```
 
-如果 pnpm 明确提示安装期构建被阻止，再带 `--allow-build` 重试；正常安装不需要这一步：
+安装后在 Harness 设置页选择内容目录，并确认 `ego-browser` 可用。视频草稿还需要 `video-publisher` Skill；微信公众号图文适配器已经内置。
+
+## 对话工具
+
+- `oil_creator_guide`：查看当前两步流程和安全边界。
+- `oil_creator_setup`：预览或应用内容目录、创作者档案和启用平台配置。
+- `oil_create_content`：创建一个新的内容子文件夹。
+- `oil_creator_profile`：读取或更新创作者档案。
+- `oil_platform_accounts`：列出、打开或检查 24 个平台账号。
+- `oil_distribution_source`：读取工作台固定的素材选择和平台生成约束。
+- `oil_create_platform_drafts`：冻结 AI 平台变体并启动 Ego 草稿流程。
+- `oil_prepare_drafts`：只重试已经冻结的分发包，不重新生成文案。
+
+## 开发
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add --allow-build=dsh-oil-creator github:oil-oil/dsh-oil-creator
-```
-
-</details>
-
-### 2. 让 AI 完成首次配置
-
-推荐选择 Harness 的 `standard` 或 `code` Agent preset，然后直接说：
-
-> 检查并配置内容工作台，找到适合的内容目录，并告诉我还缺哪些能力。
-
-内置 `creator-workbench` Skill 会先调用只读的 `oil_creator_setup`：
-
-1. 寻找已有的内容目录。
-2. 检查 OpenScreen、Screen Studio、字幕、封面和 Ego Browser 等可选能力。
-3. 只报告凭据是否已配置，不把 API Key 读回对话。
-4. 先预览配置变化，得到确认后才保存。
-
-候选目录不存在时，AI 会先展示准备创建的完整路径；确认创建后再重新预览配置。`minimal` preset 不包含 Skill 和文件工具，不适合首次配置或自动整理目录。
-
-### 3. 做第一条内容
-
-可以直接对 AI 说：
-
-> 今天做一期 DeepSeek Harness 安装上手。新建内容目录，把选题写进笔记，再给我一个脚本初稿。
-
-随后继续说“绑定刚才的 OpenScreen 工程”“等待成片后生成字幕和封面”或“这条还缺什么”。工作台会根据文件夹里的真实产物推进阶段。
-
-## 核心能力
-
-- **本地片库**：按 `日期_可读标题` 扫描目录，展示阶段、成片、字幕、封面、文章和发布状态。
-- **对话上下文**：通过 `@当前详情`、内容搜索或 `/current content` 把目标文件夹交给 AI。
-- **AI 自举配置**：自动发现标准安装路径，缺少能力时给出明确安装方式，写入前必须预览和确认。
-- **长期脚本规则**：保存语气、结构、禁忌和目标观众，之后写或修改 `script.md` 时复用。
-- **长任务追踪**：字幕、封面和烧录启动后立即返回，由工作台继续观察文件产物和任务状态。
-- **目录整理**：预览并修正旧文件夹名称；默认不执行、不删除文件。
-- **可选发布闭环**：准备平台草稿后由人最终发表，再同步播放、点赞、评论和作品链接。
-
-完整工具列表和逐步示例见 [使用说明](docs/usage.md)。
-
-## 可选能力
-
-核心片库和脚本管理不依赖下表中的外部工具。缺少某项时，只关闭对应环节。
-
-| 能力 | 可选依赖 | 说明 |
-| --- | --- | --- |
-| 开源录屏与剪辑 | [OpenScreen](https://github.com/getopenscreen/openscreen/releases) | 推荐的跨平台方案；支持 `.openscreen` 绑定、打开和导出等待 |
-| 字幕转录、排版、预览和烧录 | [oil-subtitle](https://github.com/oil-oil/oil-subtitle) + `DASHSCOPE_API_KEY` | 首次 clone 后必须运行 `bash ~/.agents/skills/oil-subtitle/setup.sh`；Key 在[百炼控制台](https://bailian.console.aliyun.com)申请 |
-| 三画幅封面 | [oil-cover](https://github.com/oil-oil/oil-cover) + `ZENMUX_API_KEY` | Key 在 [ZenMux](https://zenmux.ai) 申请 |
-| Screen Studio 自动剪辑 | [screen-studio-editor](https://github.com/oil-oil/screen-studio-editor) | 仅 macOS；录制和导出仍在 Screen Studio 完成 |
-| 多平台草稿与数据回收 | [Ego Lite](https://lite.ego.app/) + [video-publisher](https://github.com/oil-oil/video-publisher-skill) | 仅 macOS；需要提前登录各平台创作者后台 |
-| 公众号图文 | [oil-video-article](https://github.com/oil-oil/oil-video-article) | 独立工作流，工作台负责展示已有文章 |
-
-字幕和封面 Skill 留空时，插件会依次从 `~/.claude/skills`、`~/.codex/skills`、`~/.agents/skills` 自动发现；只有非标准安装位置才需要填写高级路径。
-
-## 配置原则
-
-设置入口位于 **设置 → 插件 → 内容工作台**。设置页只保留需要人决定的信息，例如内容目录、脚本规则和可选能力凭据；可以通过系统检查发现的路径不重复暴露。
-
-- API Key 使用 Harness 官方凭据服务保存。页面只显示“已配置 / 未配置”，不会回显明文。
-- 内容目录可以换成任意已有的绝对路径，每个直接子文件夹代表一条内容。
-- `enabledPlatforms` 默认全开，包含小红书、抖音、B 站和视频号。关闭的平台不会参与 AI 发布或数据同步；全部关闭时不执行这两项操作。
-- 脚本规则既可以在设置页修改，也可以让 AI 通过 `oil_script_rules` 记录和更新。
-- Cordis 高级配置仍保留 `libraryRoot`、`dataDir`、`subtitleSkillDir` 和 `coverSkillDir`，用于自动发现无法覆盖的特殊环境。
-
-## 数据与权限边界
-
-- 正文、视频、字幕、封面和文章保存在用户选择的本地目录。
-- 插件不会自动上传内容；上传只在用户明确调用发布 Skill 后发生，并停在最终发表前。
-- 字幕、封面和平台同步会访问各自的外部服务；不安装、不配置就不会启用。
-- 目录创建、配置保存和批量重命名都遵循“先预览、再确认、后执行”。
-
-## 卸载
-
-```bash
-npx @deepseek-ai/dsh plugin --profile web remove dsh-oil-creator
-```
-
-安装、卸载或更新配置后重启 `dsh web`。不要手动修改 `~/.dsh/profiles/web/package.json`，也不要把项目的 `cordis.patch.yml` 复制到用户 profile；插件自己的 bundle patch 会负责装配和清理侧栏。
-
-如果旧版本曾在 profile 的 `cordis.patch.yml` 里手动加入以下内容，迁移后应删除，避免卸载插件后官方侧栏仍被关闭：
-
-```yaml
-- id: ui-sidebar
-  disabled: true
-```
-
-## 开发与验证
-
-```bash
-pnpm install --frozen-lockfile
+pnpm install
 pnpm check
 ```
 
-`pnpm check` 会依次运行 TypeScript 检查、Vitest 测试和 Host / Client 构建。欢迎提交 Issue 或 Pull Request；涉及文件格式、配置兼容或外部能力时，请同时补充对应测试和文档。
+`pnpm check` 会依次执行类型检查、测试和构建。插件通过随 npm 包发布的 `dsh.bundle.patch` 接管侧栏入口，不修改用户 profile 文件。
 
-准备推送开源提交或创建 GitHub tag 前运行 `pnpm release:check`。它会先拒绝脏工作树、未跟踪的关键文件或缺失的 `origin`，再验证测试、构建和 GitHub 安装包内容；不会发布到 npm。
+完整的需求—证据对应关系和真实平台回归门槛见 [验证记录](docs/verification.md)。
 
-## 文档
+## 安全约束
 
-- [日常使用与完整工具说明](docs/usage.md)
-- [内容文件夹约定](docs/files.md)
-- [插件实现与兼容性说明](docs/implementation.md)
-
-## 使用问题
-
-安装或使用过程中遇到问题，可以到 [oiloil.org](https://www.oiloil.org/#consulting) 联系我。代码缺陷和功能建议仍然欢迎提交 Issue。
+- Ego Browser 登录步骤始终把页面交还用户操作，工作台不读取密码或验证码。
+- Harness AI 只读取用户明确选择的文件；Ego 不调用模型、不决定文案。
+- 自动化只到草稿；不点击“发布”“发表”“立即投稿”等最终动作。
+- 原创权益确认必须来自用户本次明确确认，不能从素材内容推断。
+- 平台登录可用与草稿适配可用是两项独立状态。
 
 ## License
 
