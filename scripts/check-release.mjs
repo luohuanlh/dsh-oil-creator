@@ -9,7 +9,10 @@ const REQUIRED_FILES = [
   "cordis.patch.yml",
   "tsdown.config.ts",
   "vitest.config.ts",
-  "scripts/collect-publish.mjs",
+  "scripts/platform-account.mjs",
+  "scripts/article-draft.mjs",
+  "scripts/video-draft.mjs",
+  "scripts/video-draft-runner.mjs",
   "scripts/copy-inplace.mjs",
   "scripts/check-release.mjs",
   "src/index.ts",
@@ -18,7 +21,9 @@ const REQUIRED_FILES = [
   "src/capabilities.ts",
   "src/guide.ts",
   "src/platforms.ts",
-  "src/client/publishPlatforms.ts",
+  "src/platformAccounts.ts",
+  "src/draftRunner.ts",
+  "src/articleDraftRunner.ts",
   "src/settingsContract.ts",
   "src/settingsHost.ts",
   "src/client/settingsSlot.ts",
@@ -39,7 +44,10 @@ const RUNTIME_FILES = [
   "lib/index.js",
   "lib/client.js",
   "lib/typert.host.js",
-  "lib/collect-publish.mjs",
+  "lib/platform-account.mjs",
+  "lib/article-draft.mjs",
+  "lib/video-draft.mjs",
+  "lib/video-draft-runner.mjs",
 ];
 
 const GITHUB_REPOSITORY = "https://github.com/oil-oil/dsh-oil-creator";
@@ -118,7 +126,7 @@ function checkRelease(root) {
   }
 
   const scripts = manifest.scripts ?? {};
-  if (scripts.build !== "tsdown && node scripts/copy-inplace.mjs scripts/collect-publish.mjs lib/collect-publish.mjs") {
+  if (scripts.build !== "tsdown && node scripts/copy-inplace.mjs scripts/platform-account.mjs lib/platform-account.mjs && node scripts/copy-inplace.mjs scripts/article-draft.mjs lib/article-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft.mjs lib/video-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft-runner.mjs lib/video-draft-runner.mjs") {
     addFailure("build 脚本不是仓库内可复现的 tsdown + lib 拷贝流程");
   }
   if (scripts.prepare !== "npm run build") {

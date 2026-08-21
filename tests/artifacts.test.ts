@@ -48,6 +48,10 @@ describe("pickers", () => {
     ])).toBe("标题.md");
   });
 
+  it("accepts a finished HTML article", () => {
+    expect(pickArticleFile(["标题.source.html", "标题.html"])).toBe("标题.html");
+  });
+
   it("prefers publish-package.json", () => {
     expect(pickPublishPackage([
       "a.video-publisher.json",

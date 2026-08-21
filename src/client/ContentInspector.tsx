@@ -1,19 +1,26 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  IconBrowseOutline16,
   IconCloseOutline16,
-  IconFolderOpenOutline16,
   MarkdownText,
-  Menu,
-  StateDot,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 
-import { formatCount } from "../collectPublish.ts";
-import { isPublishMark } from "../publishStatus.ts";
 import { rewriteArticleImages } from "../articleMarkdown.ts";
-import type { ArticleMediaResult, ContentDetail, PublishMark, PublishPlatform, SubtitleCue, VideoPlaybackResult, WorkflowStage } from "../types.ts";
-import { CoverThumb, coverThumbRevision } from "./CoverThumb.tsx";
+import { resolveContentType } from "../contentType.ts";
+import {
+  PUBLISH_PLATFORM_DEFINITIONS,
+  supportsAutoDraft,
+} from "../platforms.ts";
+import type {
+  ArticleMediaResult,
+  AssetImportKind,
+  AssetSelection,
+  ContentDetail,
+  ContentType,
+  PlatformAccount,
+  PublishPlatform,
+  VideoPlaybackResult,
+} from "../types.ts";
 import type { CreatorViewFace } from "./face.ts";
 import {
   applyConversationInset,
@@ -24,162 +31,94 @@ import {
   useProfileEpoch,
   useSelectedContentId,
 } from "./contentSelection.ts";
+import { defaultDistributionPlatforms } from "./distributionSelection.ts";
 import type { CreatorKey } from "./locales.ts";
 import { PlatformMark } from "./PlatformMark.tsx";
-import { isPublishSyncDisabled, PUBLISH_UI_PLATFORMS, selectEnabledPublishPlatforms } from "./publishPlatforms.ts";
-import { formatRelativeTime } from "./relativeTime.ts";
-import { WORKFLOW_TONE } from "./sidebar/ContentSidebarPanel.tsx";
 import { ActionBar, ActionButton } from "./ui/ActionButton.tsx";
 import { StatusPill, type StatusTone } from "./ui/StatusPill.tsx";
 import { Surface } from "./ui/Surface.tsx";
 import "./ContentInspector.css";
 
-const TABS = ["overview", "video", "script", "subtitle", "article"] as const;
-type InspectorTab = (typeof TABS)[number];
-
-const PIPELINE_STEPS = [
-  { id: "topic", label: "inspector.step.topic", hint: "inspector.step.topicHint" },
-  { id: "record", label: "inspector.step.record", hint: "inspector.step.recordHint" },
-  { id: "cut", label: "inspector.step.cut", hint: "inspector.step.cutHint" },
-  { id: "finish", label: "inspector.step.finish", hint: "inspector.step.finishHint" },
-  { id: "publish", label: "inspector.step.publish" },
-] as const;
-
-type PipelineStepId = (typeof PIPELINE_STEPS)[number]["id"];
-
-const WORKFLOW_INDEX: Record<WorkflowStage, number> = {
-  idle: 0,
-  record: 1,
-  cut: 2,
-  finish: 3,
-  publish: 4,
-  live: 4,
-};
-
-const PUBLISH_KEY: Record<PublishMark, CreatorKey> = {
-  unpublished: "inspector.publish.unpublished",
-  draft: "inspector.publish.draft",
-  published: "inspector.publish.published",
-};
-
-const PUBLISH_TONE: Record<PublishMark, StatusTone> = {
-  unpublished: "neutral",
-  draft: "pending",
-  published: "success",
-};
-
-const PUBLISH_MARKS: readonly PublishMark[] = ["unpublished", "draft", "published"];
-
-const STAGE_KEY: Record<WorkflowStage, CreatorKey> = {
-  idle: "inspector.stage.idle",
-  record: "inspector.stage.record",
-  cut: "inspector.stage.cut",
-  finish: "inspector.stage.finish",
-  publish: "inspector.stage.publish",
-  live: "inspector.stage.live",
-};
-
-const TAB_KEY: Record<InspectorTab, CreatorKey> = {
-  overview: "inspector.tab.overview",
+const CONTENT_TYPE_KEY: Record<ContentType, CreatorKey> = {
   video: "inspector.tab.video",
-  script: "inspector.tab.script",
-  subtitle: "inspector.tab.subtitle",
+  audio: "inspector.tab.audio",
   article: "inspector.tab.article",
 };
 
-function cuesFromSubtitle(nextSubtitle: { text: string; cues: SubtitleCue[] }): SubtitleCue[] {
-  if (nextSubtitle.cues.length > 0) return nextSubtitle.cues;
-  if (nextSubtitle.text === "") return [];
-  return nextSubtitle.text.split("\n").filter((line) => line.trim() !== "").map((text) => ({ text }));
+const PLATFORM_ICON = {
+  xiaohongshu: "xhs",
+  douyin: "douyin",
+  bilibili: "bilibili",
+  channels: "wechat",
+} as const;
+
+const LOCAL_IMPORT_LIMIT: Record<AssetImportKind, number> = {
+  article: 2 * 1024 * 1024,
+  cover: 20 * 1024 * 1024,
+};
+const ARTICLE_META_MAX = 120;
+
+async function fileBase64(file: File, kind: AssetImportKind): Promise<string> {
+  if (file.size > LOCAL_IMPORT_LIMIT[kind]) {
+    throw new Error(kind === "article"
+      ? "Markdown 文章不能超过 2 MB"
+      : "文章封面不能超过 20 MB");
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 32_768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  }
+  return btoa(binary);
 }
 
 function friendlyError(cause: unknown, t: (key: CreatorKey) => string): string {
   if (cause instanceof Error) {
-    if (cause.message.startsWith("content not found")) return t("empty.gone" as CreatorKey);
+    if (cause.message.startsWith("content not found")) return t("empty.gone");
     return cause.message;
   }
-  return t("empty.error" as CreatorKey);
+  return t("empty.error");
 }
 
-function metricParts(
-  row: { views?: number; likes?: number; comments?: number },
+function draftTone(detail: ContentDetail, platform: PublishPlatform): StatusTone {
+  const row = detail.publish[platform];
+  if (row.draftState === "running") return "active";
+  if (row.draftState === "ready") return "pending";
+  if (row.draftState === "error") return "error";
+  if (row.status === "draft") return "success";
+  return "neutral";
+}
+
+function draftLabel(
+  detail: ContentDetail,
+  platform: PublishPlatform,
   t: (key: CreatorKey) => string,
-): string[] {
-  const parts: string[] = [];
-  if (row.views !== undefined) {
-    parts.push(t("inspector.publish.views").replace("{n}", formatCount(row.views)));
-  }
-  if (row.likes !== undefined) {
-    parts.push(t("inspector.publish.likes").replace("{n}", formatCount(row.likes)));
-  }
-  if (row.comments !== undefined) {
-    parts.push(t("inspector.publish.comments").replace("{n}", formatCount(row.comments)));
-  }
-  return parts;
-}
-
-function JobNote({ tone, children }: { tone?: "running" | "done" | "error"; children: ReactNode }) {
-  return (
-    <div className={tone === undefined ? "jobNote" : `jobNote ${tone}`}>
-      {tone === "running" && <StateDot state="ongoing" size={12} />}
-      {tone === "done" && <StateDot state="done" size={12} />}
-      {tone === "error" && <StateDot state="error" size={12} />}
-      {children}
-    </div>
-  );
-}
-
-function WorkRow({
-  name,
-  status,
-  tone,
-  actions,
-}: {
-  name: string;
-  status: string;
-  tone?: StatusTone;
-  actions?: ReactNode;
-}) {
-  return (
-    <div className="workRow">
-      <div className="workMain">
-        <span className="workName">{name}</span>
-        <StatusPill tone={tone ?? "neutral"}>{status}</StatusPill>
-      </div>
-      {actions !== undefined && <ActionBar>{actions}</ActionBar>}
-    </div>
-  );
+): string {
+  const row = detail.publish[platform];
+  if (row.draftState === "running") return t("inspector.draft.running");
+  if (row.draftState === "ready") return t("inspector.draft.staged");
+  if (row.draftState === "error") return t("inspector.draft.failed");
+  if (row.status === "draft") return t("inspector.publish.draft");
+  return t("inspector.publish.unpublished");
 }
 
 export type ContentInspectorProps =
   & PropsRuntime<"shell.overlay">
   & InjectFace<CreatorViewFace>
   & PropsLocale<"dsh.oil.creator">
-  & {
-    closeDetails: () => void;
-  };
+  & { closeDetails: () => void };
 
 export function ContentInspector({
   t,
   useSessions,
   ready,
   getContent,
-  getCoverThumb,
   getVideoPlayback,
   getArticleMedia,
-  getSubtitleText,
   getSettings,
-  markReadyToRecord,
-  bindStudio,
-  openStudio,
-  setPublish,
-  syncPublish,
-  startSubtitleGenerate,
-  startSubtitleBurn,
-  startCoverGenerate,
-  setScript,
-  pickDirectory,
-  openSubtitlePreview,
+  getPlatformAccounts,
+  importAsset,
+  queueDistribution,
   openPath,
   closeDetails,
 }: ContentInspectorProps) {
@@ -187,61 +126,62 @@ export function ContentInspector({
   const currentSessionId = useSessions((sessions) => sessions.current);
   const libraryEpoch = useLibraryEpoch();
   const profileEpoch = useProfileEpoch();
-  const [enabledPlatforms, setEnabledPlatforms] = useState<readonly PublishPlatform[] | undefined>(undefined);
-  const scriptSavedRef = useRef(true);
-  const loadedId = useRef<string | null>(null);
-  const [detail, setDetail] = useState<ContentDetail | undefined>(undefined);
-  const [cues, setCues] = useState<SubtitleCue[]>([]);
-  const [error, setError] = useState<string | undefined>(undefined);
-  const [tab, setTab] = useState<InspectorTab>("overview");
+  const [detail, setDetail] = useState<ContentDetail>();
+  const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
+  const [enabledPlatforms, setEnabledPlatforms] = useState<PublishPlatform[]>([]);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<PublishPlatform[]>([]);
+  const [videoPath, setVideoPath] = useState("");
+  const [subtitlePath, setSubtitlePath] = useState("");
+  const [articlePath, setArticlePath] = useState("");
+  const [coverPath, setCoverPath] = useState("");
+  const [articleTitle, setArticleTitle] = useState("");
+  const [articleSummary, setArticleSummary] = useState("");
+  const [importingAsset, setImportingAsset] = useState<AssetImportKind>();
+  const [assetError, setAssetError] = useState<string>();
+  const [queued, setQueued] = useState(false);
+  const [error, setError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
+  const [busy, setBusy] = useState(false);
   const [panelWidth, setPanelWidth] = useState(getInspectorWidth);
   const [expanded, setExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [actionError, setActionError] = useState<string | undefined>(undefined);
-
-  const [busy, setBusy] = useState<"subtitle" | "burn" | "cover" | "sync" | undefined>(undefined);
-  const expectSubtitlePreview = useRef(false);
-  const [syncHint, setSyncHint] = useState<string | undefined>(undefined);
-  const [scriptDraft, setScriptDraft] = useState("");
-  const [scriptSaved, setScriptSaved] = useState(true);
-  scriptSavedRef.current = scriptSaved;
-  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
+  const [videoSrc, setVideoSrc] = useState<string>();
   const [videoReady, setVideoReady] = useState(false);
-  const [articleOrigin, setArticleOrigin] = useState<string | undefined>(undefined);
-  const [publishMenu, setPublishMenu] = useState<PublishPlatform | null>(null);
-  const [publishPending, setPublishPending] = useState<PublishPlatform | null>(null);
+  const [articleOrigin, setArticleOrigin] = useState<string>();
+  const [articlePreview, setArticlePreview] = useState("");
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const articleFileInput = useRef<HTMLInputElement>(null);
+  const coverFileInput = useRef<HTMLInputElement>(null);
+  const contentType = detail === undefined ? undefined : resolveContentType(detail);
+  const mode: AssetSelection["mode"] = contentType === "article" ? "article" : "video";
 
   useEffect(() => {
-    setTab("overview");
+    setDetail(undefined);
+    setError(undefined);
     setActionError(undefined);
-
-    setSyncHint(undefined);
-    setScriptDraft("");
-    setScriptSaved(true);
+    setAssetError(undefined);
+    setImportingAsset(undefined);
+    setArticleTitle("");
+    setArticleSummary("");
+    setQueued(false);
     setVideoSrc(undefined);
     setVideoReady(false);
     setArticleOrigin(undefined);
-    setBusy(undefined);
-    expectSubtitlePreview.current = false;
-    setPublishMenu(null);
-    setPublishPending(null);
+    setArticlePreview("");
   }, [selectedId]);
 
   useEffect(() => {
-    let cancelled = false;
-    setEnabledPlatforms(undefined);
-    if (!ready()) {
-      setEnabledPlatforms([]);
-      return () => { cancelled = true; };
-    }
-    void getSettings().then((settings) => {
-      if (!cancelled) setEnabledPlatforms(settings.profile.enabledPlatforms);
-    }, () => {
-      if (!cancelled) setEnabledPlatforms([]);
-    });
-    return () => { cancelled = true; };
-  }, [getSettings, libraryEpoch, profileEpoch, ready]);
+    if (detail === undefined) return;
+    setVideoPath(detail.videoSubtitled ?? detail.videoRaw ?? detail.assets.videos[0]?.path ?? "");
+    setSubtitlePath(
+      detail.subtitles.srt
+      ?? detail.subtitles.ass
+      ?? detail.assets.subtitles[0]?.path
+      ?? "",
+    );
+    setArticlePath(detail.articlePath ?? detail.assets.articles[0]?.path ?? "");
+    setCoverPath(detail.assets.covers[0]?.path ?? "");
+  }, [detail?.id]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => { setExpanded(true); });
@@ -249,135 +189,108 @@ export function ContentInspector({
   }, []);
 
   useEffect(() => {
-    if (selectedId === null) {
-      loadedId.current = null;
-      setDetail(undefined);
-      setCues([]);
-      setError(undefined);
-      return;
-    }
-    if (!ready()) {
-      setError(t("empty.remote" as CreatorKey));
-      return;
-    }
-    const switched = loadedId.current !== selectedId;
+    if (selectedId === null || !ready()) return;
     let cancelled = false;
-    setError(undefined);
-    void Promise.all([getContent(selectedId), getSubtitleText(selectedId)]).then(
-      ([nextDetail, nextSubtitle]) => {
-        if (cancelled) return;
-        loadedId.current = selectedId;
-        setDetail(nextDetail);
-        if (switched || scriptSavedRef.current) {
-          setScriptDraft(nextDetail.script);
-          setScriptSaved(true);
-        }
-        setCues(cuesFromSubtitle(nextSubtitle));
-      },
-      (cause: unknown) => {
-        if (cancelled) return;
-        setDetail(undefined);
-        setCues([]);
-        setError(friendlyError(cause, t));
-      },
+    void getContent(selectedId).then(
+      (next) => { if (!cancelled) setDetail(next); },
+      (cause) => { if (!cancelled) setError(friendlyError(cause, t)); },
     );
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId, libraryEpoch]);
+    return () => { cancelled = true; };
+  }, [selectedId, libraryEpoch, getContent, ready, t]);
 
   useEffect(() => {
-    if (tab !== "video" || selectedId === null || !ready()) return;
+    if (!ready()) return;
+    let cancelled = false;
+    void Promise.all([getSettings(), getPlatformAccounts()]).then(([settings, result]) => {
+      if (cancelled) return;
+      const enabled = settings.profile.enabledPlatforms.filter(supportsAutoDraft);
+      setEnabledPlatforms(enabled);
+      setAccounts(result.accounts);
+    }, () => undefined);
+    return () => { cancelled = true; };
+  }, [profileEpoch, getSettings, getPlatformAccounts, ready]);
+
+  const availablePlatforms = enabledPlatforms.filter((platform) =>
+    PUBLISH_PLATFORM_DEFINITIONS[platform].kind === mode
+  );
+
+  useEffect(() => {
+    setSelectedPlatforms(defaultDistributionPlatforms(availablePlatforms, accounts));
+    setQueued(false);
+  }, [
+    mode,
+    enabledPlatforms.join("|"),
+    accounts.map((account) => `${account.platform}:${account.status}`).join("|"),
+  ]);
+
+  const hasRunningDraft = detail !== undefined
+    && selectedPlatforms.some((platform) => detail.publish[platform].draftState === "running");
+
+  useEffect(() => {
+    if (!hasRunningDraft || selectedId === null || !ready()) return;
+    const timer = window.setInterval(() => {
+      void getContent(selectedId).then(
+        (next) => { setDetail(next); },
+        (cause) => { setActionError(friendlyError(cause, t)); },
+      );
+    }, 3000);
+    return () => { window.clearInterval(timer); };
+  }, [hasRunningDraft, selectedId, getContent, ready, t]);
+
+  const queueReachedRunner = queued && detail !== undefined
+    && selectedPlatforms.some((platform) => {
+      const row = detail.publish[platform];
+      return row.draftState === "running"
+        || row.draftState === "ready"
+        || row.draftState === "error"
+        || row.status === "draft";
+    });
+
+  useEffect(() => {
+    if (queueReachedRunner) setQueued(false);
+  }, [queueReachedRunner]);
+
+  useEffect(() => {
+    if (!queued) return;
+    const timer = window.setTimeout(() => {
+      setQueued(false);
+      setActionError(t("inspector.draft.queueTimeout"));
+    }, 120_000);
+    return () => { window.clearTimeout(timer); };
+  }, [queued, t]);
+
+  useEffect(() => {
+    if (contentType !== "video" || selectedId === null || videoPath === "" || !ready()) return;
     let cancelled = false;
     setVideoReady(false);
-    void getVideoPlayback(selectedId).then((next: VideoPlaybackResult) => {
+    void getVideoPlayback(selectedId, videoPath).then((next: VideoPlaybackResult) => {
       if (cancelled) return;
       setVideoSrc(next.found ? next.url : undefined);
       setVideoReady(true);
     }, () => {
-      if (cancelled) return;
-      setVideoSrc(undefined);
-      setVideoReady(true);
+      if (!cancelled) setVideoReady(true);
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, selectedId, libraryEpoch]);
+    return () => { cancelled = true; };
+  }, [contentType, selectedId, videoPath, libraryEpoch, getVideoPlayback, ready]);
 
   useEffect(() => {
-    if (tab !== "article" || selectedId === null || !ready()) return;
+    if (contentType !== "article" || selectedId === null || articlePath === "" || !ready()) return;
     let cancelled = false;
-    void getArticleMedia(selectedId).then((next: ArticleMediaResult) => {
-      if (cancelled) return;
-      setArticleOrigin(next.found ? next.origin : undefined);
+    void getArticleMedia(selectedId, articlePath).then((next: ArticleMediaResult) => {
+      if (!cancelled) {
+        setArticleOrigin(next.found ? next.origin : undefined);
+        setArticlePreview(next.found ? next.text : "");
+      }
     }, () => {
-      if (!cancelled) setArticleOrigin(undefined);
+      if (!cancelled) {
+        setArticleOrigin(undefined);
+        setArticlePreview("");
+      }
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, selectedId, libraryEpoch]);
-
-  useEffect(() => {
-    if (detail === undefined || scriptSaved) return;
-    const timer = window.setTimeout(() => {
-      void setScript(detail.id, scriptDraft).then((next) => {
-        setDetail(next);
-        setScriptSaved(scriptDraft === next.script);
-      }, (cause: unknown) => {
-        setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      });
-    }, 700);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [detail?.id, scriptDraft, scriptSaved]);
-
-  useEffect(() => {
-    const running = detail?.burn.status === "running"
-      || detail?.subtitleJob.status === "running"
-      || detail?.coverJob.status === "running";
-    if (!running || selectedId === null || !ready()) return;
-    const timer = window.setInterval(() => {
-      void getContent(selectedId).then((next) => { setDetail(next); });
-    }, 3000);
-    return () => { window.clearInterval(timer); };
-  }, [selectedId, detail?.burn.status, detail?.subtitleJob.status, detail?.coverJob.status]);
-
-  useEffect(() => {
-    if (selectedId === null || detail?.subtitleJob.status !== "done" || !ready()) return;
-    void getSubtitleText(selectedId).then((nextSubtitle) => {
-      setCues(cuesFromSubtitle(nextSubtitle));
-    });
-  }, [selectedId, detail?.subtitleJob.status]);
-
-  useEffect(() => {
-    if (!expectSubtitlePreview.current || selectedId === null || !ready()) return;
-    if (detail?.subtitleJob.status === "done") {
-      expectSubtitlePreview.current = false;
-      void openSubtitlePreview(selectedId).then(() => undefined, (cause: unknown) => {
-        setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      });
-      return;
-    }
-    if (detail?.subtitleJob.status === "error") expectSubtitlePreview.current = false;
-  }, [selectedId, detail?.subtitleJob.status]);
+    return () => { cancelled = true; };
+  }, [contentType, selectedId, articlePath, libraryEpoch, getArticleMedia, ready]);
 
   const shownWidth = expanded ? panelWidth : 0;
-
-  const applyPublish = (platform: PublishPlatform, status: PublishMark): void => {
-    setPublishMenu(null);
-    if (detail === undefined || detail.publish[platform].status === status) return;
-    setPublishPending(platform);
-    void setPublish(detail.id, platform, status).then((next) => {
-      setDetail(next);
-      setPublishPending(null);
-    }, (cause: unknown) => {
-      setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      setPublishPending(null);
-    });
-  };
-
   useEffect(() => {
     if (selectedId === null) {
       clearConversationInset();
@@ -385,7 +298,6 @@ export function ContentInspector({
     }
     applyConversationInset(shownWidth, !dragging);
   }, [selectedId, currentSessionId, shownWidth, dragging]);
-
   useEffect(() => () => { clearConversationInset(); }, []);
 
   useEffect(() => {
@@ -409,186 +321,379 @@ export function ContentInspector({
 
   if (selectedId === null) return null;
 
-  const hasVideo = detail?.videoRaw !== undefined || detail?.videoSubtitled !== undefined;
-  const hasSubtitleDraft = detail?.subtitles.srt !== undefined || detail?.subtitles.transcript !== undefined;
-  const canPreviewSubtitle = hasSubtitleDraft || detail?.subtitleJob.status === "done";
-  const hasAnyCover = detail !== undefined
-    && (detail.covers["3x4"] !== undefined || detail.covers["4x3"] !== undefined || detail.covers["16x9"] !== undefined);
-  const platformSettingsPending = enabledPlatforms === undefined;
-  const visiblePlatforms = platformSettingsPending ? [] : selectEnabledPublishPlatforms(enabledPlatforms);
-  const publishedCount = detail === undefined
-    ? 0
-    : visiblePlatforms.filter((platform) => detail.publish[platform.key].status === "published").length;
-  const anyPublishMarked = detail !== undefined
-    && visiblePlatforms.some((platform) => detail.publish[platform.key].status !== "unpublished");
-  const publishStepDone = visiblePlatforms.length > 0 && publishedCount === visiblePlatforms.length;
-  const stageIndex = detail === undefined ? 0 : WORKFLOW_INDEX[detail.workflow];
-  const currentStep: PipelineStepId = publishStepDone
-    ? "publish"
-    : (PIPELINE_STEPS[stageIndex]?.id ?? "topic");
-
-  const onReadyToRecord = (): void => {
-    if (detail === undefined) return;
-    void markReadyToRecord(detail.id).then((next) => { setDetail(next); });
-  };
-
-  const onBindStudio = (): void => {
-    if (detail === undefined) return;
-    void pickDirectory().then((path) => {
-      if (path === null) return;
-      return bindStudio(detail.id, path);
-    }).then((next) => {
-      if (next !== undefined) setDetail(next);
-    });
-  };
-
-  const onOpenStudio = (): void => {
-    if (detail === undefined) return;
-    void openStudio(detail.id);
-  };
-
-  const onGenerateCover = (): void => {
-    if (detail === undefined) return;
-    if (detail.videoRaw === undefined && detail.videoSubtitled === undefined) {
-      setActionError(t("inspector.cover.needVideo" as CreatorKey));
-      return;
-    }
-    if (!detail.secrets.cover.configured) {
-      setActionError(t("inspector.cover.needKey" as CreatorKey));
-      return;
-    }
-    setActionError(undefined);
-    setBusy("cover");
-    void startCoverGenerate(detail.id).then((next) => {
-      setDetail(next);
-      setBusy(undefined);
-    }, (cause: unknown) => {
-      setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      setBusy(undefined);
-    });
-  };
-
-  const onGenerateSubtitle = (): void => {
-    if (detail === undefined) return;
-    if (detail.videoRaw === undefined && detail.videoSubtitled === undefined) {
-      setActionError(t("inspector.subtitle.needVideo" as CreatorKey));
-      return;
-    }
-    if (!detail.secrets.subtitle.configured) {
-      setActionError(t("inspector.subtitle.needKey" as CreatorKey));
-      return;
-    }
-    setActionError(undefined);
-    setBusy("subtitle");
-    expectSubtitlePreview.current = true;
-    void startSubtitleGenerate(detail.id).then((next) => {
-      setDetail(next);
-      setBusy(undefined);
-    }, (cause: unknown) => {
-      expectSubtitlePreview.current = false;
-      setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      setBusy(undefined);
-    });
-  };
-
-  const onBurnSubtitle = (): void => {
-    if (detail === undefined) return;
-    if (detail.videoRaw === undefined) {
-      setActionError(t("inspector.subtitle.needVideo" as CreatorKey));
-      return;
-    }
-    if (!hasSubtitleDraft && detail.subtitleJob.status !== "done") {
-      setActionError(t("inspector.subtitle.needDraft" as CreatorKey));
-      return;
-    }
-    setActionError(undefined);
-    setBusy("burn");
-    void startSubtitleBurn(detail.id).then((next) => {
-      setDetail(next);
-      setBusy(undefined);
-    }, (cause: unknown) => {
-      setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      setBusy(undefined);
-    });
-  };
-
-  const onPreviewSubtitle = (): void => {
-    if (detail === undefined) return;
-    void openSubtitlePreview(detail.id).then(() => undefined, (cause: unknown) => {
-      setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-    });
-  };
-
-  const onSyncPublish = (): void => {
-    if (detail === undefined) return;
-    setActionError(undefined);
-    setBusy("sync");
-    void syncPublish({ id: detail.id }).then((result) => {
-      const login = result.platforms
-        .filter((page) => page.loginRequired === true)
-        .map((page) => {
-          const label = PUBLISH_UI_PLATFORMS.find((item) => item.key === page.platform);
-          return label === undefined ? page.platform : t(label.label);
-        });
-      setSyncHint(t((result.cached === true ? "inspector.publish.cached" : "inspector.publish.synced") as CreatorKey)
-        .replace("{n}", String(result.matched)));
-      if (login.length > 0) {
-        setActionError(
-          t("inspector.publish.login" as CreatorKey).replace("{name}", login.join("、")),
-        );
+  const selection: AssetSelection | undefined = mode === "video"
+    ? videoPath === "" ? undefined : {
+        mode: "video",
+        videoPath,
+        ...(subtitlePath === "" ? {} : { subtitlePath }),
       }
-      setBusy(undefined);
-      return getContent(detail.id);
-    }).then((next) => {
-      if (next !== undefined) setDetail(next);
-    }, (cause: unknown) => {
-      setActionError(cause instanceof Error ? cause.message : t("empty.error" as CreatorKey));
-      setBusy(undefined);
+    : articlePath === "" || coverPath === "" ? undefined : {
+        mode: "article",
+        articlePath,
+        coverPath,
+        ...(articleTitle.trim() === "" ? {} : { articleTitle: articleTitle.trim() }),
+        ...(articleSummary.trim() === "" ? {} : { articleSummary: articleSummary.trim() }),
+      };
+  const contentReady = selection !== undefined;
+  const accountMap = new Map(accounts.map((account) => [account.platform, account]));
+  const accountsReady = selectedPlatforms.length > 0
+    && selectedPlatforms.every((platform) => accountMap.get(platform)?.status === "active");
+  const draftsReady = detail !== undefined && selectedPlatforms.length > 0
+    && selectedPlatforms.every((platform) => detail.publish[platform].status === "draft");
+  const canStart = detail !== undefined
+    && contentReady
+    && accountsReady
+    && selectedPlatforms.length > 0
+    && currentSessionId !== undefined
+    && !busy
+    && !queued
+    && !hasRunningDraft;
+
+  const togglePlatform = (platform: PublishPlatform) => {
+    setQueued(false);
+    setSelectedPlatforms((current) =>
+      current.includes(platform)
+        ? current.filter((item) => item !== platform)
+        : availablePlatforms.filter((item) => current.includes(item) || item === platform)
+    );
+  };
+
+  const onStartDrafts = () => {
+    if (detail === undefined || selection === undefined || !canStart) return;
+    setBusy(true);
+    setQueued(false);
+    setActionError(undefined);
+    void queueDistribution({
+      id: detail.id,
+      selection,
+      platforms: selectedPlatforms,
+    }).then(() => {
+      setQueued(true);
+      setBusy(false);
+    }, (cause) => {
+      setActionError(friendlyError(cause, t));
+      setBusy(false);
     });
   };
 
-  const subtitleStatus = (): { status: string; tone?: StatusTone } => {
-    if (detail === undefined) return { status: "" };
-    if (detail.subtitleJob.status === "running" || busy === "subtitle") {
-      return { status: t("inspector.subtitle.generating" as CreatorKey), tone: "active" };
+  const onImportAsset = async (kind: AssetImportKind, file: File): Promise<void> => {
+    if (detail === undefined || importingAsset !== undefined) return;
+    setImportingAsset(kind);
+    setAssetError(undefined);
+    setQueued(false);
+    try {
+      const imported = await importAsset({
+        id: detail.id,
+        kind,
+        name: file.name,
+        mimeType: file.type,
+        base64: await fileBase64(file, kind),
+      });
+      setDetail(imported.detail);
+      if (kind === "article") setArticlePath(imported.asset.path);
+      else setCoverPath(imported.asset.path);
+    } catch (cause) {
+      setAssetError(friendlyError(cause, t));
+    } finally {
+      setImportingAsset(undefined);
     }
-    if (detail.burn.status === "running" || busy === "burn") {
-      return { status: t("inspector.subtitle.burning" as CreatorKey), tone: "active" };
-    }
-    if (detail.subtitleJob.status === "error" || detail.burn.status === "error") {
-      const raw = detail.subtitleJob.error ?? detail.burn.error;
-      return {
-        status: raw !== undefined && raw.includes("process exited")
-          ? t("inspector.subtitle.failed" as CreatorKey)
-          : raw ?? t("inspector.subtitle.failed" as CreatorKey),
-        tone: "error",
-      };
-    }
-    if (detail.videoSubtitled !== undefined) {
-      return { status: t("inspector.subtitle.burned" as CreatorKey), tone: "success" };
-    }
-    if (hasSubtitleDraft) {
-      return { status: t("inspector.subtitle.proofPending" as CreatorKey), tone: "pending" };
-    }
-    return { status: t("inspector.track.notGenerated" as CreatorKey) };
   };
 
-  const coverStatus = (): { status: string; tone?: StatusTone } => {
-    if (detail === undefined) return { status: "" };
-    if (detail.coverJob.status === "running" || busy === "cover") {
-      return { status: t("inspector.cover.generating" as CreatorKey), tone: "active" };
-    }
-    if (detail.coverJob.status === "error") {
-      return {
-        status: detail.coverJob.error ?? t("inspector.cover.failed" as CreatorKey),
-        tone: "error",
-      };
-    }
-    if (hasAnyCover) return { status: t("inspector.cover.ready" as CreatorKey), tone: "success" };
-    return { status: t("inspector.track.notGenerated" as CreatorKey) };
+  const renderWorkflow = (workflowMode: AssetSelection["mode"]) => {
+    if (detail === undefined) return null;
+    const workflowPlatforms = enabledPlatforms.filter((platform) =>
+      PUBLISH_PLATFORM_DEFINITIONS[platform].kind === workflowMode
+    );
+    const preview = workflowMode === "video"
+      ? !videoReady
+        ? <div className="empty workflowPreview">{t("empty.loading")}</div>
+        : videoSrc === undefined
+          ? <div className="empty workflowPreview">{t("inspector.video.empty")}</div>
+          : (
+            <video
+              className="videoPlayer workflowPreview"
+              controls={true}
+              playsInline={true}
+              preload="metadata"
+              src={videoSrc}
+            />
+          )
+      : articlePreview.trim() === ""
+        ? null
+        : (
+          <div className="article workflowPreview">
+            <MarkdownText
+              text={articleOrigin === undefined
+                ? articlePreview
+                : rewriteArticleImages(articlePreview, articleOrigin)}
+            />
+          </div>
+        );
+
+    return (
+      <>
+        <div className="workflowRail" aria-label={t(CONTENT_TYPE_KEY[workflowMode])}>
+          {[
+            { label: t("inspector.flow.content"), done: contentReady },
+            { label: t("inspector.flow.distribute"), done: draftsReady },
+          ].map((step, index, all) => {
+            const current = !step.done && all.slice(0, index).every((item) => item.done);
+            return (
+              <div key={step.label} className={`flowNode ${step.done ? "done" : current ? "current" : ""}`}>
+                <span className="flowState" aria-hidden="true" />
+                <span className="flowLabel">{step.label}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="workflowStack">
+          <Surface
+            marker="01"
+            className="workflowSurface contentSurface"
+            title={t("inspector.content.title")}
+            titleAside={(
+              <StatusPill tone={detail.hasDistributionPackage ? "success" : "neutral"}>
+                {detail.hasDistributionPackage
+                  ? t("inspector.package.frozen")
+                  : t("inspector.package.pending")}
+              </StatusPill>
+            )}
+            hint={t("inspector.content.hint")}
+          >
+            {workflowMode === "video" ? (
+              <div className="assetFields">
+                <label className="assetField">
+                  <span>{t("inspector.asset.video")}</span>
+                  <select
+                    className="assetSelect"
+                    value={videoPath}
+                    onChange={(event) => { setVideoPath(event.target.value); setQueued(false); }}
+                  >
+                    <option value="">{t("inspector.asset.choose")}</option>
+                    {detail.assets.videos.map((asset) => (
+                      <option key={asset.path} value={asset.path}>{asset.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="assetField">
+                  <span>{t("inspector.asset.subtitle")}</span>
+                  <select
+                    className="assetSelect"
+                    value={subtitlePath}
+                    onChange={(event) => { setSubtitlePath(event.target.value); setQueued(false); }}
+                  >
+                    <option value="">{t("inspector.asset.none")}</option>
+                    {detail.assets.subtitles.map((asset) => (
+                      <option key={asset.path} value={asset.path}>{asset.name}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <>
+                <div className="assetFields">
+                  <div className="assetField">
+                    <span>{t("inspector.asset.article")}</span>
+                    <div className="assetControl">
+                      <select
+                        aria-label={t("inspector.asset.article")}
+                        className="assetSelect"
+                        value={articlePath}
+                        onChange={(event) => { setArticlePath(event.target.value); setQueued(false); }}
+                      >
+                        <option value="">{t("inspector.asset.choose")}</option>
+                        {detail.assets.articles.map((asset) => (
+                          <option key={asset.path} value={asset.path}>{asset.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="assetImportButton"
+                        disabled={importingAsset !== undefined}
+                        onClick={() => { articleFileInput.current?.click(); }}
+                      >
+                        {importingAsset === "article"
+                          ? t("inspector.asset.importing")
+                          : t("inspector.asset.import")}
+                      </button>
+                      <input
+                        ref={articleFileInput}
+                        className="assetFileInput"
+                        type="file"
+                        accept=".md,.markdown,.html,.htm,text/markdown,text/plain,text/html"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          event.currentTarget.value = "";
+                          if (file !== undefined) void onImportAsset("article", file);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="assetField">
+                    <span>{t("inspector.asset.cover")}</span>
+                    <div className="assetControl">
+                      <select
+                        aria-label={t("inspector.asset.cover")}
+                        className="assetSelect"
+                        value={coverPath}
+                        onChange={(event) => { setCoverPath(event.target.value); setQueued(false); }}
+                      >
+                        <option value="">{t("inspector.asset.choose")}</option>
+                        {detail.assets.covers.map((asset) => (
+                          <option key={asset.path} value={asset.path}>{asset.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="assetImportButton"
+                        disabled={importingAsset !== undefined}
+                        onClick={() => { coverFileInput.current?.click(); }}
+                      >
+                        {importingAsset === "cover"
+                          ? t("inspector.asset.importing")
+                          : t("inspector.asset.import")}
+                      </button>
+                      <input
+                        ref={coverFileInput}
+                        className="assetFileInput"
+                        type="file"
+                        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          event.currentTarget.value = "";
+                          if (file !== undefined) void onImportAsset("cover", file);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="articleMetaFields">
+                  <label className="articleMetaField">
+                    <span className="articleMetaHeader">
+                      <span>{t("inspector.asset.title")}</span>
+                      <span>{articleTitle.length}/{ARTICLE_META_MAX}</span>
+                    </span>
+                    <input
+                      className="articleMetaInput"
+                      type="text"
+                      maxLength={ARTICLE_META_MAX}
+                      value={articleTitle}
+                      placeholder={t("inspector.asset.titlePlaceholder")}
+                      onChange={(event) => { setArticleTitle(event.target.value); setQueued(false); }}
+                    />
+                  </label>
+                  <label className="articleMetaField">
+                    <span className="articleMetaHeader">
+                      <span>{t("inspector.asset.summary")}</span>
+                      <span>{articleSummary.length}/{ARTICLE_META_MAX}</span>
+                    </span>
+                    <input
+                      className="articleMetaInput"
+                      type="text"
+                      maxLength={ARTICLE_META_MAX}
+                      value={articleSummary}
+                      placeholder={t("inspector.asset.summaryPlaceholder")}
+                      onChange={(event) => { setArticleSummary(event.target.value); setQueued(false); }}
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+            {assetError !== undefined && <div className="assetImportError">{assetError}</div>}
+            <div className="packageHint">{t("inspector.package.hint")}</div>
+            {preview}
+          </Surface>
+          <Surface
+            marker="02"
+            className="workflowSurface draftSurface"
+            title={t("inspector.distribution.title")}
+            hint={accountsReady
+              ? t("inspector.distribution.ready")
+              : t("inspector.distribution.hint")}
+          >
+            {workflowPlatforms.length === 0
+              ? <div className="empty">{t("inspector.publish.noAdapter")}</div>
+              : (
+                <div className="publishGrid">
+                  {workflowPlatforms.map((platform) => {
+                    const account = accountMap.get(platform);
+                    const selected = selectedPlatforms.includes(platform);
+                    const row = detail.publish[platform];
+                    return (
+                      <label key={platform} className="publishCard">
+                        <div className="publishRow">
+                          <span className="publishName">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => { togglePlatform(platform); }}
+                            />
+                            <PlatformMark id={PLATFORM_ICON[platform as keyof typeof PLATFORM_ICON] ?? "article"} size={16} />
+                            {PUBLISH_PLATFORM_DEFINITIONS[platform].name}
+                          </span>
+                          <StatusPill tone={account?.status === "active" ? "success" : "neutral"}>
+                            {account?.status === "active"
+                              ? t("settings.account.active")
+                              : t("settings.account.unknown")}
+                          </StatusPill>
+                        </div>
+                        <div className="draftStatusRow">
+                          <span>{t("inspector.draft.title")}</span>
+                          <StatusPill tone={draftTone(detail, platform)}>
+                            {draftLabel(detail, platform, t)}
+                          </StatusPill>
+                        </div>
+                        {row.draftError !== undefined && (
+                          <div className="publishMetrics">{row.draftError}</div>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            {currentSessionId === undefined && (
+              <div className="jobNote error">{t("inspector.draft.sessionRequired")}</div>
+            )}
+            <ActionBar>
+              <ActionButton tone="primary" disabled={!canStart} onClick={onStartDrafts}>
+                {busy || hasRunningDraft
+                  ? t("inspector.draft.running")
+                  : t("inspector.draft.aiStart")}
+              </ActionButton>
+            </ActionBar>
+          </Surface>
+        </div>
+        {queued && <div className="jobNote done">{t("inspector.draft.queued")}</div>}
+        {actionError !== undefined && <div className="jobNote error">{actionError}</div>}
+      </>
+    );
   };
 
-  const currentStepMeta = PIPELINE_STEPS.find((step) => step.id === currentStep);
+  const renderAudio = () => {
+    if (detail === undefined) return null;
+    return (
+      <div className="audioStack">
+        <Surface
+          marker="01"
+          className="workflowSurface audioSurface"
+          title={t("inspector.audio.title")}
+          hint={t("inspector.audio.hint")}
+        >
+          <div className="audioNotice">
+            <span className="audioWave" aria-hidden="true">
+              <i /><i /><i /><i /><i />
+            </span>
+            <span>{t("inspector.audio.manual")}</span>
+          </div>
+          <ActionBar>
+            <ActionButton onClick={() => { void openPath(detail.folderPath); }}>
+              {t("inspector.openFolder")}
+            </ActionButton>
+          </ActionBar>
+        </Surface>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -599,31 +704,20 @@ export function ContentInspector({
         expanded ? "open" : "",
         dragging ? "dragging" : "",
         panelWidth >= 560 ? "wide" : "",
-      ].filter((part) => part !== "").join(" ")}
-      style={{
-        width: shownWidth,
-      }}
+      ].filter(Boolean).join(" ")}
+      style={{ width: shownWidth }}
     >
       <header className="header">
         <div className="titleRow">
-          <div className="title">
-            {detail?.title ?? (error === undefined ? t("empty.loading" as CreatorKey) : "")}
+          <div className="titleBlock">
+            <span className="titleKicker">{t("settings.title")}</span>
+            <div className="title">{detail?.title ?? (error === undefined ? t("empty.loading") : "")}</div>
           </div>
           <div className="titleActions">
-            {detail !== undefined && (
-              <button
-                type="button"
-                className="close"
-                aria-label={t("inspector.openFolder" as CreatorKey)}
-                onClick={() => { void openPath(detail.folderPath); }}
-              >
-                <IconFolderOpenOutline16 size={14} />
-              </button>
-            )}
             <button
               type="button"
               className="close"
-              aria-label={t("inspector.close" as CreatorKey)}
+              aria-label={t("inspector.close")}
               onClick={() => {
                 setSelectedId(null);
                 closeDetails();
@@ -633,361 +727,13 @@ export function ContentInspector({
             </button>
           </div>
         </div>
-        <div className="tabs" role="tablist">
-          {TABS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              aria-selected={tab === id}
-              className={tab === id ? "tab active" : "tab"}
-              onClick={() => { setTab(id); }}
-            >
-              {t(TAB_KEY[id])}
-            </button>
-          ))}
-        </div>
       </header>
       <div className="body">
         {error !== undefined && <div className="empty">{error}</div>}
-        {error === undefined && detail === undefined && (
-          <div className="empty">{t("empty.loading" as CreatorKey)}</div>
-        )}
-        {detail !== undefined && tab === "overview" && (
-          <>
-            <div className="lede">
-              <div className="coverPair">
-                <div className="coverHero">
-                  <CoverThumb
-                    id={detail.id}
-                    load={getCoverThumb}
-                    revision={coverThumbRevision(detail.covers)}
-                    fallback={<IconBrowseOutline16 className="coverFallback" size={22} />}
-                  />
-                </div>
-                {detail.covers["4x3"] !== undefined && (
-                  <div className="coverWide">
-                    <CoverThumb
-                      id={`${detail.id}::4x3`}
-                      load={getCoverThumb}
-                      revision={detail.covers["4x3"]}
-                      fallback={<IconBrowseOutline16 className="coverFallback" size={22} />}
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="ledeText">
-                <StatusPill tone={WORKFLOW_TONE[detail.workflow]}>
-                  {t(STAGE_KEY[detail.workflow])}
-                </StatusPill>
-                <div className="time">{formatRelativeTime(detail.recordedAt, Date.now(), t)}</div>
-              </div>
-            </div>
-            <div className="stepper" aria-hidden="true">
-              {PIPELINE_STEPS.map((step, index) => {
-                const done = index < stageIndex || (step.id === "publish" && publishStepDone);
-                const current = !done && step.id === currentStep;
-                return (
-                  <div
-                    key={step.id}
-                    className={`step ${done ? "done" : current ? "current" : ""}`}
-                  >
-                    <span className="stepDot" />
-                    <span className="stepLabel">{t(step.label as CreatorKey)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {hasVideo && (
-              <Surface title={t("inspector.make" as CreatorKey)}>
-                <div className="workList">
-                  <WorkRow
-                    name={t("inspector.track.subtitle" as CreatorKey)}
-                    {...subtitleStatus()}
-                  />
-                  <WorkRow
-                    name={t("inspector.track.cover" as CreatorKey)}
-                    {...coverStatus()}
-                    actions={(
-                      <ActionButton
-                        tone={hasAnyCover ? "secondary" : "primary"}
-                        onClick={onGenerateCover}
-                        disabled={busy !== undefined || detail.coverJob.status === "running"}
-                      >
-                        {t((hasAnyCover ? "inspector.cover.regenerate" : "inspector.cover.generate") as CreatorKey)}
-                      </ActionButton>
-                    )}
-                  />
-                </div>
-              </Surface>
-            )}
-            {currentStepMeta !== undefined && currentStep !== "publish" && currentStep !== "finish" && (
-              <Surface
-                title={t(currentStepMeta.label as CreatorKey)}
-                hint={"hint" in currentStepMeta ? t(currentStepMeta.hint as CreatorKey) : undefined}
-              >
-                {currentStep === "topic" && (
-                  <ActionBar>
-                    <ActionButton tone="primary" onClick={onReadyToRecord}>
-                      {t("inspector.readyToRecord" as CreatorKey)}
-                    </ActionButton>
-                  </ActionBar>
-                )}
-                {currentStep === "record" && (
-                  <ActionBar>
-                    <ActionButton
-                      tone="primary"
-                      onClick={detail.studioPath === undefined ? onBindStudio : onOpenStudio}
-                    >
-                      {t((detail.studioPath === undefined ? "inspector.studio.bind" : "inspector.studio.open") as CreatorKey)}
-                    </ActionButton>
-                  </ActionBar>
-                )}
-                {currentStep === "cut" && (
-                  <>
-                    {detail.waitingForExport && !hasVideo && (
-                      <JobNote tone={detail.exportTimedOut === true ? "error" : "running"}>
-                        {t((detail.exportTimedOut === true
-                          ? "inspector.step.exportTimedOut"
-                          : "inspector.step.waitingExport") as CreatorKey)}
-                      </JobNote>
-                    )}
-                    <ActionBar>
-                      <ActionButton
-                        tone="primary"
-                        onClick={detail.studioPath === undefined ? onBindStudio : onOpenStudio}
-                      >
-                        {t((detail.studioPath === undefined ? "inspector.studio.bind" : "inspector.studio.open") as CreatorKey)}
-                      </ActionButton>
-                      {detail.studioPath !== undefined && (
-                        <ActionButton onClick={onBindStudio}>
-                          {t("inspector.studio.rebind" as CreatorKey)}
-                        </ActionButton>
-                      )}
-                    </ActionBar>
-                  </>
-                )}
-              </Surface>
-            )}
-            {actionError !== undefined && (
-              <JobNote tone="error">{actionError}</JobNote>
-            )}
-            {(detail.workflow === "publish" || anyPublishMarked || detail.hasArticle) && (
-              <>
-                <Surface
-                  title={t("inspector.sync.title" as CreatorKey)}
-                  hint={syncHint ?? t((platformSettingsPending
-                    ? "inspector.publish.platformsLoading"
-                    : "inspector.sync.hint") as CreatorKey)}
-                >
-                  {!platformSettingsPending && visiblePlatforms.length === 0 && (
-                    <div className="empty">{t("inspector.publish.enablePlatforms" as CreatorKey)}</div>
-                  )}
-                  <ActionBar>
-                    <ActionButton
-                      tone="primary"
-                      onClick={onSyncPublish}
-                      disabled={isPublishSyncDisabled(busy, platformSettingsPending, enabledPlatforms ?? [])}
-                    >
-                      {t((busy === "sync" ? "inspector.publish.syncing" : "inspector.publish.sync") as CreatorKey)}
-                    </ActionButton>
-                  </ActionBar>
-                </Surface>
-                {visiblePlatforms.length > 0 && (
-                  <Surface title={t("inspector.platforms" as CreatorKey)}>
-                    <div className="publishGrid">
-                      {visiblePlatforms.map((platform) => {
-                        const row = detail.publish[platform.key];
-                        const metrics = metricParts(row, t);
-                        return (
-                          <div key={platform.id} className="publishCard">
-                            <div className="publishRow">
-                              <span className="publishName">
-                                <PlatformMark id={platform.id} size={16} />
-                                {t(platform.label)}
-                              </span>
-                              <Menu
-                                portal={true}
-                                align="end"
-                                open={publishMenu === platform.key}
-                                anchor={(
-                                  <StatusPill
-                                    tone={PUBLISH_TONE[row.status]}
-                                    disabled={publishPending === platform.key}
-                                    aria-haspopup="menu"
-                                    aria-label={`${t(platform.label)}：${t(PUBLISH_KEY[row.status])}`}
-                                    onClick={() => {
-                                      setPublishMenu(publishMenu === platform.key ? null : platform.key);
-                                    }}
-                                  >
-                                    {t(PUBLISH_KEY[row.status])}
-                                  </StatusPill>
-                                )}
-                                items={PUBLISH_MARKS.map((mark) => ({ id: mark, label: t(PUBLISH_KEY[mark]) }))}
-                                selectedId={row.status}
-                                onSelect={(id) => {
-                                  if (isPublishMark(id)) applyPublish(platform.key, id);
-                                }}
-                                onClose={() => { setPublishMenu(null); }}
-                              />
-                            </div>
-                            {metrics.length > 0 && (
-                              <div className="publishMetrics">{metrics.join(" · ")}</div>
-                            )}
-                            {row.status === "published" && row.url !== undefined && (
-                              <a className="publishUrl" href={row.url} target="_blank" rel="noreferrer">
-                                {t("inspector.publish.open" as CreatorKey)}
-                              </a>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </Surface>
-                )}
-                <Surface title={t("inspector.article" as CreatorKey)}>
-                  <button
-                    type="button"
-                    className="publishRow articleRow"
-                    onClick={() => { setTab("article"); }}
-                  >
-                    <span className="publishName">
-                      <PlatformMark id="article" size={16} />
-                      {t("inspector.article.draft" as CreatorKey)}
-                    </span>
-                    <StatusPill tone={detail.hasArticle ? "success" : "neutral"}>
-                      {t((detail.hasArticle ? "inspector.article.ready" : "inspector.article.missing") as CreatorKey)}
-                    </StatusPill>
-                  </button>
-                </Surface>
-              </>
-            )}
-            {detail.tags.length > 0 && (
-              <Surface title={t("detail.tags" as CreatorKey)}>
-                <div className="tags">
-                  {detail.tags.map((tag) => (
-                    <span key={tag} className="tag">#{tag}</span>
-                  ))}
-                </div>
-              </Surface>
-            )}
-          </>
-        )}
-        {detail !== undefined && tab === "video" && (
-          !videoReady
-            ? <div className="empty">{t("empty.loading" as CreatorKey)}</div>
-            : videoSrc === undefined
-              ? <div className="empty">{t("inspector.video.empty" as CreatorKey)}</div>
-              : (
-                <video
-                  className="videoPlayer"
-                  controls={true}
-                  playsInline={true}
-                  preload="metadata"
-                  src={videoSrc}
-                />
-              )
-        )}
-        {detail !== undefined && tab === "script" && (
-          <textarea
-            className="scriptEditor"
-            value={scriptDraft}
-            placeholder={t("inspector.script.placeholder" as CreatorKey)}
-            onChange={(event) => {
-              setScriptDraft(event.target.value);
-              setScriptSaved(event.target.value === detail.script);
-            }}
-          />
-        )}
-        {detail !== undefined && tab === "article" && (
-          detail.article.trim() === ""
-            ? <div className="empty">{t("inspector.article.empty" as CreatorKey)}</div>
-            : (
-              <div className="article">
-                <MarkdownText
-                  text={articleOrigin === undefined
-                    ? detail.article
-                    : rewriteArticleImages(detail.article, articleOrigin)}
-                />
-              </div>
-            )
-        )}
-        {detail !== undefined && tab === "subtitle" && (
-          <>
-            {hasVideo && (
-              <ActionBar>
-                {canPreviewSubtitle && (
-                  <ActionButton tone="ghost" onClick={onPreviewSubtitle}>
-                    {t("inspector.subtitle.previewEdit" as CreatorKey)}
-                  </ActionButton>
-                )}
-                <ActionButton
-                  tone={!hasSubtitleDraft && detail.videoSubtitled === undefined ? "primary" : "secondary"}
-                  onClick={onGenerateSubtitle}
-                  disabled={
-                    busy !== undefined
-                    || detail.subtitleJob.status === "running"
-                    || detail.burn.status === "running"
-                  }
-                >
-                  {t((
-                    !hasSubtitleDraft
-                      ? "inspector.subtitle.generate"
-                      : "inspector.subtitle.regenerate"
-                  ) as CreatorKey)}
-                </ActionButton>
-                {hasSubtitleDraft && (
-                  <ActionButton
-                    tone={detail.videoSubtitled === undefined ? "primary" : "secondary"}
-                    onClick={onBurnSubtitle}
-                    disabled={
-                      busy !== undefined
-                      || detail.subtitleJob.status === "running"
-                      || detail.burn.status === "running"
-                    }
-                  >
-                    {t((detail.videoSubtitled === undefined
-                      ? "inspector.subtitle.burn"
-                      : "inspector.subtitle.reburn") as CreatorKey)}
-                  </ActionButton>
-                )}
-              </ActionBar>
-            )}
-            {actionError !== undefined
-              ? <JobNote tone="error">{actionError}</JobNote>
-              : detail.subtitleJob.status === "running" || detail.burn.status === "running"
-                ? (
-                  <JobNote tone="running">
-                    {t((detail.subtitleJob.status === "running"
-                      ? "inspector.subtitle.generating"
-                      : "inspector.subtitle.burning") as CreatorKey)}
-                  </JobNote>
-                )
-                : detail.subtitleJob.status === "error" || detail.burn.status === "error"
-                  ? (
-                    <JobNote tone="error">
-                      {(detail.subtitleJob.error ?? detail.burn.error ?? "").includes("process exited")
-                        ? t("inspector.subtitle.burnFailed" as CreatorKey)
-                        : detail.subtitleJob.error
-                          ?? detail.burn.error
-                          ?? t("inspector.subtitle.burnFailed" as CreatorKey)}
-                    </JobNote>
-                  )
-                  : null}
-            {cues.length === 0
-              ? <div className="empty">{t("inspector.subtitle.empty" as CreatorKey)}</div>
-              : (
-                <ol className="cues">
-                  {cues.map((cue, index) => (
-                    <li key={`${cue.at ?? "cue"}-${index}`} className="cue">
-                      {cue.at !== undefined && <div className="cueTime">{cue.at}</div>}
-                      <p className="cueText">{cue.text}</p>
-                    </li>
-                  ))}
-                </ol>
-              )}
-          </>
-        )}
+        {error === undefined && detail === undefined && <div className="empty">{t("empty.loading")}</div>}
+        {detail !== undefined && contentType === "video" && renderWorkflow("video")}
+        {detail !== undefined && contentType === "article" && renderWorkflow("article")}
+        {detail !== undefined && contentType === "audio" && renderAudio()}
       </div>
       <div
         className="resize"

@@ -1,16 +1,54 @@
 import { describe, expect, it } from "vitest";
 
-import { COLLECT_PAGES } from "../src/collectPublish.ts";
-import { PUBLISH_PLATFORM_DEFINITIONS, PUBLISH_PLATFORMS } from "../src/platforms.ts";
-import { PUBLISH_PLATFORMS as STATUS_PLATFORMS } from "../src/publishStatus.ts";
+import {
+  AUTO_DRAFT_PLATFORMS,
+  draftCapability,
+  normalizeEnabledPlatforms,
+  PUBLISH_PLATFORM_DEFINITIONS,
+  PUBLISH_PLATFORMS,
+  supportsAutoDraft,
+  toVideoPublisherPlatform,
+} from "../src/platforms.ts";
 
-describe("shared publishing platform contract", () => {
-  it("derives the key list and collection pages from one definition", () => {
-    expect(PUBLISH_PLATFORMS).toEqual(Object.keys(PUBLISH_PLATFORM_DEFINITIONS));
-    expect(STATUS_PLATFORMS).toBe(PUBLISH_PLATFORMS);
-    expect(COLLECT_PAGES).toEqual(PUBLISH_PLATFORMS.map((platform) => ({
-      platform,
-      url: PUBLISH_PLATFORM_DEFINITIONS[platform].collectUrl,
-    })));
+describe("platform catalog", () => {
+  it("包含参考实现与两个音频入口共 24 个平台", () => {
+    expect(PUBLISH_PLATFORMS).toHaveLength(24);
+    expect(PUBLISH_PLATFORMS.at(-1)).toBe("ximalaya");
+    expect(PUBLISH_PLATFORM_DEFINITIONS["wechat-mp"].name).toBe("微信公众号");
+    expect(PUBLISH_PLATFORM_DEFINITIONS["netease-music"]).toMatchObject({
+      name: "网易云音乐",
+      kind: "audio",
+      draftRunner: null,
+    });
+    expect(PUBLISH_PLATFORM_DEFINITIONS.ximalaya).toMatchObject({
+      name: "喜马拉雅听",
+      kind: "audio",
+      draftRunner: null,
+    });
+  });
+
+  it("只把五个真实运行器平台标为自动草稿", () => {
+    expect(AUTO_DRAFT_PLATFORMS).toEqual([
+      "bilibili",
+      "douyin",
+      "xiaohongshu",
+      "channels",
+      "wechat-mp",
+    ]);
+    expect(AUTO_DRAFT_PLATFORMS.every(supportsAutoDraft)).toBe(true);
+    expect(supportsAutoDraft("zhihu")).toBe(false);
+    expect(supportsAutoDraft("netease-music")).toBe(false);
+    expect(supportsAutoDraft("ximalaya")).toBe(false);
+    expect(toVideoPublisherPlatform("channels")).toBe("wechat_channels");
+    expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
+    expect(draftCapability("bilibili")).toBe("remote-verified");
+    expect(draftCapability("wechat-mp")).toBe("implemented-simulated");
+    expect(draftCapability("douyin")).toBe("implemented-simulated");
+    expect(draftCapability("zhihu")).toBe("unsupported");
+  });
+
+  it("迁移旧版 wechat id 并过滤无效值", () => {
+    expect(normalizeEnabledPlatforms(["wechat", "douyin", "invalid"]))
+      .toEqual(["douyin", "channels"]);
   });
 });

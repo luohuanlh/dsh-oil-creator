@@ -1,12 +1,12 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import { normalizeEnabledPlatforms, PUBLISH_PLATFORMS } from "./platforms.ts";
+import { AUTO_DRAFT_PLATFORMS, draftCapability, isPublishPlatform, normalizeEnabledPlatforms, supportsAutoDraft } from "./platforms.ts";
 import { decodeBurnJob, decodeOverlayPublish } from "./publishStatus.ts";
-import type { CreatorProfile, OverlayItem, OverlayStore, PublishPlatform } from "./types.ts";
+import type { CreatorProfile, OverlayItem, OverlayStore, PlatformAccount, PublishPlatform } from "./types.ts";
 
 export { normalizeEnabledPlatforms } from "./platforms.ts";
-export const DEFAULT_ENABLED_PLATFORMS: readonly PublishPlatform[] = PUBLISH_PLATFORMS;
+export const DEFAULT_ENABLED_PLATFORMS: readonly PublishPlatform[] = AUTO_DRAFT_PLATFORMS;
 
 export function emptyProfile(): CreatorProfile {
   return { enabledPlatforms: [...DEFAULT_ENABLED_PLATFORMS] };
@@ -31,6 +31,31 @@ export function overlayPath(dataDir: string): string {
 
 export function emptyOverlay(): OverlayStore {
   return { schemaVersion: 1, items: {} };
+}
+
+function decodeAccounts(value: unknown): OverlayStore["accounts"] {
+  if (typeof value !== "object" || value === null) return undefined;
+  const accounts: NonNullable<OverlayStore["accounts"]> = {};
+  for (const [rawPlatform, entry] of Object.entries(value as Record<string, unknown>)) {
+    const platform = rawPlatform === "wechat" ? "channels" : rawPlatform;
+    if (!isPublishPlatform(platform) || typeof entry !== "object" || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const status = record.status === "active" || record.status === "expired"
+      ? record.status
+      : "unknown";
+    const account: Omit<PlatformAccount, "platform" | "supportsAutoDraft" | "draftCapability"> = { status };
+    if (typeof record.nickname === "string" && record.nickname.trim() !== "") {
+      account.nickname = record.nickname.trim();
+    }
+    if (typeof record.checkedAt === "number" && Number.isFinite(record.checkedAt)) {
+      account.checkedAt = record.checkedAt;
+    }
+    if (typeof record.taskSpace === "string" && record.taskSpace.trim() !== "") {
+      account.taskSpace = record.taskSpace.trim();
+    }
+    accounts[platform] = account;
+  }
+  return Object.keys(accounts).length === 0 ? undefined : accounts;
 }
 
 export function decodeOverlay(value: unknown): OverlayStore {
@@ -67,13 +92,28 @@ export function decodeOverlay(value: unknown): OverlayStore {
   if (typeof raw.libraryRoot === "string" && raw.libraryRoot.length > 0) {
     store.libraryRoot = raw.libraryRoot;
   }
-  if (typeof raw.scriptRules === "string" && raw.scriptRules.trim() !== "") {
-    store.scriptRules = raw.scriptRules.trim();
-  }
   if (typeof raw.profile === "object" && raw.profile !== null) {
     store.profile = decodeProfile(raw.profile);
   }
+  const accounts = decodeAccounts(raw.accounts);
+  if (accounts !== undefined) store.accounts = accounts;
   return store;
+}
+
+export function accountsFromOverlay(store: OverlayStore): PlatformAccount[] {
+  const accounts = store.accounts ?? {};
+  return Object.entries(accounts).flatMap(([platform, account]) => {
+    if (!isPublishPlatform(platform) || account === undefined) return [];
+    return [{
+      platform,
+      status: account.status,
+      ...(account.nickname === undefined ? {} : { nickname: account.nickname }),
+      ...(account.checkedAt === undefined ? {} : { checkedAt: account.checkedAt }),
+      ...(account.taskSpace === undefined ? {} : { taskSpace: account.taskSpace }),
+      supportsAutoDraft: supportsAutoDraft(platform),
+      draftCapability: draftCapability(platform),
+    }];
+  });
 }
 
 export async function loadOverlay(dataDir: string): Promise<OverlayStore> {

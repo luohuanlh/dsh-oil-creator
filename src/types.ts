@@ -1,11 +1,25 @@
 export type ContentFilter = "all" | "cover" | "subtitle" | "article";
 
+export type ContentType = "video" | "audio" | "article";
+
 export type PipelineStage = "raw" | "subtitled" | "covered" | "packaged";
 
 export type WorkflowStage = "idle" | "record" | "cut" | "finish" | "publish" | "live";
 
-export type { PublishPlatform } from "./platforms.ts";
-import type { PublishPlatform } from "./platforms.ts";
+export type { DraftCapability, PublishPlatform } from "./platforms.ts";
+import type { DraftCapability, PublishPlatform } from "./platforms.ts";
+import type {
+  AssetSelection,
+  ContentAssets,
+  PlatformVariant,
+} from "./distribution.ts";
+import type { PlatformGenerationRule } from "./platforms.ts";
+
+export type {
+  AssetSelection,
+  ContentAssets,
+  PlatformVariant,
+} from "./distribution.ts";
 
 export type PublishMark = "unpublished" | "draft" | "published";
 
@@ -23,6 +37,10 @@ export interface PlatformPublish extends PublishMetrics {
   source: PublishSource;
   url?: string;
   remoteId?: string;
+  draftState?: "running" | "ready" | "error";
+  draftError?: string;
+  draftStartedAt?: number;
+  draftPid?: number;
 }
 
 export type ContentPublish = Record<PublishPlatform, PlatformPublish>;
@@ -39,25 +57,14 @@ export interface BurnJob {
 
 export type MediaJob = BurnJob;
 
-export type SecretKind = "subtitle" | "cover";
-
-export interface SecretView {
-  kind: SecretKind;
-  ref: string;
-  configured: boolean;
-  writable: boolean;
-  source?: string;
-}
-
-export interface CreatorSecrets {
-  subtitle: SecretView;
-  cover: SecretView;
-}
-
 export interface OverlayPublish extends PublishMetrics {
   status: PublishMark;
   url?: string;
   remoteId?: string;
+  draftState?: "running" | "ready" | "error";
+  draftError?: string;
+  draftStartedAt?: number;
+  draftPid?: number;
 }
 
 export interface SubtitleCue {
@@ -81,6 +88,7 @@ export interface ContentSummary {
   id: string;
   folderPath: string;
   title: string;
+  contentType?: ContentType;
   date?: string;
   recordedAt: number;
   createdMs: number;
@@ -88,7 +96,9 @@ export interface ContentSummary {
   videoSubtitled?: string;
   covers: ContentCovers;
   subtitles: ContentSubtitles;
+  assets: ContentAssets;
   hasPublishPackage: boolean;
+  hasDistributionPackage: boolean;
   hasArticle: boolean;
   studioPath?: string;
   waitingForExport: boolean;
@@ -110,8 +120,6 @@ export interface CreatorProfile {
 export interface LibrarySettings {
   libraryRoot: string;
   profile: CreatorProfile;
-  secrets: CreatorSecrets;
-  scriptRules?: string;
 }
 
 export type CreatorCapabilityState = "ready" | "missing" | "unsupported";
@@ -125,16 +133,9 @@ export interface CreatorCapability {
 
 export interface CreatorCapabilities {
   library: CreatorCapability;
-  openScreen: CreatorCapability;
-  screenStudio: CreatorCapability;
-  subtitleSkill: CreatorCapability;
-  subtitleCredential: CreatorCapability;
-  coverSkill: CreatorCapability;
-  coverCredential: CreatorCapability;
-  publishSync: CreatorCapability;
-  editingSkill: CreatorCapability;
-  publishSkill: CreatorCapability;
-  articleSkill: CreatorCapability;
+  autoPublish: CreatorCapability;
+  article: CreatorCapability;
+  egoBrowser: CreatorCapability;
 }
 
 export interface CreatorSetupStatus {
@@ -180,12 +181,91 @@ export interface IdRequest {
   id: string;
 }
 
+export type AssetImportKind = "article" | "cover";
+
+export interface ImportAssetRequest {
+  id: string;
+  kind: AssetImportKind;
+  name: string;
+  mimeType: string;
+  base64: string;
+}
+
+export interface ImportAssetResult {
+  asset: { name: string; path: string };
+  detail: ContentDetail;
+}
+
 export interface ContentDetail extends ContentSummary {
   publishCopy: string;
   topicNote: string;
   script: string;
   article: string;
-  secrets: CreatorSecrets;
+}
+
+export type PlatformAccountStatus = "unknown" | "active" | "expired";
+
+export interface PlatformAccount {
+  platform: PublishPlatform;
+  status: PlatformAccountStatus;
+  nickname?: string;
+  checkedAt?: number;
+  taskSpace?: string;
+  supportsAutoDraft: boolean;
+  draftCapability: DraftCapability;
+}
+
+export interface PlatformAccountsResult {
+  accounts: PlatformAccount[];
+}
+
+export interface PlatformAccountRequest {
+  platform: PublishPlatform;
+}
+
+export interface OpenPlatformAccountResult {
+  platform: PublishPlatform;
+  started: boolean;
+  taskSpace?: string;
+}
+
+export interface StartDraftsRequest {
+  id: string;
+  platforms: PublishPlatform[];
+  confirmOriginalRights?: boolean;
+}
+
+export interface StartDraftsResult {
+  id: string;
+  platforms: PublishPlatform[];
+  started: boolean;
+}
+
+export interface DistributionSourceRequest {
+  id: string;
+  selection: AssetSelection;
+  platforms: PublishPlatform[];
+}
+
+export interface DistributionSourceResult {
+  id: string;
+  title: string;
+  selection: AssetSelection;
+  sourceText: string;
+  platforms: PlatformGenerationRule[];
+}
+
+export interface CommitDistributionRequest {
+  id: string;
+  selection: AssetSelection;
+  variants: PlatformVariant[];
+}
+
+export interface CommitDistributionResult {
+  id: string;
+  mode: AssetSelection["mode"];
+  platforms: PublishPlatform[];
+  packagePath: string;
 }
 
 export interface CoverThumbResult {
@@ -200,9 +280,15 @@ export interface VideoPlaybackResult {
   kind: "raw" | "subtitled";
 }
 
+export interface AssetPreviewRequest {
+  id: string;
+  path: string;
+}
+
 export interface ArticleMediaResult {
   found: boolean;
   origin: string;
+  text: string;
 }
 
 export interface SubtitleTextResult {
@@ -216,6 +302,7 @@ export interface SetLibraryRootRequest {
 
 export interface CreateContentRequest {
   title: string;
+  contentType?: ContentType;
 }
 
 export interface CreateContentResult {
@@ -250,13 +337,6 @@ export interface OverlayItem {
   coverJob?: MediaJob;
 }
 
-export interface SetPublishRequest {
-  id: string;
-  platform: PublishPlatform;
-  status: PublishMark;
-  url?: string;
-}
-
 export interface SubtitlePreviewResult {
   url: string;
   port: number;
@@ -283,7 +363,7 @@ export interface OverlayStore {
   schemaVersion: 1;
   libraryRoot?: string;
   profile?: CreatorProfile;
-  scriptRules?: string;
+  accounts?: Partial<Record<PublishPlatform, Omit<PlatformAccount, "platform" | "supportsAutoDraft" | "draftCapability">>>;
   items: Record<string, OverlayItem>;
 }
 

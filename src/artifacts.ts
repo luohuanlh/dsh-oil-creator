@@ -56,9 +56,9 @@ export function isDraftArticleName(name: string): boolean {
 }
 
 export function pickArticleFile(names: readonly string[]): string | undefined {
-  const markdown = names.filter((name) => name.endsWith(".md"));
-  const main = markdown.filter((name) => !isDraftArticleName(name));
-  return main[0] ?? markdown[0];
+  const articles = names.filter((name) => /\.(?:md|markdown|html?)$/i.test(name));
+  const main = articles.filter((name) => !isDraftArticleName(name));
+  return main[0] ?? articles[0];
 }
 
 export function isSubtitledVideoName(name: string): boolean {

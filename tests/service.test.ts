@@ -1,98 +1,73 @@
-import { spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const collect = vi.hoisted(() => ({
-  calls: [] as Array<{ platforms?: readonly string[] }>,
-  run: vi.fn(async (
-    _script: string,
-    _signal: AbortSignal,
-    options: { platforms?: readonly string[] } = {},
-  ) => {
-    collect.calls.push(options.platforms === undefined ? {} : { platforms: options.platforms });
-    return { collected: [] };
-  }),
+const draft = vi.hoisted(() => ({
+  prepare: vi.fn(async (_item, _dataDir, platforms) => ({
+    packagePath: "/tmp/package.json",
+    platforms: [...platforms],
+    runnerPlatforms: [...platforms],
+  })),
+  start: vi.fn(),
+  finish: undefined as undefined | ((result:
+    | { ok: true; url: string; remoteId: string; taskSpace: string }
+    | { ok: true; staged: true; taskSpace: string }
+    | { ok: false; error: string }
+  ) => void),
+  finishes: [] as Array<(result:
+    | { ok: true; url: string; remoteId: string; taskSpace: string }
+    | { ok: true; staged: true; taskSpace: string }
+    | { ok: false; error: string }
+  ) => void>,
 }));
 
-const chained = vi.hoisted(() => ({
-  calls: [] as Array<{ script: string; env?: Record<string, string> }>,
+const articleDraft = vi.hoisted(() => ({
+  prepare: vi.fn(async () => ({ input: { platform: "wechat-mp" } })),
+  start: vi.fn(),
+  finish: undefined as undefined | ((result: { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }) => void),
 }));
 
-const preview = vi.hoisted(() => ({
-  nextPid: 41001,
-  terminateCalls: [] as number[],
-  waitMode: "failure" as "failure" | "abort",
-  abortController: undefined as AbortController | undefined,
+vi.mock("../src/draftRunner.ts", () => ({
+  prepareDraftRun: draft.prepare,
+  startVideoDraftRun: draft.start,
 }));
 
-vi.mock("../src/collectEgo.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/collectEgo.ts")>();
-  return { ...actual, runCollectPublish: collect.run };
-});
-
-vi.mock("../src/subtitle.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/subtitle.ts")>();
-  return {
-    ...actual,
-    spawnPython: vi.fn((_python: string, script: string, _args: readonly string[], env?: Record<string, string>) => {
-      chained.calls.push({ script, ...(env === undefined ? {} : { env }) });
-      return {
-        pid: preview.nextPid++,
-        stderr: undefined,
-        once: (_event: string, listener: (code: number) => void) => {
-          queueMicrotask(() => listener(0));
-          return undefined;
-        },
-        unref: vi.fn(),
-      } as never;
-    }),
-    waitHttp: vi.fn(async (_url: string, _timeoutMs: number, _signal: AbortSignal) => {
-      if (preview.waitMode === "abort") {
-        preview.abortController?.abort(new Error("preview aborted"));
-        throw new Error("preview aborted");
-      }
-      throw new Error("preview did not start");
-    }),
-  };
-});
-
-vi.mock("../src/processAlive.ts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../src/processAlive.ts")>();
-  return {
-    ...actual,
-    terminateOwnedProcess: vi.fn(async (pid: number | undefined) => {
-      if (pid !== undefined) preview.terminateCalls.push(pid);
-      return true;
-    }),
-  };
-});
+vi.mock("../src/articleDraftRunner.ts", () => ({
+  prepareArticleDraftRun: articleDraft.prepare,
+  startArticleDraftRun: articleDraft.start,
+}));
 
 import { OilCreatorService } from "../src/service.ts";
-import { saveCollectCache } from "../src/collectCache.ts";
 import { emptyOverlay, loadOverlay, saveOverlay } from "../src/overlay.ts";
 import { emptyBurn, emptyPublish } from "../src/publishStatus.ts";
-import { loadPreviewRegistry } from "../src/previewServers.ts";
-import type { ContentDetail, ContentSummary, CreatorProfile, OverlayItem } from "../src/types.ts";
+import { DISTRIBUTION_PACKAGE_NAME } from "../src/distribution.ts";
+import type { ContentSummary } from "../src/types.ts";
 
-function item(folderPath: string, videoRaw: string): ContentSummary {
+function summary(folderPath: string, videoPath: string): ContentSummary {
   return {
-    id: "2026-08-13_demo",
+    id: "2026-08-21_demo",
     folderPath,
-    title: "Demo title",
+    title: "Demo",
     recordedAt: 1,
     createdMs: 1,
-    videoRaw,
+    videoRaw: videoPath,
     covers: {},
     subtitles: {},
-    hasPublishPackage: false,
+    assets: {
+      videos: [{ name: "demo.mp4", path: videoPath }],
+      subtitles: [],
+      articles: [],
+      covers: [],
+    },
+    hasPublishPackage: true,
+    hasDistributionPackage: false,
     hasArticle: false,
     waitingForExport: false,
-    tags: [],
-    pipeline: "raw",
-    workflow: "finish",
+    tags: ["demo"],
+    pipeline: "packaged",
+    workflow: "publish",
     publish: emptyPublish(),
     burn: emptyBurn(),
     subtitleJob: emptyBurn(),
@@ -100,403 +75,380 @@ function item(folderPath: string, videoRaw: string): ContentSummary {
   };
 }
 
-describe("OilCreatorService.bindStudio", () => {
-  it("通过现有 studioPath 接口绑定 OpenScreen 工程", async () => {
-    const folder = await mkdtemp(join(tmpdir(), "oil-service-openscreen-"));
-    const projectPath = join(folder, "demo.openscreen");
-    await writeFile(projectPath, "{}\n");
-    const overlayItem: OverlayItem = {};
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      patchItem: (
-        id: string,
-        patch: (item: OverlayItem) => void,
-        signal: AbortSignal,
-      ) => Promise<ContentDetail>;
-    };
-    probe.patchItem = async (_id, patch) => {
-      patch(overlayItem);
-      return undefined as never;
-    };
-
-    await service.bindStudio(
-      { id: "2026-08-20_demo", path: projectPath },
-      new AbortController().signal,
-    );
-
-    expect(overlayItem.studioPath).toBe(projectPath);
-  });
-
-  it("通过现有目录选择器绑定文件夹内的 OpenScreen 工程", async () => {
-    const folder = await mkdtemp(join(tmpdir(), "oil-service-openscreen-dir-"));
-    const projectPath = join(folder, "demo.openscreen");
-    await writeFile(projectPath, "{}\n");
-    const overlayItem: OverlayItem = {};
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      patchItem: (
-        id: string,
-        patch: (item: OverlayItem) => void,
-        signal: AbortSignal,
-      ) => Promise<ContentDetail>;
-    };
-    probe.patchItem = async (_id, patch) => {
-      patch(overlayItem);
-      return undefined as never;
-    };
-
-    await service.bindStudio(
-      { id: "2026-08-20_demo", path: folder },
-      new AbortController().signal,
-    );
-
-    expect(overlayItem.studioPath).toBe(projectPath);
-  });
-
-  it("在非 macOS 系统通过现有打开接口启动 OpenScreen 工程", async () => {
-    const folder = await mkdtemp(join(tmpdir(), "oil-service-open-openscreen-"));
-    const projectPath = join(folder, "demo.openscreen");
-    const openedPath = join(folder, "opened.txt");
-    const bin = join(folder, "bin");
-    await mkdir(bin);
-    await writeFile(projectPath, "{}\n");
-    await writeFile(
-      join(bin, "xdg-open"),
-      `#!/bin/sh\nprintf '%s' "$1" > '${openedPath}'\n`,
-    );
-    await chmod(join(bin, "xdg-open"), 0o755);
-
-    const bound = item(folder, join(folder, "demo.mp4"));
-    bound.studioPath = projectPath;
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      find: () => Promise<ContentSummary>;
-      getContent: () => Promise<ContentDetail>;
-    };
-    probe.find = async () => bound;
-    probe.getContent = async () => undefined as never;
-    const platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
-    const previousPath = process.env.PATH;
-    process.env.PATH = `${bin}:${previousPath ?? ""}`;
-
-    try {
-      await service.openStudio({ id: bound.id }, new AbortController().signal);
-      expect(await readFile(openedPath, "utf8")).toBe(projectPath);
-    } finally {
-      platform.mockRestore();
-      if (previousPath === undefined) delete process.env.PATH;
-      else process.env.PATH = previousPath;
-    }
-  });
-
-  it("OpenScreen 导出的 MP4 稳定落盘后清除等待状态", async () => {
-    vi.useFakeTimers();
-    const folder = await mkdtemp(join(tmpdir(), "oil-service-openscreen-export-"));
-    const projectPath = join(folder, "demo.openscreen");
-    await writeFile(projectPath, "{}\n");
-    const bound = item(folder, join(folder, "missing.mp4"));
-    delete bound.videoRaw;
-    bound.studioPath = projectPath;
-    const overlayItem: OverlayItem = { studioPath: projectPath };
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      exportWaiters: Map<string, AbortController>;
-      find: () => Promise<ContentSummary>;
-      patchItem: (
-        id: string,
-        patch: (item: OverlayItem) => void,
-        signal: AbortSignal,
-      ) => Promise<ContentDetail>;
-      getContent: () => Promise<ContentDetail>;
-    };
-    probe.exportWaiters = new Map();
-    probe.find = async () => bound;
-    probe.patchItem = async (_id, patch) => {
-      patch(overlayItem);
-      return undefined as never;
-    };
-    probe.getContent = async () => undefined as never;
-
-    try {
-      await writeFile(join(folder, "demo.mp4"), "video");
-      await service.waitForExport({ id: bound.id, timeoutMs: 20_000 }, new AbortController().signal);
-      expect(overlayItem.waitingForExport).toBe(true);
-      for (let tick = 0; tick < 6; tick += 1) {
-        await readFile(projectPath);
-        await vi.advanceTimersByTimeAsync(2_000);
-      }
-      expect(overlayItem.waitingForExport).toBeUndefined();
-      expect(overlayItem.exportTimedOut).toBeUndefined();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});
-
-describe("OilCreatorService.startSubtitleGenerate", () => {
-  it("always prepares subtitles without resolving or injecting the cover credential", async () => {
-    const folder = await mkdtemp(join(tmpdir(), "oil-service-subtitle-"));
-    const video = join(folder, "demo.mp4");
-    await writeFile(video, "v");
-
-    let launch: Parameters<OilCreatorService["startChainedJob"]>[2] | undefined;
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      ctx: { get: (name: string) => unknown };
-      find: () => Promise<ContentSummary>;
-      subtitleSkill: () => Promise<{ root: string; python: string }>;
-      startChainedJob: (
-        id: string,
-        field: "burn" | "subtitleJob" | "coverJob",
-        nextLaunch: Parameters<OilCreatorService["startChainedJob"]>[2],
-        signal: AbortSignal,
-      ) => Promise<ContentDetail>;
-    };
-    probe.ctx = {
-      get: () => ({
-        resolve: async (ref: string) => {
-          if (ref === "ZENMUX_API_KEY") throw new Error("cover credential must not be requested");
-          return ref === "DASHSCOPE_API_KEY" ? { value: "subtitle-key" } : undefined;
-        },
-        describe: async () => ({ configured: true, writable: false }),
-      }),
-    };
-    probe.find = async () => item(folder, video);
-    probe.subtitleSkill = async () => ({ root: "/tmp/oil-subtitle", python: "/tmp/python" });
-    probe.startChainedJob = async (_id, _field, nextLaunch) => {
-      launch = nextLaunch;
-      return undefined as never;
-    };
-
-    await service.startSubtitleGenerate({ id: "2026-08-13_demo" }, new AbortController().signal);
-
-    expect(launch?.steps).toHaveLength(3);
-    expect(launch?.steps[0]?.script.endsWith("bailian_transcribe.py")).toBe(true);
-    expect(launch?.steps[1]?.script.endsWith("review_subtitles.py")).toBe(true);
-    expect(launch?.steps[2]?.script.endsWith("prepare_subtitles.py")).toBe(true);
-    expect(launch?.steps.some((step) => step.script.endsWith("burn_subtitles.py"))).toBe(false);
-    expect(launch?.env).toEqual({ DASHSCOPE_API_KEY: "subtitle-key" });
-  });
-});
-
-describe("OilCreatorService.startChainedJob", () => {
-  it("passes each step only its declared credential", async () => {
-    chained.calls.length = 0;
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      patchItem: () => Promise<ContentDetail>;
-    };
-    probe.patchItem = async () => undefined as never;
-
-    await service.startChainedJob("demo", "subtitleJob", {
-      python: "/tmp/python",
-      env: { DASHSCOPE_API_KEY: "dash", ZENMUX_API_KEY: "zen" },
-      steps: [
-        { script: "bailian_transcribe.py", args: [], output: "transcript", env: "subtitle" },
-        { script: "review_subtitles.py", args: [], output: "reviewed", env: "subtitle" },
-        { script: "prepare_subtitles.py", args: [], output: "prepared", env: "none" },
-      ],
-    }, new AbortController().signal);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-    expect(chained.calls).toEqual([
-      { script: "bailian_transcribe.py", env: { DASHSCOPE_API_KEY: "dash" } },
-      { script: "review_subtitles.py", env: { DASHSCOPE_API_KEY: "dash" } },
-      { script: "prepare_subtitles.py" },
-    ]);
-  });
-});
-
-describe("OilCreatorService.openSubtitlePreview", () => {
-  async function previewService(folder: string, video: string): Promise<OilCreatorService> {
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const previewItem = item(folder, video);
-    previewItem.subtitles = { srt: join(folder, "demo.srt") };
-    const probe = service as unknown as {
-      dataDir: string;
-      previews: OilCreatorService["previews"];
-      find: () => Promise<ContentSummary>;
-      subtitleSkill: () => Promise<{ root: string; python: string }>;
-    };
-    probe.dataDir = folder;
-    probe.previews = new Map();
-    probe.find = async () => previewItem;
-    probe.subtitleSkill = async () => ({ root: "/tmp/oil-subtitle", python: "/tmp/python" });
-    return service;
-  }
-
-  it.each(["failure", "abort"] as const)("terminates and cleans up after waitHttp %s", async (mode) => {
-    const folder = await mkdtemp(join(tmpdir(), "oil-service-preview-"));
-    const video = join(folder, "demo.mp4");
-    await writeFile(video, "v");
-    await writeFile(join(folder, "demo.srt"), "1\n00:00:00,000 --> 00:00:01,000\n字幕\n");
-    preview.waitMode = mode;
-    preview.abortController = new AbortController();
-    preview.terminateCalls.length = 0;
-    const service = await previewService(folder, video);
-
-    await expect(service.openSubtitlePreview({ id: "2026-08-13_demo" }, preview.abortController.signal))
-      .rejects.toThrow(mode === "failure" ? "preview did not start" : "preview aborted");
-
-    expect(preview.terminateCalls).toHaveLength(1);
-    expect(service.previews.size).toBe(0);
-    expect(loadPreviewRegistry(join(folder, "preview-servers.json"))).toEqual([]);
-  });
-});
-
-async function syncService(profile: CreatorProfile): Promise<OilCreatorService> {
-  const dataDir = await mkdtemp(join(tmpdir(), "oil-service-sync-"));
-  const overlay = emptyOverlay();
-  overlay.profile = profile;
-  await saveOverlay(dataDir, overlay);
+function probe(dataDir: string, item: ContentSummary): OilCreatorService {
   const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-  const probe = service as unknown as {
-    dataDir: string;
-    scanned: () => Promise<{ items: ContentSummary[] }>;
-    invalidateCatalog: () => void;
-  };
-  probe.dataDir = dataDir;
-  probe.scanned = async () => ({ items: [] });
-  probe.invalidateCatalog = () => undefined;
+  Object.assign(service, {
+    dataDir,
+    libraryRoot: item.folderPath,
+    cache: undefined,
+    catalogRevision: 0,
+    videos: new Map(),
+    articles: new Map(),
+    draftStarts: new Set(),
+    find: vi.fn(async () => item),
+    invalidateCatalog: vi.fn(),
+  });
   return service;
 }
 
-describe("OilCreatorService.syncPublish", () => {
-  beforeEach(() => {
-    collect.calls.length = 0;
-    collect.run.mockClear();
-  });
-
-  it("passes the enabled platforms to the collector by default", async () => {
-    const service = await syncService({ enabledPlatforms: ["douyin", "wechat"] });
-
-    await service.syncPublish({}, new AbortController().signal);
-
-    expect(collect.calls).toEqual([{ platforms: ["douyin", "wechat"] }]);
-  });
-
-  it("rejects an explicitly requested disabled platform", async () => {
-    const service = await syncService({ enabledPlatforms: ["douyin"] });
-
-    await expect(service.syncPublish({ platform: "wechat" }, new AbortController().signal))
-      .rejects.toThrow("publish platform is disabled: wechat");
-    expect(collect.calls).toEqual([]);
-  });
-
-  it("returns without invoking the collector when all platforms are disabled", async () => {
-    const service = await syncService({ enabledPlatforms: [] });
-
-    await expect(service.syncPublish({}, new AbortController().signal)).resolves.toEqual({
-      matched: 0,
-      platforms: [],
+beforeEach(() => {
+  draft.prepare.mockClear();
+  draft.start.mockReset();
+  draft.finish = undefined;
+  draft.finishes = [];
+  draft.start.mockImplementation(async () => {
+    const completion = new Promise<
+      | { ok: true; url: string; remoteId: string; taskSpace: string }
+      | { ok: true; staged: true; taskSpace: string }
+      | { ok: false; error: string }
+    >((resolve) => {
+      draft.finish = resolve;
+      draft.finishes.push(resolve);
     });
-    expect(collect.calls).toEqual([]);
+    return { pid: 43210, completion };
   });
-
-  it("does not use a fresh cache that omits an enabled platform", async () => {
-    const service = await syncService({ enabledPlatforms: ["douyin", "wechat"] });
-    const dataDir = (service as unknown as { dataDir: string }).dataDir;
-    await saveCollectCache(dataDir, {
-      collected: [{ platform: "douyin", items: [] }],
-    }, { scope: "library" });
-
-    await service.syncPublish({}, new AbortController().signal);
-
-    expect(collect.calls).toEqual([{ platforms: ["douyin", "wechat"] }]);
-  });
-
-  it("checks a requested content id before the empty-platform early return", async () => {
-    const service = await syncService({ enabledPlatforms: [] });
-
-    await expect(service.syncPublish({ id: "missing" }, new AbortController().signal))
-      .rejects.toThrow("content not found: missing");
-    expect(collect.calls).toEqual([]);
+  articleDraft.prepare.mockClear();
+  articleDraft.start.mockReset();
+  articleDraft.finish = undefined;
+  articleDraft.start.mockImplementation(async () => {
+    const completion = new Promise<
+      { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }
+    >((resolve) => { articleDraft.finish = resolve; });
+    return { pid: 54321, completion };
   });
 });
 
-describe("OilCreatorService subtitle job reconcile", () => {
-  async function overlayService(item: OverlayItem) {
-    const dataDir = await mkdtemp(join(tmpdir(), "oil-service-job-"));
-    const libraryRoot = await mkdtemp(join(tmpdir(), "oil-service-lib-"));
+describe("OilCreatorService.startDrafts", () => {
+  it("记录运行中状态并在运行器完成后标为草稿", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-draft-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
     const overlay = emptyOverlay();
-    overlay.libraryRoot = libraryRoot;
-    overlay.items.demo = item;
-    await saveOverlay(dataDir, overlay);
-    const service = Object.create(OilCreatorService.prototype) as OilCreatorService;
-    const probe = service as unknown as {
-      dataDir: string;
-      libraryRoot: string;
-      cache: undefined;
-      watchedRoot: string;
-      watchClose: () => void;
-      catalogRevision: number;
-      exportWaiters: Map<string, AbortController>;
-    };
-    probe.dataDir = dataDir;
-    probe.libraryRoot = libraryRoot;
-    probe.cache = undefined;
-    probe.watchedRoot = libraryRoot;
-    probe.watchClose = () => undefined;
-    probe.catalogRevision = 0;
-    probe.exportWaiters = new Map();
-    return { dataDir, service };
-  }
+    overlay.profile = { enabledPlatforms: ["bilibili"] };
+    overlay.accounts = { bilibili: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, video));
 
-  function liveScript(script: string) {
-    const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)", script], {
-      detached: true,
-      stdio: "ignore",
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["bilibili"] },
+      new AbortController().signal,
+    );
+
+    expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.bilibili)
+      .toMatchObject({ status: "unpublished", draftState: "running", draftPid: 43210 });
+
+    draft.finish?.({
+      ok: true,
+      url: "https://member.bilibili.com/draft/42",
+      remoteId: "42",
+      taskSpace: "7",
     });
-    child.unref();
-    return child;
-  }
-
-  it("keeps subtitleJob running while prepare_subtitles.py is still the pid", async () => {
-    const child = liveScript("prepare_subtitles.py");
-    expect(child.pid).toBeTypeOf("number");
-    try {
-      const { dataDir, service } = await overlayService({
-        subtitleJob: {
-          status: "running",
-          startedAt: 1,
-          output: join(tmpdir(), "missing-transcript.json"),
-          pid: child.pid as number,
-        },
-      });
-      await service.scanned();
-      const overlay = await loadOverlay(dataDir);
-      expect(overlay.items.demo?.subtitleJob?.status).toBe("running");
-    } finally {
-      if (child.pid !== undefined) process.kill(child.pid);
-    }
+    await vi.waitFor(async () => {
+      expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.bilibili)
+        .toMatchObject({ status: "draft" });
+    });
+    expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.bilibili?.draftState)
+      .toBeUndefined();
   });
 
-  it("recovers a false process-exited error while burn_subtitles.py is still running", async () => {
-    const child = liveScript("burn_subtitles.py");
-    expect(child.pid).toBeTypeOf("number");
-    try {
-      const { dataDir, service } = await overlayService({
-        burn: {
-          status: "running",
-          startedAt: 1,
-          output: join(tmpdir(), "missing-subtitled.mp4"),
-          pid: child.pid as number,
-        },
-        subtitleJob: {
-          status: "error",
-          startedAt: 1,
-          output: join(tmpdir(), "missing-subtitled.mp4"),
-          error: "subtitleJob process exited",
-        },
-      });
-      await service.scanned();
-      const overlay = await loadOverlay(dataDir);
-      expect(overlay.items.demo?.subtitleJob).toMatchObject({
-        status: "running",
-        pid: child.pid,
-      });
-    } finally {
-      if (child.pid !== undefined) process.kill(child.pid);
-    }
+  it("平台只达到页面 READY 时不伪装成远端草稿", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-staged-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["douyin"] };
+    overlay.accounts = { douyin: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, video));
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["douyin"] },
+      new AbortController().signal,
+    );
+    draft.finish?.({ ok: true, staged: true, taskSpace: "13" });
+
+    await vi.waitFor(async () => {
+      expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.douyin)
+        .toMatchObject({ status: "unpublished", draftState: "ready" });
+    });
+  });
+
+  it("运行器缺少远端 ID 或回读 URL 时拒绝标记为草稿", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-unverified-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["bilibili"] };
+    overlay.accounts = { bilibili: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, video));
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["bilibili"] },
+      new AbortController().signal,
+    );
+    (draft.finish as unknown as ((result: { ok: true }) => void) | undefined)?.({ ok: true });
+
+    await vi.waitFor(async () => {
+      expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.bilibili)
+        .toMatchObject({
+          status: "unpublished",
+          draftState: "error",
+          draftError: expect.stringContaining("远端 ID"),
+        });
+    });
+  });
+
+  it("拒绝未启用的平台", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-draft-"));
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["bilibili"] };
+    overlay.accounts = { bilibili: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, join(root, "demo.mp4")));
+
+    await expect(service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["douyin"] },
+      new AbortController().signal,
+    )).rejects.toThrow("平台尚未在设置中启用");
+    expect(draft.prepare).not.toHaveBeenCalled();
+  });
+
+  it("拒绝尚未通过登录检查的平台", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-draft-"));
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["bilibili"] };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, join(root, "demo.mp4")));
+
+    await expect(service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["bilibili"] },
+      new AbortController().signal,
+    )).rejects.toThrow("账号尚未通过登录检查");
+    expect(draft.prepare).not.toHaveBeenCalled();
+  });
+
+  it("拒绝空的平台列表", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-draft-"));
+    const service = probe(root, summary(root, join(root, "demo.mp4")));
+    await expect(service.startDrafts(
+      { id: "2026-08-21_demo", platforms: [] },
+      new AbortController().signal,
+    )).rejects.toThrow("至少选择一个");
+  });
+
+  it("并发请求只允许同一平台启动一个运行器", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-start-lock-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["bilibili"] };
+    overlay.accounts = { bilibili: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, video));
+    let releaseStart: (() => void) | undefined;
+    draft.start.mockImplementationOnce(() => new Promise((resolve) => {
+      releaseStart = () => {
+        resolve({
+          pid: 43210,
+          completion: new Promise(() => undefined),
+        });
+      };
+    }));
+
+    const first = service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["bilibili"] },
+      new AbortController().signal,
+    );
+    await vi.waitFor(() => { expect(draft.start).toHaveBeenCalledTimes(1); });
+    await expect(service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["bilibili"] },
+      new AbortController().signal,
+    )).resolves.toMatchObject({ started: false });
+    releaseStart?.();
+    await first;
+    expect(draft.start).toHaveBeenCalledTimes(1);
+  });
+
+  it("逐平台启动并隔离成功与失败状态", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-isolation-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["bilibili", "douyin"] };
+    overlay.accounts = {
+      bilibili: { status: "active", checkedAt: 1 },
+      douyin: { status: "active", checkedAt: 1 },
+    };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, video));
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["bilibili", "douyin"] },
+      new AbortController().signal,
+    );
+
+    expect(draft.prepare.mock.calls.map((call) => call[2])).toEqual([["bilibili"], ["douyin"]]);
+    expect(draft.start).toHaveBeenCalledTimes(2);
+    draft.finishes[0]?.({
+      ok: true,
+      url: "https://member.bilibili.com/draft/42",
+      remoteId: "42",
+      taskSpace: "7",
+    });
+    draft.finishes[1]?.({ ok: false, error: "抖音页面失败" });
+    await vi.waitFor(async () => {
+      const saved = await loadOverlay(root);
+      expect(saved.items["2026-08-21_demo"]?.publish?.bilibili?.status).toBe("draft");
+      expect(saved.items["2026-08-21_demo"]?.publish?.douyin)
+        .toMatchObject({ status: "unpublished", draftState: "error", draftError: "抖音页面失败" });
+    });
+  });
+
+  it("文章冻结包交给微信公众号 Ego 适配器", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-article-"));
+    const article = join(root, "article.md");
+    const cover = join(root, "cover.png");
+    await writeFile(article, "# 文章");
+    await writeFile(cover, "cover");
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["wechat-mp"] };
+    overlay.accounts = { "wechat-mp": { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const { videoRaw: _videoRaw, ...articleBase } = summary(root, join(root, "missing.mp4"));
+    const content: ContentSummary = {
+      ...articleBase,
+      assets: {
+        videos: [],
+        subtitles: [],
+        articles: [{ name: "article.md", path: article }],
+        covers: [{ name: "cover.png", path: cover }],
+      },
+      hasArticle: true,
+      articlePath: article,
+    };
+    const service = probe(root, content);
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["wechat-mp"] },
+      new AbortController().signal,
+    );
+
+    expect(articleDraft.prepare).toHaveBeenCalledWith(content, "wechat-mp");
+    expect(articleDraft.start).toHaveBeenCalledTimes(1);
+    articleDraft.finish?.({
+      ok: true,
+      url: "https://mp.weixin.qq.com/draft/42",
+      remoteId: "42",
+      taskSpace: "7",
+    });
+    await vi.waitFor(async () => {
+      expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.["wechat-mp"])
+        .toMatchObject({ status: "draft", url: "https://mp.weixin.qq.com/draft/42", remoteId: "42" });
+    });
+  });
+});
+
+describe("OilCreatorService.getPlatformAccounts", () => {
+  it("始终返回 24 个平台并区分草稿支持", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-accounts-"));
+    const overlay = emptyOverlay();
+    overlay.accounts = { zhihu: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, join(root, "demo.mp4")));
+
+    const result = await service.getPlatformAccounts({}, new AbortController().signal);
+    expect(result.accounts).toHaveLength(24);
+    expect(result.accounts.find((row) => row.platform === "zhihu"))
+      .toMatchObject({ status: "active", supportsAutoDraft: false });
+    expect(result.accounts.find((row) => row.platform === "bilibili")?.supportsAutoDraft)
+      .toBe(true);
+    expect(result.accounts.find((row) => row.platform === "netease-music"))
+      .toMatchObject({ status: "unknown", supportsAutoDraft: false });
+    expect(result.accounts.find((row) => row.platform === "ximalaya"))
+      .toMatchObject({ status: "unknown", supportsAutoDraft: false });
+  });
+});
+
+describe("OilCreatorService Harness distribution", () => {
+  it("预览严格使用工作台当前选择的素材并拒绝目录外路径", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-preview-"));
+    const defaultVideo = join(root, "default.mp4");
+    const selectedVideo = join(root, "selected.mov");
+    const defaultArticle = join(root, "default.md");
+    const selectedArticle = join(root, "selected.md");
+    const outsideArticle = join(await mkdtemp(join(tmpdir(), "oil-preview-outside-")), "outside.md");
+    await Promise.all([
+      writeFile(defaultVideo, "default-video"),
+      writeFile(selectedVideo, "selected-video"),
+      writeFile(defaultArticle, "# 默认文章"),
+      writeFile(selectedArticle, "# 当前选择文章"),
+      writeFile(outsideArticle, "# 目录外文章"),
+    ]);
+    const item = summary(root, defaultVideo);
+    item.articlePath = defaultArticle;
+    item.assets.videos.push({ name: "selected.mov", path: selectedVideo });
+    item.assets.articles = [
+      { name: "default.md", path: defaultArticle },
+      { name: "selected.md", path: selectedArticle },
+    ];
+    const service = probe(root, item);
+
+    const video = await service.getVideoPlayback(
+      { id: item.id, path: selectedVideo },
+      new AbortController().signal,
+    );
+    const article = await service.getArticleMedia(
+      { id: item.id, path: selectedArticle },
+      new AbortController().signal,
+    );
+
+    expect(video).toMatchObject({ found: true, kind: "raw" });
+    expect(article).toMatchObject({ found: true, text: "# 当前选择文章" });
+    await expect(service.getArticleMedia(
+      { id: item.id, path: outsideArticle },
+      new AbortController().signal,
+    )).rejects.toThrow("不属于当前内容文件夹");
+    await service.stopServers();
+  });
+
+  it("把所选字幕和平台约束交给 Harness AI", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-source-"));
+    const video = join(root, "demo.mp4");
+    const subtitle = join(root, "demo.srt");
+    await writeFile(video, "video");
+    await writeFile(subtitle, "1\n00:00:00,000 --> 00:00:01,000\n你好 Harness\n");
+    const service = probe(root, summary(root, video));
+
+    const result = await service.getDistributionSource({
+      id: "2026-08-21_demo",
+      selection: { mode: "video", videoPath: video, subtitlePath: subtitle },
+      platforms: ["bilibili", "douyin"],
+    }, new AbortController().signal);
+
+    expect(result.sourceText).toContain("你好 Harness");
+    expect(result.platforms).toEqual([
+      expect.objectContaining({ platform: "bilibili", titleMax: 80, tagsMax: 10 }),
+      expect.objectContaining({ platform: "douyin", titleMax: 30, tagsMax: 5 }),
+    ]);
+  });
+
+  it("提交 AI 平台变体后原子写入冻结包", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-commit-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    const service = probe(root, summary(root, video));
+
+    const result = await service.commitDistribution({
+      id: "2026-08-21_demo",
+      selection: { mode: "video", videoPath: video },
+      variants: [
+        { platform: "bilibili", title: "B站标题", summary: "摘要", body: "简介", tags: ["AI"] },
+      ],
+    }, new AbortController().signal);
+
+    expect(result).toMatchObject({ id: "2026-08-21_demo", mode: "video", platforms: ["bilibili"] });
+    expect(JSON.parse(await readFile(join(root, DISTRIBUTION_PACKAGE_NAME), "utf8")))
+      .toMatchObject({ variants: { bilibili: { title: "B站标题", body: "简介" } } });
   });
 });

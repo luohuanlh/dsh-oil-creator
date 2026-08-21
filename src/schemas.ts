@@ -14,6 +14,18 @@ const contentSubtitlesSchema = z.object({
   transcript: z.string().optional(),
 });
 
+const localContentAssetSchema = z.object({
+  name: z.string().min(1),
+  path: z.string().min(1),
+});
+
+const contentAssetsSchema = z.object({
+  videos: z.array(localContentAssetSchema),
+  subtitles: z.array(localContentAssetSchema),
+  articles: z.array(localContentAssetSchema),
+  covers: z.array(localContentAssetSchema),
+});
+
 const pipelineSchema = z.union([
   z.literal("raw"),
   z.literal("subtitled"),
@@ -52,6 +64,14 @@ const platformPublishSchema = z.object({
   likes: z.number().optional(),
   comments: z.number().optional(),
   syncedAt: z.number().optional(),
+  draftState: z.union([
+    z.literal("running"),
+    z.literal("ready"),
+    z.literal("error"),
+  ]).optional(),
+  draftError: z.string().optional(),
+  draftStartedAt: z.number().optional(),
+  draftPid: z.number().int().positive().optional(),
 });
 
 const contentPublishSchema = z.object(
@@ -78,6 +98,11 @@ export const contentSummarySchema = z.object({
   id: z.string().min(1),
   folderPath: z.string().min(1),
   title: z.string(),
+  contentType: z.union([
+    z.literal("video"),
+    z.literal("audio"),
+    z.literal("article"),
+  ]).optional(),
   date: z.string().optional(),
   recordedAt: z.number(),
   createdMs: z.number(),
@@ -85,7 +110,9 @@ export const contentSummarySchema = z.object({
   videoSubtitled: z.string().optional(),
   covers: contentCoversSchema,
   subtitles: contentSubtitlesSchema,
+  assets: contentAssetsSchema,
   hasPublishPackage: z.boolean(),
+  hasDistributionPackage: z.boolean(),
   hasArticle: z.boolean(),
   studioPath: z.string().optional(),
   waitingForExport: z.boolean(),
@@ -104,22 +131,9 @@ export const creatorProfileSchema = z.object({
   enabledPlatforms: z.array(publishPlatformSchema),
 });
 
-const secretViewSchema = z.object({
-  kind: z.union([z.literal("subtitle"), z.literal("cover")]),
-  ref: z.string(),
-  configured: z.boolean(),
-  writable: z.boolean(),
-  source: z.string().optional(),
-});
-
 export const librarySettingsSchema = z.object({
   libraryRoot: z.string(),
   profile: creatorProfileSchema,
-  secrets: z.object({
-    subtitle: secretViewSchema,
-    cover: secretViewSchema,
-  }),
-  scriptRules: z.string().optional(),
 });
 
 export const listContentsRequestSchema = z.object({
@@ -148,18 +162,27 @@ export const idRequestSchema = z.object({
   id: z.string().min(1),
 });
 
+export const importAssetRequestSchema = z.object({
+  id: z.string().min(1),
+  kind: z.union([z.literal("article"), z.literal("cover")]),
+  name: z.string().min(1).max(255),
+  mimeType: z.string().max(128),
+  base64: z.string().min(1).max(28_000_000),
+});
+
 export const contentDetailSchema = contentSummarySchema.and(
   z.object({
     publishCopy: z.string(),
     topicNote: z.string(),
     script: z.string(),
     article: z.string(),
-    secrets: z.object({
-      subtitle: secretViewSchema,
-      cover: secretViewSchema,
-    }),
   }),
 );
+
+export const importAssetResultSchema = z.object({
+  asset: localContentAssetSchema,
+  detail: contentDetailSchema,
+});
 
 export const coverThumbResultSchema = z.object({
   found: z.boolean(),
@@ -173,9 +196,15 @@ export const videoPlaybackResultSchema = z.object({
   kind: z.union([z.literal("raw"), z.literal("subtitled")]),
 });
 
+export const assetPreviewRequestSchema = z.object({
+  id: z.string().min(1),
+  path: z.string().min(1),
+});
+
 export const articleMediaResultSchema = z.object({
   found: z.boolean(),
   origin: z.string(),
+  text: z.string(),
 });
 
 export const subtitleTextResultSchema = z.object({
@@ -194,13 +223,6 @@ export const setContentStageRequestSchema = z.object({
 export const bindStudioRequestSchema = z.object({
   id: z.string().min(1),
   path: z.string().min(1),
-});
-
-export const setPublishRequestSchema = z.object({
-  id: z.string().min(1),
-  platform: publishPlatformSchema,
-  status: publishMarkSchema,
-  url: z.string().optional(),
 });
 
 export const subtitlePreviewResultSchema = z.object({
@@ -243,17 +265,51 @@ const capabilitySchema = z.object({
 export const capabilitiesResultSchema = z.object({
   capabilities: z.object({
     library: capabilitySchema,
-    openScreen: capabilitySchema,
-    screenStudio: capabilitySchema,
-    subtitleSkill: capabilitySchema,
-    subtitleCredential: capabilitySchema,
-    coverSkill: capabilitySchema,
-    coverCredential: capabilitySchema,
-    publishSync: capabilitySchema,
-    editingSkill: capabilitySchema,
-    publishSkill: capabilitySchema,
-    articleSkill: capabilitySchema,
+    autoPublish: capabilitySchema,
+    article: capabilitySchema,
+    egoBrowser: capabilitySchema,
   }),
+});
+
+const platformAccountSchema = z.object({
+  platform: publishPlatformSchema,
+  status: z.union([z.literal("unknown"), z.literal("active"), z.literal("expired")]),
+  nickname: z.string().optional(),
+  checkedAt: z.number().optional(),
+  taskSpace: z.string().optional(),
+  supportsAutoDraft: z.boolean(),
+  draftCapability: z.union([
+    z.literal("remote-verified"),
+    z.literal("implemented-simulated"),
+    z.literal("page-ready"),
+    z.literal("unsupported"),
+  ]),
+});
+
+export const platformAccountsResultSchema = z.object({
+  accounts: z.array(platformAccountSchema),
+});
+
+export const platformAccountRequestSchema = z.object({
+  platform: publishPlatformSchema,
+});
+
+export const openPlatformAccountResultSchema = z.object({
+  platform: publishPlatformSchema,
+  started: z.boolean(),
+  taskSpace: z.string().optional(),
+});
+
+export const startDraftsRequestSchema = z.object({
+  id: z.string().min(1),
+  platforms: z.array(publishPlatformSchema).min(1),
+  confirmOriginalRights: z.boolean().optional(),
+});
+
+export const startDraftsResultSchema = z.object({
+  id: z.string().min(1),
+  platforms: z.array(publishPlatformSchema),
+  started: z.boolean(),
 });
 
 export const waitExportRequestSchema = z.object({
@@ -267,6 +323,11 @@ export const setLibraryRootRequestSchema = z.object({
 
 export const createContentRequestSchema = z.object({
   title: z.string().min(1),
+  contentType: z.union([
+    z.literal("video"),
+    z.literal("audio"),
+    z.literal("article"),
+  ]).optional(),
 });
 
 export const createContentResultSchema = z.object({

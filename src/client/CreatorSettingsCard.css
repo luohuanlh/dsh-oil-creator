@@ -209,3 +209,377 @@
   justify-content: space-between;
   gap: 8px;
 }
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto minmax(76px, auto) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName small,
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountSupport {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+@media (max-width: 760px) {
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountRow {
+    grid-template-columns: minmax(120px, 1fr) auto;
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountSupport {
+    display: none;
+  }
+}
+
+/* Settings as a compact studio ledger */
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] {
+  container-name: oil-settings;
+  container-type: inline-size;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--oil-line);
+  border-radius: 18px 4px 18px 18px;
+  background: var(--oil-paper-raised);
+  box-shadow: 0 12px 34px rgba(63, 45, 25, 0.07);
+  color: var(--oil-ink);
+  font-family: var(--oil-font-body);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"].open {
+  border-color: color-mix(in srgb, var(--oil-accent) 36%, var(--oil-line));
+  background: var(--oil-paper);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .header {
+  min-height: 76px;
+  padding: 14px 18px;
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, var(--oil-accent) 0 4px, transparent 4px),
+    var(--oil-paper-raised);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .settingsIcon {
+  flex: none;
+  display: block;
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .name {
+  color: var(--oil-ink);
+  font-family: var(--oil-font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .description {
+  color: var(--oil-ink-faint);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .pending {
+  border: 1px solid color-mix(in srgb, var(--oil-accent) 45%, var(--oil-line));
+  background: var(--oil-accent-soft);
+  color: var(--oil-accent-deep);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  gap: 14px;
+  margin: 0;
+  padding: 18px;
+  border-top: 1px solid var(--oil-line);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .field {
+  gap: 5px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--oil-line);
+  border-radius: 4px 14px 14px 4px;
+  background: var(--oil-paper-raised);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .fieldLabel {
+  color: var(--oil-ink);
+  font-family: var(--oil-font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .fieldHint {
+  color: var(--oil-ink-faint);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .capabilityField,
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .libraryField {
+  min-height: 0;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .capabilityGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .capabilityItem {
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 1px solid var(--oil-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--oil-paper-deep) 55%, transparent);
+  color: var(--oil-ink-soft);
+  font-size: 11px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .pathRow {
+  align-items: stretch;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .path {
+  padding: 9px 11px;
+  border-color: var(--oil-line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--oil-paper-deep) 48%, transparent);
+  color: var(--oil-ink-soft);
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-size: 10px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountsField {
+  grid-column: 1 / -1;
+  padding: 18px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountGroups {
+  display: grid;
+  grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.35fr);
+  align-items: start;
+  gap: 14px;
+  min-width: 0;
+  width: 100%;
+  margin-top: 14px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountGroup {
+  min-width: 0;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .audioGroup {
+  grid-column: 1 / -1;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountGroupHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 0 4px 7px;
+  border-bottom: 1px solid var(--oil-line);
+  color: var(--oil-ink-soft);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountGroupHead strong {
+  color: var(--oil-accent);
+  font-family: var(--oil-font-display);
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  margin: 0;
+  padding-right: 0;
+  overflow: visible;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .articleGroup .accountList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .audioGroup .accountList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 54px;
+  padding: 9px 10px;
+  border: 1px solid var(--oil-line);
+  border-radius: 3px 11px 11px 3px;
+  background: color-mix(in srgb, var(--oil-paper-deep) 45%, transparent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountRow:hover {
+  border-color: color-mix(in srgb, var(--oil-accent) 42%, var(--oil-line));
+  background: var(--oil-accent-soft);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountMain {
+  align-self: center;
+  min-width: 0;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountMain input {
+  accent-color: var(--oil-accent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--oil-ink);
+  font-family: var(--oil-font-body);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName small {
+  min-width: 0;
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--oil-ink-faint);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountActions {
+  grid-column: auto;
+  white-space: nowrap;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountActions button {
+  min-height: 25px;
+  padding-inline: 9px;
+  font-size: 9px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .footer {
+  grid-column: 1 / -1;
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--oil-line);
+  background: var(--oil-paper);
+}
+
+@media (max-width: 920px) {
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountGroups,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .body {
+    grid-template-columns: 1fr;
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountsField,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .footer {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 620px) {
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .articleGroup .accountList,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .capabilityGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The host settings sheet can be narrower than the browser viewport. */
+@container oil-settings (max-width: 760px) {
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountGroups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .videoGroup .accountList,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .articleGroup .accountList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName small {
+    display: none;
+  }
+}
+
+@container oil-settings (max-width: 520px) {
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .body,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .capabilityGrid,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .videoGroup .accountList,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .articleGroup .accountList,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .audioGroup .accountList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountsField,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .footer {
+    grid-column: 1;
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .body {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .field,
+  [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountsField {
+    padding: 12px;
+  }
+}

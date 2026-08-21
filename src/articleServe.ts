@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
-import { findFreePort } from "./subtitle.ts";
+import { findFreePort } from "./ports.ts";
 
 const IMAGE_MIME: Record<string, string> = {
   ".jpg": "image/jpeg",

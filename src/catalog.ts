@@ -6,11 +6,18 @@ import {
   isSubtitledVideoName,
   pickArticleFile,
   pickPublishPackage,
+  SCRIPT_NAME,
+  TOPIC_NAME,
 } from "./artifacts.ts";
-import { anyPlatformPublished, emptyBurn, mergePublish, readFolderPublish } from "./publishStatus.ts";
+import { emptyBurn, mergePublish, readFolderPublish } from "./publishStatus.ts";
+import {
+  discoverContentAssets,
+  readFrozenDistributionPackage,
+} from "./distribution.ts";
 import type {
   ContentFilter,
   ContentSummary,
+  ContentType,
   LibraryCounts,
   OverlayItem,
   OverlayStore,
@@ -20,9 +27,9 @@ import type {
 } from "./types.ts";
 
 const DATE_PREFIX = /^(\d{4}-\d{2}-\d{2})_(.+)$/;
+export const CONTENT_METADATA_NAME = ".oil-content.json";
 const SKIP_DIRS = new Set([
   ".dsh-oil-creator",
-  ".oil-cover",
   "公众号文章",
 ]);
 
@@ -52,6 +59,7 @@ export async function createContentFolder(
   libraryRoot: string,
   title: string,
   now = new Date(),
+  contentType: ContentType = "video",
 ): Promise<{ id: string; folderPath: string }> {
   const root = await stat(libraryRoot).catch(() => undefined);
   if (root === undefined || !root.isDirectory()) {
@@ -65,6 +73,10 @@ export async function createContentFolder(
     const exists = await stat(folderPath).then(() => true, () => false);
     if (!exists) {
       await mkdir(folderPath);
+      await writeFile(join(folderPath, CONTENT_METADATA_NAME), `${JSON.stringify({
+        schemaVersion: 1,
+        contentType,
+      }, null, 2)}\n`, "utf8");
       return { id, folderPath };
     }
     id = `${base}-${suffix}`;
@@ -117,7 +129,7 @@ function hasSubtitle(item: ContentSummary): boolean {
 }
 
 export function pipelineOf(item: Omit<ContentSummary, "pipeline" | "workflow">): PipelineStage {
-  if (item.hasPublishPackage) return "packaged";
+  if (item.hasDistributionPackage || item.hasPublishPackage) return "packaged";
   if (hasCover(item as ContentSummary)) return "covered";
   if (hasSubtitle(item as ContentSummary)) return "subtitled";
   return "raw";
@@ -125,17 +137,15 @@ export function pipelineOf(item: Omit<ContentSummary, "pipeline" | "workflow">):
 
 export function workflowOf(
   item: Omit<ContentSummary, "pipeline" | "workflow">,
-  overlay?: OverlayItem,
+  _overlay?: OverlayItem,
 ): WorkflowStage {
-  if (anyPlatformPublished(item.publish)) return "live";
-  const recorded = item.videoRaw !== undefined || item.videoSubtitled !== undefined;
-  if (recorded) {
-    if (hasSubtitle(item as ContentSummary) && hasCover(item as ContentSummary)) return "publish";
-    return "finish";
+  if (Object.values(item.publish).some((row) => row.status === "draft" || row.status === "published")) {
+    return "live";
   }
-  if (item.studioPath !== undefined || overlay?.studioPath !== undefined) return "cut";
-  if (overlay?.waitingForExport === true) return "finish";
-  if (overlay?.readyToRecord === true) return "record";
+  const hasSource = item.videoRaw !== undefined
+    || item.videoSubtitled !== undefined
+    || item.hasArticle;
+  if (hasSource && (item.hasDistributionPackage || item.hasPublishPackage)) return "publish";
   return "idle";
 }
 
@@ -181,6 +191,14 @@ function stringArrayField(value: unknown, key: string): string[] {
   return field.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
+function contentTypeField(value: unknown): ContentType | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const field = (value as Record<string, unknown>).contentType;
+  return field === "video" || field === "audio" || field === "article"
+    ? field
+    : undefined;
+}
+
 async function scanFolder(
   libraryRoot: string,
   folderName: string,
@@ -194,6 +212,7 @@ async function scanFolder(
   const entries = await readdir(folderPath, { withFileTypes: true });
   const names = entries.map((entry) => entry.name);
   const { date, title: folderTitle } = folderDateAndTitle(folderName);
+  const contentType = contentTypeField(await readJson(join(folderPath, CONTENT_METADATA_NAME)));
 
   const covers: ContentSummary["covers"] = {};
   const cover3x4 = names.find((name) => name.endsWith("_3x4.png"));
@@ -239,6 +258,8 @@ async function scanFolder(
   const packageName = pickPublishPackage(names);
   const packagePath = packageName === undefined ? undefined : join(folderPath, packageName);
   const packageJson = packagePath === undefined ? undefined : await readJson(packagePath);
+  const assets = await discoverContentAssets(folderPath);
+  const distributionPackage = await readFrozenDistributionPackage(folderPath);
   const overlayTitle = overlay.items[folderName]?.title;
   const title = overlayTitle ?? folderTitle;
 
@@ -274,16 +295,25 @@ async function scanFolder(
     const articleFile = pickArticleFile(articleNames);
     if (articleFile !== undefined) articlePath = join(folderPath, ARTICLE_DIR, articleFile);
   }
+  if (articlePath === undefined) {
+    const articleFile = pickArticleFile(names.filter((name) =>
+      name !== SCRIPT_NAME && name !== TOPIC_NAME
+    ));
+    if (articleFile !== undefined) articlePath = join(folderPath, articleFile);
+  }
 
   const draft: Omit<ContentSummary, "pipeline" | "workflow"> = {
     id: folderName,
     folderPath,
     title,
+    ...(contentType === undefined ? {} : { contentType }),
     recordedAt,
     createdMs,
     covers,
     subtitles,
+    assets,
     hasPublishPackage: packageJson !== undefined,
+    hasDistributionPackage: distributionPackage !== undefined,
     hasArticle: articlePath !== undefined,
     waitingForExport: overlayItem?.waitingForExport === true,
     ...(overlayItem?.exportTimedOut === true ? { exportTimedOut: true } : {}),

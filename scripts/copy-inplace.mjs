@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
-const src = resolve(repositoryRoot, process.argv[2] ?? "scripts/collect-publish.mjs");
-const dest = resolve(repositoryRoot, process.argv[3] ?? "lib/collect-publish.mjs");
+const src = resolve(repositoryRoot, process.argv[2] ?? "scripts/platform-account.mjs");
+const dest = resolve(repositoryRoot, process.argv[3] ?? "lib/platform-account.mjs");
 const libDirectory = resolve(repositoryRoot, "lib");
 
 if (dest !== libDirectory && !dest.startsWith(`${libDirectory}${sep}`)) {

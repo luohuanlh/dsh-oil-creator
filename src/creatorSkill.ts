@@ -13,53 +13,49 @@ interface SkillsContext {
 export const CREATOR_WORKBENCH_SKILL = {
   name: "creator-workbench",
   description:
-    "配置和使用内容工作台。首次使用、选择或安装录屏工具、调整内容目录、整理目录、检查字幕/封面/发布能力，或推进一条内容时使用。",
+    "配置和使用 AI 内容分发工作台：选择本地素材、生成平台变体，并由 Ego Browser 只保存草稿。",
   source: "runtime" as const,
   invocation: { modelInvocable: true, userInvocable: true },
   content: `# 内容工作台
 
-## 开始前
+## 唯一流程
 
-1. 用户不知道这个插件能做什么、怎么用，或你不确定下一步时，先调用 \`oil_creator_guide\`；它会返回带当前能力状态的完整指引。
-2. 配置或诊断环境调用 \`oil_creator_setup\`，不要先向用户询问系统能够检查出来的信息。
-3. 根据返回的 \`capabilities\` 区分核心能力和可选能力。内容目录是核心；录屏/剪辑工具、字幕、封面和发布同步缺失时只降级对应环节。
-4. 如果需要寻找目录，先用系统文件工具只读查看候选目录。不要扫描整个磁盘，不要读取与内容工作无关的私人文件。
+1. **内容管理与固定输入**：磁盘文件夹是原始素材的唯一真相来源。工作台会给出用户已经选择的视频 + 可选字幕，或 Markdown 文章 + 封面，以及目标平台。不得擅自替换文件。
+2. **平台绑定**：使用 oil_platform_accounts 列出 24 个平台并打开或检查 Ego Browser 账号；能登录不代表平台已经有草稿适配器。
+3. **Harness AI 适配**：先用 oil_distribution_source 读取固定输入。sourceText 来自所选文章/字幕；视频未选字幕时回退到同目录的 script.md 与 topic.md。根据 sourceText 和每个平台约束，生成每个平台恰好一个 title、summary、body、tags；保留原文事实，不虚构数据、功能或引语。
+4. **冻结并建草稿**：用 oil_create_platform_drafts 提交同一组固定输入和全部 variants。工具先原子冻结内容，再交给 Ego Browser 上传、填表、保存和验证草稿。
+5. **重试**：只有在用户要求重试已经冻结的内容时才用 oil_prepare_drafts；它复用同一份文案，不重新生成。
+
+## Harness / Ego 边界
+
+- Harness AI 负责理解字幕或文章、按平台适配字段并提交冻结分发包。
+- Ego Browser 只负责登录会话、文件上传、页面/API 填写、保存草稿和回读验证；不得调用模型或自行改写文案。
+- B站视频已通过真实远端保存与 id 回读。微信公众号图文已实现并通过模拟回归，但完成真实账号回归前不得称为远端已验证。抖音、小红书和视频号当前只准备已验证的投稿页，并明确返回“页面已备”；通过各自的远端保存回归前，不得报告草稿成功。其他平台只有真实适配器通过回归后才能使用。
+
+## 工作台页面
+
+- 概览只显示封面、状态和时间等预览信息，不承载选择或执行操作。
+- 视频和图文页各自只有两步：先选择该类型的内容文件并预览，再选择平台并创建草稿。平台账号状态、平台选择、草稿状态和启动动作统一在第二步。
 
 ## 配置
 
-- 内容目录和 \`enabledPlatforms\` 通过 \`oil_creator_setup\` 配置；这里不配置创作者名称或平台主页。
-- 脚本规则（人设）通过 \`oil_script_rules\` 配置：写或改 script.md 前先读；用户第一次让你写脚本而没有规则时，主动问清语气、结构、禁忌和目标观众再存下；之后把新的长期偏好合并进现有规则，不要整体覆盖。
-- 候选内容目录不存在时，先展示准备创建的完整路径；用户确认后用系统文件工具创建，再重新调用 \`oil_creator_setup\` 预览。不要把不存在的目录直接交给配置工具。
-- 第一次带配置字段调用时保持 \`apply=false\`，把精确变更展示给用户。
-- 只有用户确认后，才使用同一组字段和 \`apply=true\`。
-- 不向用户索要 API Key 明文。字幕和封面凭据只能让用户在插件设置页通过 Harness Credentials 配置。
-- 高级依赖路径由插件配置或环境自动发现；能自动发现时不要增加问题。
+- 首次使用或环境不明时调用 oil_creator_setup。第一次传配置字段保持 apply=false，展示精确变更；只有用户确认后才用同一组字段和 apply=true。
+- 内容目录不存在时先展示准备创建的绝对路径，确认后再用文件工具创建。
+- 设置页环境状态只包含内容目录、自动发布、公众号图文和 Ego Browser。
 
-## 录屏工具选择与安装
+## 文件约定
 
-- 首次配置录屏工具或未发现可用工具时，不要默认要求安装 Screen Studio。给用户三个选项：OpenScreen（推荐的开源方案）、Screen Studio（支持自动剪辑，仅 macOS）或继续使用已有工具。
-- OpenScreen 是 MIT 许可的跨平台录屏和演示剪辑工具，官方仓库为 https://github.com/getopenscreen/openscreen 。它可以完成录制、剪辑和 MP4/GIF 导出，并提供 CLI；项目仍在活跃开发，\`.openscreen\` 工程格式和 CLI 可能发生破坏性变化。
-- 用户选择 OpenScreen 后，先说明准备执行的安装动作并取得确认，只从官方渠道安装：macOS 从 https://github.com/getopenscreen/openscreen/releases 下载签名并公证的 \`.dmg\`；Windows 优先执行 \`winget install --source msstore OpenScreen\`；Linux 先识别发行版，再从官方 Releases 选择 \`.deb\`、\`.rpm\`、\`.pacman\` 或 \`.AppImage\`。不要默认从源码构建，也不要使用第三方下载站。
-- macOS 首次启动后，引导用户在“系统设置 → 隐私与安全性”授予“屏幕录制”和“辅助功能”权限。安装或授权尚未验证时，不要声称已经可用。
-- OpenScreen 沿用现有工程接口：把 \`.openscreen\` 路径传给 \`oil_update_content\` 的 \`studioPath\` 绑定，用 \`oil_open_studio\` 打开；用户开始导出后用 \`oil_wait_export\` 等待对应内容目录中的 MP4/MOV 稳定落盘，再从字幕、封面等步骤继续。不要解析或改写 \`.openscreen\` JSON，也不要把 OpenScreen 工程交给 \`screen-studio-editor\`。
-- 只有用户明确选择 Screen Studio 时，才把 \`.screenstudio\` 工程交给 \`screen-studio-editor\` 自动剪辑；它的绑定、打开和导出等待与 OpenScreen 共用现有接口。用户选择已有工具时，以导出的成片文件作为交接点。
+- 一条内容对应一个子文件夹，推荐命名 YYYY-MM-DD_可读标题。
+- 视频使用 MP4/MOV，字幕使用 SRT/ASS/VTT/TXT；文章使用 Markdown，封面使用 PNG/JPEG/WebP。
+- 用户不需要手写发布包。oil_create_platform_drafts 会生成 .oil-distribution.json 作为可审计、可重试的冻结分发包。
+- 不得移动、删除或改写用户选择的原始素材。
 
-## 内容目录
+## 草稿安全
 
-- 磁盘文件是正文真源；工作台 overlay 只保存绑定、阶段和发布状态。
-- 一集一个子目录，默认命名为 \`YYYY-MM-DD_可读标题\`。
-- 先列目录，再读这一集需要的 \`topic.md\`、\`script.md\`、发布包、字幕或文章文件。
-- 创建新内容使用 \`oil_create_content\`；修改普通 Markdown 和 JSON 正文使用系统文件工具。
-
-## 整理与发布安全
-
-- 调用 \`oil_organize_library\` 时先预览，向用户列出改名前后；确认后才传 \`apply=true\`。它不删除文件。
-- 发布默认准备草稿。上传、账号登录和最终发表属于外部发布能力；最终发表必须由用户明确确认。
-- 自动发布（\`video-publisher\` skill）和已发布数据回收（\`oil_sync_publish\`）只处理 \`enabledPlatforms\` 中的平台，都依赖 Ego Browser 和已登录的创作者后台；\`enabledPlatforms\` 为空时不执行发布或同步，先配置并确认启用平台。能力检查显示缺失时明确告诉用户这两项不可用，其余功能照常。
-
-## 推进工作
-
-每次只推进当前缺失的下一步：选题与脚本 → 录制/工程 → 导出成片 → 字幕 → 封面 → 发布草稿 → 用户最终发表 → 同步数据。长任务启动后检查产物或工作台状态，不把“已经启动”说成“已经完成”。`,
+- 自动草稿不是最终发布。不得点击最终“发布 / 发表 / 立即投稿”控件。
+- 只有用户本次明确确认，才能给 oil_create_platform_drafts 或 oil_prepare_drafts 传 confirmOriginalRights=true；不能从内容本身推断原创权。
+- 如果平台没有真实适配器，明确返回“尚未接入”，不要手写草稿成功状态。
+- 某个平台失败时如实报告该平台错误；不要覆盖其他平台已经验证成功的草稿。`,
 };
 
 export function registerCreatorWorkbenchSkill(ctx: SkillsContext): () => void {

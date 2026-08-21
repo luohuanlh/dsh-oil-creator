@@ -1,17 +1,19 @@
 import type {
+  ArticleMediaResult,
+  AssetSelection,
   ContentDetail,
   ContentFilter,
+  ContentType,
   CoverThumbResult,
   CreatorCapabilities,
   CreatorProfile,
   LibrarySettings,
+  ImportAssetRequest,
+  ImportAssetResult,
   ListContentsResult,
-  PublishMark,
+  OpenPlatformAccountResult,
+  PlatformAccountsResult,
   PublishPlatform,
-  SubtitlePreviewResult,
-  SubtitleTextResult,
-  SyncPublishResult,
-  ArticleMediaResult,
   VideoPlaybackResult,
 } from "../types.ts";
 
@@ -20,27 +22,28 @@ export interface CreatorViewFace {
   listContents: (query: string, filter: ContentFilter) => Promise<ListContentsResult>;
   getRevision: () => Promise<number>;
   getContent: (id: string) => Promise<ContentDetail>;
+  importAsset: (request: ImportAssetRequest) => Promise<ImportAssetResult>;
   getCoverThumb: (id: string) => Promise<CoverThumbResult>;
-  getVideoPlayback: (id: string) => Promise<VideoPlaybackResult>;
-  getArticleMedia: (id: string) => Promise<ArticleMediaResult>;
-  getSubtitleText: (id: string) => Promise<SubtitleTextResult>;
+  getVideoPlayback: (id: string, path: string) => Promise<VideoPlaybackResult>;
+  getArticleMedia: (id: string, path: string) => Promise<ArticleMediaResult>;
   pickDirectory: () => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
   getSettings: () => Promise<LibrarySettings>;
   getCapabilities: () => Promise<CreatorCapabilities>;
   setLibraryRoot: (path: string) => Promise<void>;
   setProfile: (profile: CreatorProfile) => Promise<void>;
-  setScriptRules: (text: string) => Promise<void>;
   refreshCatalog: () => Promise<ListContentsResult>;
-  createContent: (title: string) => Promise<{ id: string; folderPath: string }>;
-  markReadyToRecord: (id: string) => Promise<ContentDetail>;
-  bindStudio: (id: string, path: string) => Promise<ContentDetail>;
-  openStudio: (id: string) => Promise<ContentDetail>;
-  setPublish: (id: string, platform: PublishPlatform, status: PublishMark, url?: string) => Promise<ContentDetail>;
-  syncPublish: (request?: { platform?: PublishPlatform; id?: string }) => Promise<SyncPublishResult>;
-  openSubtitlePreview: (id: string) => Promise<SubtitlePreviewResult>;
-  startSubtitleBurn: (id: string) => Promise<ContentDetail>;
-  startSubtitleGenerate: (id: string) => Promise<ContentDetail>;
-  startCoverGenerate: (id: string) => Promise<ContentDetail>;
-  setScript: (id: string, text: string) => Promise<ContentDetail>;
+  createContent: (
+    title: string,
+    contentType: ContentType,
+  ) => Promise<{ id: string; folderPath: string }>;
+  getPlatformAccounts: () => Promise<PlatformAccountsResult>;
+  openPlatformAccount: (platform: PublishPlatform) => Promise<OpenPlatformAccountResult>;
+  checkPlatformAccount: (platform: PublishPlatform) => Promise<PlatformAccountsResult>;
+  queueDistribution: (request: {
+    id: string;
+    selection: AssetSelection;
+    platforms: PublishPlatform[];
+    confirmOriginalRights?: boolean;
+  }) => Promise<void>;
 }

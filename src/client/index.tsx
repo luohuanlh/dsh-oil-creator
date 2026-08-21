@@ -1,33 +1,36 @@
-import type { ClientContext, WorkspaceId } from "@deepseek-ai/dsh-client-runtime/client";
+import type { ClientContext, ISessions, WorkspaceId } from "@deepseek-ai/dsh-client-runtime/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
 import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
 import type {} from "@deepseek-ai/dsh-api-remotes/client";
 import type {} from "@deepseek-ai/dsh-client-connection/client";
 import type {} from "@deepseek-ai/dsh-client-ui-settings-plugins/client";
 
+import "./OilTheme.css";
+
 import { TYPERT_REMOTE } from "../remote.ts";
 import { CREATOR_SETTINGS_NAMESPACE } from "../settingsContract.ts";
-import { startLibraryLiveSync } from "./catalogSync.ts";
-import { remountPluginCss, releasePluginCss } from "./pluginCss.ts";
-import { releaseShellChrome } from "./contentSelection.ts";
-import { registerContentTriggers } from "./contentTriggers.ts";
 import type {
+  ArticleMediaResult,
+  AssetSelection,
   ContentDetail,
   ContentFilter,
+  ContentType,
   CoverThumbResult,
   CreateContentResult,
   CreatorCapabilities,
   CreatorProfile,
   LibrarySettings,
+  ImportAssetRequest,
+  ImportAssetResult,
   ListContentsResult,
-  PublishMark,
+  OpenPlatformAccountResult,
+  PlatformAccountsResult,
   PublishPlatform,
-  SubtitlePreviewResult,
-  SyncPublishResult,
-  ArticleMediaResult,
   VideoPlaybackResult,
 } from "../types.ts";
+import { startLibraryLiveSync } from "./catalogSync.ts";
 import { ContentInspector } from "./ContentInspector.tsx";
+import { queueDistributionPrompt } from "./distributionPrompt.ts";
 import {
   bumpLibrary,
   bumpProfile,
@@ -35,10 +38,12 @@ import {
   setSelectedContentId,
   subscribeSelectedContentId,
 } from "./contentSelection.ts";
-import type { CredentialsClient } from "./credentialsApi.ts";
+import { registerContentTriggers } from "./contentTriggers.ts";
 import { CreatorSettingsCard } from "./CreatorSettingsCard.tsx";
 import type { CreatorViewFace } from "./face.ts";
 import { en, NS, type CreatorKey, zh } from "./locales.ts";
+import { remountPluginCss, releasePluginCss } from "./pluginCss.ts";
+import { releaseShellChrome } from "./contentSelection.ts";
 import { OilSidebarRoot } from "./sidebar/OilSidebarRoot.tsx";
 import type { OilSidebarInjected, OilSidebarSlotProps } from "./sidebar/slots.ts";
 import {
@@ -61,38 +66,23 @@ interface RemoteAnswer<T> {
 interface OilCreatorRemote {
   listContents: (request: { query: string; filter: ContentFilter }) => Promise<RemoteAnswer<ListContentsResult>>;
   getContent: (request: { id: string }) => Promise<RemoteAnswer<ContentDetail>>;
+  importAsset: (request: ImportAssetRequest) => Promise<RemoteAnswer<ImportAssetResult>>;
   getCoverThumb: (request: { id: string }) => Promise<RemoteAnswer<CoverThumbResult>>;
-  getVideoPlayback: (request: { id: string }) => Promise<RemoteAnswer<VideoPlaybackResult>>;
-  getArticleMedia: (request: { id: string }) => Promise<RemoteAnswer<ArticleMediaResult>>;
-  getSubtitleText: (request: { id: string }) => Promise<RemoteAnswer<{ text: string; cues: Array<{ text: string; at?: string }> }>>;
+  getVideoPlayback: (request: { id: string; path: string }) => Promise<RemoteAnswer<VideoPlaybackResult>>;
+  getArticleMedia: (request: { id: string; path: string }) => Promise<RemoteAnswer<ArticleMediaResult>>;
   getSettings: (request: Record<string, never>) => Promise<RemoteAnswer<LibrarySettings>>;
   getCapabilities: (request: Record<string, never>) => Promise<RemoteAnswer<{ capabilities: CreatorCapabilities }>>;
   getRevision: (request: Record<string, never>) => Promise<RemoteAnswer<{ revision: number }>>;
   setLibraryRoot: (request: { path: string }) => Promise<RemoteAnswer<LibrarySettings>>;
   setProfile: (request: { profile: CreatorProfile }) => Promise<RemoteAnswer<LibrarySettings>>;
-  setScriptRules: (request: { text: string }) => Promise<RemoteAnswer<LibrarySettings>>;
   refreshCatalog: (request: Record<string, never>) => Promise<RemoteAnswer<ListContentsResult>>;
-  createContent: (request: { title: string }) => Promise<RemoteAnswer<CreateContentResult>>;
-  setContentStage: (request: { id: string; readyToRecord: boolean }) => Promise<RemoteAnswer<ContentDetail>>;
-  bindStudio: (request: { id: string; path: string }) => Promise<RemoteAnswer<ContentDetail>>;
-  openStudio: (request: { id: string }) => Promise<RemoteAnswer<ContentDetail>>;
-  setPublish: (request: {
-    id: string;
-    platform: PublishPlatform;
-    status: PublishMark;
-    url?: string;
-  }) => Promise<RemoteAnswer<ContentDetail>>;
-  syncPublish: (request: { id?: string; platform?: PublishPlatform; force?: boolean }) => Promise<RemoteAnswer<SyncPublishResult>>;
-  openSubtitlePreview: (request: { id: string }) => Promise<RemoteAnswer<SubtitlePreviewResult>>;
-  startSubtitleBurn: (request: { id: string }) => Promise<RemoteAnswer<ContentDetail>>;
-  startSubtitleGenerate: (request: { id: string }) => Promise<RemoteAnswer<ContentDetail>>;
-  startCoverGenerate: (request: { id: string }) => Promise<RemoteAnswer<ContentDetail>>;
-  setScript: (request: { id: string; text: string }) => Promise<RemoteAnswer<ContentDetail>>;
-}
-
-function credentialsOf(ctx: ClientContext): CredentialsClient | undefined {
-  const connection = ctx.get("connection") as { api?: { credentials?: CredentialsClient } } | undefined;
-  return connection?.api?.credentials;
+  createContent: (request: {
+    title: string;
+    contentType?: ContentType;
+  }) => Promise<RemoteAnswer<CreateContentResult>>;
+  getPlatformAccounts: (request: Record<string, never>) => Promise<RemoteAnswer<PlatformAccountsResult>>;
+  openPlatformAccount: (request: { platform: PublishPlatform }) => Promise<RemoteAnswer<OpenPlatformAccountResult>>;
+  checkPlatformAccount: (request: { platform: PublishPlatform }) => Promise<RemoteAnswer<PlatformAccountsResult>>;
 }
 
 function unwrap<T>(answer: RemoteAnswer<T>, fallback: string): T {
@@ -102,7 +92,7 @@ function unwrap<T>(answer: RemoteAnswer<T>, fallback: string): T {
   return answer.value;
 }
 
-export const inject = ["slots", "locale", "remote", "workspaces", "layout", "connection"];
+export const inject = ["slots", "locale", "remote", "workspaces", "layout", "sessions"];
 
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-oil-creator: dictionaries");
@@ -113,6 +103,7 @@ export function apply(ctx: ClientContext): void {
       releaseShellChrome();
     };
   }, "dsh-oil-creator: chrome");
+
   const remoteOf = (): OilCreatorRemote | undefined =>
     ctx.get("remote.oilCreator") as OilCreatorRemote | undefined;
 
@@ -128,6 +119,13 @@ export function apply(ctx: ClientContext): void {
       if (remote === undefined) throw new Error("remote unavailable");
       return unwrap(await remote.getContent({ id }), "content failed");
     },
+    importAsset: async (request) => {
+      const remote = remoteOf();
+      if (remote === undefined) throw new Error("remote unavailable");
+      const imported = unwrap(await remote.importAsset(request), "asset import failed");
+      bumpLibrary();
+      return imported;
+    },
     getCoverThumb: async (id) => {
       const remote = remoteOf();
       if (remote === undefined) return { found: false, mime: "", base64: "" };
@@ -136,27 +134,21 @@ export function apply(ctx: ClientContext): void {
         ? answer.value
         : { found: false, mime: "", base64: "" };
     },
-    getVideoPlayback: async (id) => {
+    getVideoPlayback: async (id, path) => {
       const remote = remoteOf();
       if (remote === undefined) return { found: false, url: "", kind: "raw" };
-      const answer = await remote.getVideoPlayback({ id });
+      const answer = await remote.getVideoPlayback({ id, path });
       return answer.ok && answer.value !== undefined
         ? answer.value
         : { found: false, url: "", kind: "raw" };
     },
-    getArticleMedia: async (id) => {
+    getArticleMedia: async (id, path) => {
       const remote = remoteOf();
-      if (remote === undefined) return { found: false, origin: "" };
-      const answer = await remote.getArticleMedia({ id });
+      if (remote === undefined) return { found: false, origin: "", text: "" };
+      const answer = await remote.getArticleMedia({ id, path });
       return answer.ok && answer.value !== undefined
         ? answer.value
-        : { found: false, origin: "" };
-    },
-    getSubtitleText: async (id) => {
-      const remote = remoteOf();
-      if (remote === undefined) return { text: "", cues: [] };
-      const answer = await remote.getSubtitleText({ id });
-      return answer.ok && answer.value !== undefined ? answer.value : { text: "", cues: [] };
+        : { found: false, origin: "", text: "" };
     },
     pickDirectory: () => ctx.workspaces.pickDirectory(),
     openPath: (path) => ctx.workspaces.openPath(path),
@@ -187,12 +179,6 @@ export function apply(ctx: ClientContext): void {
       unwrap(await remote.setProfile({ profile }), "set profile failed");
       bumpProfile();
     },
-    setScriptRules: async (text) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      unwrap(await remote.setScriptRules({ text }), "set script rules failed");
-      bumpProfile();
-    },
     refreshCatalog: async () => {
       const remote = remoteOf();
       if (remote === undefined) throw new Error("remote unavailable");
@@ -200,82 +186,38 @@ export function apply(ctx: ClientContext): void {
       bumpLibrary();
       return listed;
     },
-    createContent: async (title) => {
+    createContent: async (title, contentType) => {
       const remote = remoteOf();
       if (remote === undefined) throw new Error("remote unavailable");
-      const created = unwrap(await remote.createContent({ title }), "create failed");
+      const created = unwrap(
+        await remote.createContent({ title, contentType }),
+        "create failed",
+      );
       bumpLibrary();
       return created;
     },
-    markReadyToRecord: async (id) => {
+    getPlatformAccounts: async () => {
       const remote = remoteOf();
       if (remote === undefined) throw new Error("remote unavailable");
-      const next = unwrap(await remote.setContentStage({ id, readyToRecord: true }), "stage failed");
-      bumpLibrary();
-      return next;
+      return unwrap(await remote.getPlatformAccounts({}), "accounts failed");
     },
-    bindStudio: async (id, path) => {
+    openPlatformAccount: async (platform) => {
       const remote = remoteOf();
       if (remote === undefined) throw new Error("remote unavailable");
-      const next = unwrap(await remote.bindStudio({ id, path }), "bind failed");
-      bumpLibrary();
-      return next;
+      return unwrap(await remote.openPlatformAccount({ platform }), "open account failed");
     },
-    openStudio: async (id) => {
+    checkPlatformAccount: async (platform) => {
       const remote = remoteOf();
       if (remote === undefined) throw new Error("remote unavailable");
-      return unwrap(await remote.openStudio({ id }), "open failed");
+      return unwrap(await remote.checkPlatformAccount({ platform }), "check account failed");
     },
-    setPublish: async (id, platform, status, url) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      const next = unwrap(
-        await remote.setPublish(url === undefined ? { id, platform, status } : { id, platform, status, url }),
-        "publish failed",
-      );
-      bumpLibrary();
-      return next;
-    },
-    syncPublish: async (request) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      const result = unwrap(
-        await remote.syncPublish(request ?? {}),
-        "sync failed",
-      );
-      bumpLibrary();
-      return result;
-    },
-    openSubtitlePreview: async (id) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      return unwrap(await remote.openSubtitlePreview({ id }), "preview failed");
-    },
-    startSubtitleBurn: async (id) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      const next = unwrap(await remote.startSubtitleBurn({ id }), "burn failed");
-      bumpLibrary();
-      return next;
-    },
-    startSubtitleGenerate: async (id) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      const next = unwrap(await remote.startSubtitleGenerate({ id }), "transcribe failed");
-      bumpLibrary();
-      return next;
-    },
-    startCoverGenerate: async (id) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      const next = unwrap(await remote.startCoverGenerate({ id }), "cover failed");
-      bumpLibrary();
-      return next;
-    },
-    setScript: async (id, text) => {
-      const remote = remoteOf();
-      if (remote === undefined) throw new Error("remote unavailable");
-      return unwrap(await remote.setScript({ id, text }), "script failed");
+    queueDistribution: async (request: {
+      id: string;
+      selection: AssetSelection;
+      platforms: PublishPlatform[];
+      confirmOriginalRights?: boolean;
+    }) => {
+      await queueDistributionPrompt(ctx.get("sessions") as unknown as ISessions, request);
     },
   });
 
@@ -296,12 +238,8 @@ export function apply(ctx: ClientContext): void {
   }, "dsh-oil-creator: content triggers");
 
   const injectSidebar = (): OilSidebarInjected => ({
-    startSession: (workspaceId?: WorkspaceId) => {
-      ctx.workspaces.startSession(workspaceId);
-    },
-    toggleSidebar: () => {
-      ctx.layout.toggleSidebar();
-    },
+    startSession: (workspaceId?: WorkspaceId) => { ctx.workspaces.startSession(workspaceId); },
+    toggleSidebar: () => { ctx.layout.toggleSidebar(); },
   });
 
   function BoundSidebar(props: OilSidebarSlotProps) {
@@ -309,10 +247,7 @@ export function apply(ctx: ClientContext): void {
     return (
       <OilSidebarRoot
         {...props}
-        tabLabels={{
-          sessions: contentT("tab.sessions"),
-          content: contentT("tab"),
-        }}
+        tabLabels={{ sessions: contentT("tab.sessions"), content: contentT("tab") }}
         contentFace={contentFace}
         contentT={contentT}
       />
@@ -335,9 +270,6 @@ export function apply(ctx: ClientContext): void {
 
   ctx.effect(async () => {
     const disposeRemote = await ctx.remote.$mount(TYPERT_REMOTE);
-    // Cordis waits for async effect setup during unload. Do not install new
-    // slots after the owner has already entered teardown; release the remote
-    // contribution immediately in that race.
     if (ctx.fiber.state >= 5) {
       await disposeRemote();
       return () => {};
@@ -363,9 +295,7 @@ export function apply(ctx: ClientContext): void {
           locale: NS,
           inject: () => ({
             ...face(),
-            closeDetails: () => {
-              setSelectedContentId(null);
-            },
+            closeDetails: () => { setSelectedContentId(null); },
           }),
         }, ContentInspector);
       };
@@ -385,10 +315,7 @@ export function apply(ctx: ClientContext): void {
           legacyId: "dsh-oil-creator",
           legacyOrder: 40,
           locale: NS,
-          inject: () => ({
-            ...face(),
-            credentials: credentialsOf(ctx),
-          }),
+          inject: () => face(),
         },
       ));
     const stopLive = startLibraryLiveSync(() => contentFace.getRevision());

@@ -16,8 +16,25 @@ export { PUBLISH_PLATFORMS } from "./platforms.ts";
 
 const FILE_TO_PLATFORM: Record<string, PublishPlatform> = Object.fromEntries([
   ...PUBLISH_PLATFORMS.map((platform) => [platform, platform]),
-  ["wechat_channels", "wechat"],
+  ["wechat_channels", "channels"],
+  ["wechat", "channels"],
 ]) as Record<string, PublishPlatform>;
+
+function sanitizeStoredUrl(raw: string): string {
+  const value = raw.trim();
+  try {
+    const url = new URL(value);
+    for (const key of ["token", "ticket", "access_token", "auth_token"]) {
+      url.searchParams.delete(key);
+    }
+    return url.toString();
+  } catch {
+    return value.replace(
+      /([?&](?:token|ticket|access_token|auth_token)=)[^&\s"'<>]+/gi,
+      "$1[REDACTED]",
+    );
+  }
+}
 
 export function anyPlatformPublished(publish: ContentPublish): boolean {
   return PUBLISH_PLATFORMS.some((key) => publish[key].status === "published");
@@ -35,12 +52,6 @@ export function emptyBurn(): BurnJob {
   return { status: "idle" };
 }
 
-export function nextPublishMark(status: PublishMark): PublishMark {
-  if (status === "unpublished") return "draft";
-  if (status === "draft") return "published";
-  return "unpublished";
-}
-
 export function isPublishMark(value: unknown): value is PublishMark {
   return value === "unpublished" || value === "draft" || value === "published";
 }
@@ -52,8 +63,13 @@ export function isPublishPlatform(value: unknown): value is PublishPlatform {
 export function mapPublisherStatus(raw: string): PublishMark {
   const value = raw.trim().toLowerCase();
   if (value === "published" || value === "live" || value === "posted") return "published";
-  if (value === "ready" || value === "draft" || value === "prepared") return "draft";
   return "unpublished";
+}
+
+function publisherReady(raw: unknown): boolean {
+  if (typeof raw !== "string") return false;
+  const value = raw.trim().toLowerCase();
+  return value === "ready" || value === "prepared";
 }
 
 export function pickAutoPublishName(names: readonly string[]): string | undefined {
@@ -63,21 +79,43 @@ export function pickAutoPublishName(names: readonly string[]): string | undefine
 
 function platformFromField(field: unknown, fallback: PublishMark): PlatformPublish {
   if (typeof field === "string") {
-    return { status: mapPublisherStatus(field), source: "publisher" };
+    return {
+      status: mapPublisherStatus(field),
+      source: "publisher",
+      ...(publisherReady(field) ? { draftState: "ready" as const } : {}),
+    };
   }
   if (typeof field !== "object" || field === null) {
     return { status: fallback, source: "publisher" };
   }
   const record = field as Record<string, unknown>;
-  const status = typeof record.status === "string"
-    ? mapPublisherStatus(record.status)
-    : fallback;
+  const rawStatus = typeof record.status === "string" ? record.status.trim().toLowerCase() : "";
   const url = typeof record.url === "string" && record.url.trim() !== ""
-    ? record.url.trim()
+    ? sanitizeStoredUrl(record.url)
     : undefined;
+  const remoteId = typeof record.remoteId === "string" && record.remoteId.trim() !== ""
+    ? record.remoteId.trim()
+    : undefined;
+  const verifiedDraft = rawStatus === "draft" && url !== undefined && remoteId !== undefined;
+  const status = verifiedDraft
+    ? "draft"
+    : typeof record.status === "string"
+      ? mapPublisherStatus(record.status)
+      : fallback;
   return url === undefined
-    ? { status, source: "publisher" }
-    : { status, source: "publisher", url };
+    ? {
+        status,
+        source: "publisher",
+        ...(publisherReady(record.status) ? { draftState: "ready" as const } : {}),
+        ...(remoteId === undefined ? {} : { remoteId }),
+      }
+    : {
+        status,
+        source: "publisher",
+        url,
+        ...(publisherReady(record.status) ? { draftState: "ready" as const } : {}),
+        ...(remoteId === undefined ? {} : { remoteId }),
+      };
 }
 
 export function publishFromAutoPublish(value: unknown): ContentPublish {
@@ -127,7 +165,7 @@ export function decodeOverlayPublish(raw: unknown): OverlayItem["publish"] {
     if (!isPublishMark(record.status)) continue;
     const entry: OverlayPublish = { status: record.status };
     if (typeof record.url === "string" && record.url.trim() !== "") {
-      entry.url = record.url.trim();
+      entry.url = sanitizeStoredUrl(record.url);
     }
     if (typeof record.remoteId === "string" && record.remoteId.trim() !== "") {
       entry.remoteId = record.remoteId.trim();
@@ -139,6 +177,23 @@ export function decodeOverlayPublish(raw: unknown): OverlayItem["publish"] {
     }
     if (typeof record.syncedAt === "number" && Number.isFinite(record.syncedAt)) {
       entry.syncedAt = record.syncedAt;
+    }
+    if (record.draftState === "running"
+      || record.draftState === "ready"
+      || record.draftState === "error") {
+      entry.draftState = record.draftState;
+    }
+    if (typeof record.draftError === "string" && record.draftError.trim() !== "") {
+      entry.draftError = record.draftError.trim();
+    }
+    if (typeof record.draftStartedAt === "number" && Number.isFinite(record.draftStartedAt)) {
+      entry.draftStartedAt = record.draftStartedAt;
+    }
+    if (typeof record.draftPid === "number" && Number.isInteger(record.draftPid) && record.draftPid > 0) {
+      entry.draftPid = record.draftPid;
+    }
+    if (entry.status === "draft" && (entry.remoteId === undefined || entry.url === undefined)) {
+      entry.status = "unpublished";
     }
     next[key] = entry;
   }
@@ -163,51 +218,21 @@ export function decodeBurnJob(raw: unknown): BurnJob | undefined {
   return next;
 }
 
-export function patchOverlayPublish(
-  current: OverlayItem["publish"],
-  platform: PublishPlatform,
-  status: PublishMark,
-  url?: string,
-): NonNullable<OverlayItem["publish"]> {
-  const next: NonNullable<OverlayItem["publish"]> = { ...current };
-  const previous = current?.[platform];
-  const entry: OverlayPublish = {
-    status,
-    ...(previous === undefined ? {} : copyOverlayMetrics(previous)),
-  };
-  if (status === "published" && url !== undefined && url.trim() !== "") {
-    entry.url = url.trim();
-  } else if (previous?.url !== undefined && status === "published") {
-    entry.url = previous.url;
-  }
-  next[platform] = entry;
-  return next;
-}
-
-function copyOverlayMetrics(over: OverlayPublish): Pick<
-  OverlayPublish,
-  "remoteId" | "views" | "likes" | "comments" | "syncedAt"
-> {
-  const next: Pick<OverlayPublish, "remoteId" | "views" | "likes" | "comments" | "syncedAt"> = {};
-  if (over.remoteId !== undefined) next.remoteId = over.remoteId;
-  if (over.views !== undefined) next.views = over.views;
-  if (over.likes !== undefined) next.likes = over.likes;
-  if (over.comments !== undefined) next.comments = over.comments;
-  if (over.syncedAt !== undefined) next.syncedAt = over.syncedAt;
-  return next;
-}
-
 function copyOverlayFields(over: OverlayPublish): Pick<
   OverlayPublish,
-  "url" | "remoteId" | "views" | "likes" | "comments" | "syncedAt"
+  "url" | "remoteId" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"
 > {
-  const next: Pick<OverlayPublish, "url" | "remoteId" | "views" | "likes" | "comments" | "syncedAt"> = {};
+  const next: Pick<OverlayPublish, "url" | "remoteId" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"> = {};
   if (over.url !== undefined) next.url = over.url;
   if (over.remoteId !== undefined) next.remoteId = over.remoteId;
   if (over.views !== undefined) next.views = over.views;
   if (over.likes !== undefined) next.likes = over.likes;
   if (over.comments !== undefined) next.comments = over.comments;
   if (over.syncedAt !== undefined) next.syncedAt = over.syncedAt;
+  if (over.draftState !== undefined) next.draftState = over.draftState;
+  if (over.draftError !== undefined) next.draftError = over.draftError;
+  if (over.draftStartedAt !== undefined) next.draftStartedAt = over.draftStartedAt;
+  if (over.draftPid !== undefined) next.draftPid = over.draftPid;
   return next;
 }
 

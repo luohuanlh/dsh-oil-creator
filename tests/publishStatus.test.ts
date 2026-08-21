@@ -5,15 +5,15 @@ import {
   emptyPublish,
   mapPublisherStatus,
   mergePublish,
-  nextPublishMark,
   pickAutoPublishName,
   publishFromAutoPublish,
 } from "../src/publishStatus.ts";
 
 describe("mapPublisherStatus", () => {
-  it("maps ready to draft and live to published", () => {
-    expect(mapPublisherStatus("ready")).toBe("draft");
-    expect(mapPublisherStatus("READY")).toBe("draft");
+  it("keeps page READY distinct from remote draft and maps live to published", () => {
+    expect(mapPublisherStatus("ready")).toBe("unpublished");
+    expect(mapPublisherStatus("READY")).toBe("unpublished");
+    expect(mapPublisherStatus("draft")).toBe("unpublished");
     expect(mapPublisherStatus("published")).toBe("published");
     expect(mapPublisherStatus("blocked")).toBe("unpublished");
     expect(mapPublisherStatus("needs_mutation")).toBe("unpublished");
@@ -21,7 +21,7 @@ describe("mapPublisherStatus", () => {
 });
 
 describe("publishFromAutoPublish", () => {
-  it("reads wechat_channels as wechat", () => {
+  it("reads wechat_channels as channels", () => {
     const publish = publishFromAutoPublish({
       publisher: {
         platforms: {
@@ -30,8 +30,12 @@ describe("publishFromAutoPublish", () => {
         },
       },
     });
-    expect(publish.xiaohongshu).toEqual({ status: "draft", source: "publisher" });
-    expect(publish.wechat).toEqual({
+    expect(publish.xiaohongshu).toEqual({
+      status: "unpublished",
+      source: "publisher",
+      draftState: "ready",
+    });
+    expect(publish.channels).toEqual({
       status: "published",
       source: "publisher",
       url: "https://channels.example/1",
@@ -41,6 +45,29 @@ describe("publishFromAutoPublish", () => {
 
   it("returns empty when the sidecar has no publisher block", () => {
     expect(publishFromAutoPublish({ title: "x" })).toEqual(emptyPublish());
+  });
+
+  it("只有同时带远端 ID 和回读 URL 的旧 sidecar 才能标记草稿", () => {
+    const publish = publishFromAutoPublish({
+      publisher: {
+        platforms: {
+          bilibili: { status: "draft" },
+          channels: {
+            status: "draft",
+            remoteId: "remote-42",
+            url: "https://channels.example/draft/42",
+          },
+        },
+      },
+    });
+
+    expect(publish.bilibili.status).toBe("unpublished");
+    expect(publish.channels).toEqual({
+      status: "draft",
+      source: "publisher",
+      url: "https://channels.example/draft/42",
+      remoteId: "remote-42",
+    });
   });
 });
 
@@ -53,14 +80,6 @@ describe("mergePublish", () => {
       status: "unpublished",
       source: "overlay",
     });
-  });
-});
-
-describe("nextPublishMark", () => {
-  it("cycles the three marks", () => {
-    expect(nextPublishMark("unpublished")).toBe("draft");
-    expect(nextPublishMark("draft")).toBe("published");
-    expect(nextPublishMark("published")).toBe("unpublished");
   });
 });
 
@@ -92,5 +111,42 @@ describe("decodeOverlay", () => {
       pid: 12,
       output: "/tmp/a_subtitled.mp4",
     });
+  });
+
+  it("保留页面已备但未远端保存的中间态", () => {
+    const store = decodeOverlay({
+      schemaVersion: 1,
+      items: {
+        demo: {
+          publish: { douyin: { status: "unpublished", draftState: "ready" } },
+        },
+      },
+    });
+    expect(store.items.demo?.publish?.douyin)
+      .toEqual({ status: "unpublished", draftState: "ready" });
+  });
+
+  it("拒绝无远端证据的 overlay 草稿并清除历史 URL 凭据", () => {
+    const store = decodeOverlay({
+      items: {
+        demo: {
+          publish: {
+            bilibili: { status: "draft" },
+            "wechat-mp": {
+              status: "draft",
+              remoteId: "42",
+              url: "https://mp.weixin.qq.com/cgi-bin/appmsg?appmsgid=42&token=secret-token",
+            },
+          },
+        },
+      },
+    });
+
+    expect(store.items.demo?.publish?.bilibili?.status).toBe("unpublished");
+    expect(store.items.demo?.publish?.["wechat-mp"]).toMatchObject({
+      status: "draft",
+      remoteId: "42",
+    });
+    expect(store.items.demo?.publish?.["wechat-mp"]?.url).not.toContain("token=");
   });
 });

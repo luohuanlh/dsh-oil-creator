@@ -1,16 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { IconChevronDownOutline14 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-settings-plugins/client";
 
-import { normalizeEnabledPlatforms, PUBLISH_PLATFORMS } from "../platforms.ts";
-import { COVER_KEY_REFS, SUBTITLE_KEY_REFS } from "../secrets.ts";
-import type { CreatorCapabilities, CreatorProfile, CreatorSecrets, PublishPlatform } from "../types.ts";
-import type { CredentialsClient, SecretDraft } from "./credentialsApi.ts";
-import { applyDescribed, secretDraftOf } from "./credentialsApi.ts";
+import {
+  AUTO_DRAFT_PLATFORMS,
+  draftCapability,
+  normalizeEnabledPlatforms,
+  PUBLISH_PLATFORM_DEFINITIONS,
+  PUBLISH_PLATFORMS,
+  type PlatformKind,
+} from "../platforms.ts";
+import type {
+  CreatorCapabilities,
+  CreatorProfile,
+  PlatformAccount,
+  PublishPlatform,
+} from "../types.ts";
 import type { CreatorViewFace } from "./face.ts";
 import type { CreatorKey } from "./locales.ts";
-import { CREATOR_SETTINGS_PLATFORMS } from "./publishPlatforms.ts";
+import { CONTENT_WORKBENCH_ICON_SRC } from "./assets/contentWorkbenchIcon.ts";
 import { ActionBar, ActionButton } from "./ui/ActionButton.tsx";
 import { StatusPill, type StatusTone } from "./ui/StatusPill.tsx";
 import "./CreatorSettingsCard.css";
@@ -18,35 +27,41 @@ import "./CreatorSettingsCard.css";
 export type CreatorSettingsCardProps =
   & PropsRuntime<"settings.plugin.item">
   & PropsLocale<"dsh.oil.creator">
-  & InjectFace<
-    Pick<CreatorViewFace, "ready" | "getSettings" | "getCapabilities" | "setLibraryRoot" | "setProfile" | "setScriptRules" | "pickDirectory">
-    & { credentials: CredentialsClient | undefined }
-  >;
+  & InjectFace<Pick<
+    CreatorViewFace,
+    | "ready"
+    | "getSettings"
+    | "getCapabilities"
+    | "setLibraryRoot"
+    | "setProfile"
+    | "pickDirectory"
+    | "getPlatformAccounts"
+    | "openPlatformAccount"
+    | "checkPlatformAccount"
+  >>;
 
-const EMPTY_SECRETS: CreatorSecrets = {
-  subtitle: { kind: "subtitle", ref: SUBTITLE_KEY_REFS[0], configured: false, writable: true },
-  cover: { kind: "cover", ref: COVER_KEY_REFS[0], configured: false, writable: true },
-};
-
-const EMPTY_PROFILE: CreatorProfile = { enabledPlatforms: [...PUBLISH_PLATFORMS] };
+const EMPTY_PROFILE: CreatorProfile = { enabledPlatforms: [...AUTO_DRAFT_PLATFORMS] };
 
 const CAPABILITY_ROWS: ReadonlyArray<{ id: keyof CreatorCapabilities; label: CreatorKey }> = [
   { id: "library", label: "settings.capability.library" },
-  { id: "openScreen", label: "settings.capability.openScreen" },
-  { id: "screenStudio", label: "settings.capability.screenStudio" },
-  { id: "subtitleSkill", label: "settings.capability.subtitle" },
-  { id: "coverSkill", label: "settings.capability.cover" },
-  { id: "editingSkill", label: "settings.capability.editing" },
-  { id: "publishSkill", label: "settings.capability.publish" },
-  { id: "articleSkill", label: "settings.capability.article" },
-  { id: "publishSync", label: "settings.capability.ego" },
+  { id: "autoPublish", label: "settings.capability.publish" },
+  { id: "article", label: "settings.capability.article" },
+  { id: "egoBrowser", label: "settings.capability.ego" },
+];
+
+const ACCOUNT_GROUPS: ReadonlyArray<{ kind: PlatformKind; label: CreatorKey }> = [
+  { kind: "video", label: "settings.account.video" },
+  { kind: "article", label: "settings.account.article" },
+  { kind: "audio", label: "settings.account.audio" },
 ];
 
 function capabilityTone(state: CreatorCapabilities[keyof CreatorCapabilities]["state"]): StatusTone {
   return state === "ready" ? "success" : "neutral";
 }
 
-function capabilityStateKey(state: CreatorCapabilities[keyof CreatorCapabilities]["state"]): CreatorKey {
+function capabilityStateKey(
+  state: CreatorCapabilities[keyof CreatorCapabilities]["state"],
+): CreatorKey {
   if (state === "ready") return "settings.state.ready";
   if (state === "unsupported") return "settings.state.unsupported";
   return "settings.state.missing";
@@ -58,7 +73,38 @@ function cloneProfile(profile: CreatorProfile): CreatorProfile {
 
 function sameProfile(left: CreatorProfile, right: CreatorProfile): boolean {
   return left.enabledPlatforms.length === right.enabledPlatforms.length
-    && left.enabledPlatforms.every((platform, index) => platform === right.enabledPlatforms[index]);
+    && left.enabledPlatforms.every((platform, index) =>
+      platform === right.enabledPlatforms[index]
+    );
+}
+
+function accountTone(status: PlatformAccount["status"]): StatusTone {
+  if (status === "active") return "success";
+  if (status === "expired") return "error";
+  return "neutral";
+}
+
+function accountLabel(status: PlatformAccount["status"], t: (key: CreatorKey) => string): string {
+  if (status === "active") return t("settings.account.active");
+  if (status === "expired") return t("settings.account.expired");
+  return t("settings.account.unknown");
+}
+
+type AccountAction = "open" | "check";
+
+function accountAction(account: Pick<PlatformAccount, "status" | "taskSpace">): AccountAction {
+  return account.taskSpace !== undefined || account.status === "active" ? "check" : "open";
+}
+
+function accountActionKey(
+  account: Pick<PlatformAccount, "status" | "taskSpace">,
+  busy: boolean,
+): CreatorKey {
+  if (busy) return "settings.account.action.working";
+  if (account.taskSpace !== undefined) return "settings.account.action.finish";
+  if (account.status === "active") return "settings.account.action.recheck";
+  if (account.status === "expired") return "settings.account.action.relogin";
+  return "settings.account.action.login";
 }
 
 export function CreatorSettingsCard({
@@ -67,28 +113,28 @@ export function CreatorSettingsCard({
   getSettings,
   setLibraryRoot,
   setProfile,
-  setScriptRules,
   pickDirectory,
   getCapabilities,
-  credentials,
+  getPlatformAccounts,
+  openPlatformAccount,
+  checkPlatformAccount,
 }: CreatorSettingsCardProps) {
   const [open, setOpen] = useState(false);
   const [savedRoot, setSavedRoot] = useState("");
   const [draftRoot, setDraftRoot] = useState("");
   const [savedProfile, setSavedProfile] = useState<CreatorProfile>(EMPTY_PROFILE);
   const [draftProfile, setDraftProfile] = useState<CreatorProfile>(EMPTY_PROFILE);
-  const [savedRules, setSavedRules] = useState("");
-  const [draftRules, setDraftRules] = useState("");
-  const [secrets, setSecrets] = useState<SecretDraft[]>([
-    secretDraftOf(EMPTY_SECRETS.subtitle),
-    secretDraftOf(EMPTY_SECRETS.cover),
-  ]);
-  const [loaded, setLoaded] = useState(false);
-  const [capabilities, setCapabilities] = useState<CreatorCapabilities | undefined>(undefined);
+  const [capabilities, setCapabilities] = useState<CreatorCapabilities>();
+  const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
+  const [accountBusy, setAccountBusy] = useState<PublishPlatform>();
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string>();
   const [saved, setSaved] = useState(false);
-  const [keyFailed, setKeyFailed] = useState(false);
+
+  const accountMap = useMemo(
+    () => new Map(accounts.map((account) => [account.platform, account])),
+    [accounts],
+  );
 
   useEffect(() => {
     if (!ready()) return;
@@ -99,107 +145,50 @@ export function CreatorSettingsCard({
       setDraftRoot(settings.libraryRoot);
       setSavedProfile(cloneProfile(settings.profile));
       setDraftProfile(cloneProfile(settings.profile));
-      setSavedRules(settings.scriptRules ?? "");
-      setDraftRules(settings.scriptRules ?? "");
-      const nextSecrets = settings.secrets ?? EMPTY_SECRETS;
-      setSecrets([
-        secretDraftOf(nextSecrets.subtitle),
-        secretDraftOf(nextSecrets.cover),
-      ]);
-      setLoaded(true);
-    }, () => {
-      if (!cancelled) setLoaded(true);
-    });
-    return () => {
-      cancelled = true;
-    };
+    }, () => undefined);
+    return () => { cancelled = true; };
   }, [ready, getSettings]);
-
-  useEffect(() => {
-    if (!open || credentials === undefined) return;
-    let cancelled = false;
-    const refs = secrets.map((item) => item.ref);
-    void credentials.describe({ refs }).then((response) => {
-      if (cancelled || !response.result.ok || response.result.value === undefined) {
-        if (!cancelled && (response.result.ok !== true)) {
-          setSecrets((current) => current.map((item) => ({ ...item, loadError: true })));
-        }
-        return;
-      }
-      const described = response.result.value.credentials;
-      setSecrets((current) => current.map((item) => applyDescribed(item, described)));
-    }, () => {
-      if (!cancelled) setSecrets((current) => current.map((item) => ({ ...item, loadError: true })));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, credentials, secrets.map((item) => item.ref).join(",")]);
 
   useEffect(() => {
     if (!open || !ready()) return;
     let cancelled = false;
-    void getCapabilities().then((next) => {
-      if (!cancelled) setCapabilities(next);
-    }, () => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [open, ready, getCapabilities]);
+    void Promise.all([getCapabilities(), getPlatformAccounts()]).then(
+      ([nextCapabilities, nextAccounts]) => {
+        if (cancelled) return;
+        setCapabilities(nextCapabilities);
+        setAccounts(nextAccounts.accounts);
+      },
+      () => undefined,
+    );
+    return () => { cancelled = true; };
+  }, [open, ready, getCapabilities, getPlatformAccounts]);
 
   const dirtyRoot = draftRoot !== savedRoot;
   const dirtyProfile = !sameProfile(draftProfile, savedProfile);
-  const dirtyRules = draftRules !== savedRules;
-  const dirtyKeys = secrets.some((item) => item.nextValue.trim() !== "");
-  const dirty = dirtyRoot || dirtyProfile || dirtyRules || dirtyKeys;
-  const title = t("settings.title" as CreatorKey);
+  const dirty = dirtyRoot || dirtyProfile;
+  const title = t("settings.title");
 
   const onPick = async () => {
     const path = await pickDirectory();
-    if (path === null) return;
-    setDraftRoot(path);
+    if (path !== null) setDraftRoot(path);
     setSaved(false);
-    setFailed(false);
+    setFailed(undefined);
   };
 
   const patchProfile = (platform: PublishPlatform, enabled: boolean) => {
-    setDraftProfile((current) => {
-      const enabledPlatforms = enabled
+    setDraftProfile((current) => ({
+      enabledPlatforms: normalizeEnabledPlatforms(enabled
         ? [...current.enabledPlatforms, platform]
-        : current.enabledPlatforms.filter((item) => item !== platform);
-      return { enabledPlatforms: normalizeEnabledPlatforms(enabledPlatforms) };
-    });
+        : current.enabledPlatforms.filter((item) => item !== platform)),
+    }));
     setSaved(false);
-    setFailed(false);
   };
 
   const onSave = async () => {
-    if (!dirty || saving) return;
-    if (dirtyRoot && draftRoot === "") return;
+    if (!dirty || saving || (dirtyRoot && draftRoot === "")) return;
     setSaving(true);
-    setFailed(false);
-    setKeyFailed(false);
-    setSaved(false);
+    setFailed(undefined);
     try {
-      if (dirtyKeys) {
-        if (credentials === undefined) {
-          setKeyFailed(true);
-          return;
-        }
-        for (const item of secrets) {
-          const value = item.nextValue.trim();
-          if (value === "") continue;
-          if (!(await credentials.set({ ref: item.ref, value })).result.ok) {
-            setKeyFailed(true);
-            return;
-          }
-        }
-        setSecrets((current) => current.map((item) => (
-          item.nextValue.trim() === ""
-            ? item
-            : { ...item, nextValue: "", configured: true, loadError: false }
-        )));
-      }
       if (dirtyRoot) {
         await setLibraryRoot(draftRoot);
         setSavedRoot(draftRoot);
@@ -208,16 +197,74 @@ export function CreatorSettingsCard({
         await setProfile(draftProfile);
         setSavedProfile(cloneProfile(draftProfile));
       }
-      if (dirtyRules) {
-        await setScriptRules(draftRules);
-        setSavedRules(draftRules);
-      }
       setSaved(true);
-    } catch {
-      setFailed(true);
+    } catch (cause) {
+      setFailed(cause instanceof Error ? cause.message : t("settings.saveFailed"));
     } finally {
       setSaving(false);
     }
+  };
+
+  const runAccountAction = async (platform: PublishPlatform, action: AccountAction) => {
+    setAccountBusy(platform);
+    setFailed(undefined);
+    try {
+      if (action === "open") {
+        await openPlatformAccount(platform);
+        setAccounts((await getPlatformAccounts()).accounts);
+      } else {
+        setAccounts((await checkPlatformAccount(platform)).accounts);
+      }
+    } catch (cause) {
+      setFailed(cause instanceof Error ? cause.message : t("settings.account.failed"));
+    } finally {
+      setAccountBusy(undefined);
+    }
+  };
+
+  const renderAccount = (platform: PublishPlatform) => {
+    const definition = PUBLISH_PLATFORM_DEFINITIONS[platform];
+    const account = accountMap.get(platform) ?? {
+      platform,
+      status: "unknown" as const,
+      supportsAutoDraft: false,
+      draftCapability: draftCapability(platform),
+    };
+    const enabled = draftProfile.enabledPlatforms.includes(platform);
+    const action = accountAction(account);
+    return (
+      <div key={platform} className="accountRow" data-platform-kind={definition.kind}>
+        <label className="accountMain">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={!account.supportsAutoDraft}
+            onChange={(event) => { patchProfile(platform, event.target.checked); }}
+          />
+          <span className="accountName">
+            {definition.name}
+            <small>{account.draftCapability === "remote-verified"
+              ? t("settings.account.remoteVerified")
+              : account.draftCapability === "implemented-simulated"
+                ? t("settings.account.simulated")
+                : account.draftCapability === "page-ready"
+                  ? t("settings.account.pageReady")
+                  : t("settings.account.bindingOnly")}</small>
+          </span>
+        </label>
+        <StatusPill tone={accountTone(account.status)}>
+          {accountLabel(account.status, t)}
+        </StatusPill>
+        <div className="accountActions">
+          <ActionButton
+            disabled={accountBusy !== undefined}
+            onClick={() => { void runAccountAction(platform, action); }}
+          >
+            {t(accountActionKey(account, accountBusy === platform))}
+          </ActionButton>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -226,22 +273,28 @@ export function CreatorSettingsCard({
         type="button"
         className="header"
         aria-expanded={open}
-        aria-label={`${t((open ? "settings.collapse" : "settings.expand") as CreatorKey)}: ${title}`}
+        aria-label={`${t(open ? "settings.collapse" : "settings.expand")}: ${title}`}
         onClick={() => { setOpen(!open); }}
       >
+        <img
+          className="settingsIcon"
+          src={CONTENT_WORKBENCH_ICON_SRC}
+          alt=""
+          aria-hidden="true"
+        />
         <span className="headText">
           <span className="name">{title}</span>
-          <span className="description">{t("settings.description" as CreatorKey)}</span>
+          <span className="description">{t("settings.description")}</span>
         </span>
-        {dirty && <span className="pending">{t("settings.save" as CreatorKey)}</span>}
+        {dirty && <span className="pending">{t("settings.save")}</span>}
         <IconChevronDownOutline14 className={open ? "chevron open" : "chevron"} />
       </button>
       {open && (
         <div className="body">
           {capabilities !== undefined && (
-            <div className="field">
-              <span className="fieldLabel">{t("settings.capabilities" as CreatorKey)}</span>
-              <span className="fieldHint">{t("settings.capabilitiesHint" as CreatorKey)}</span>
+            <div className="field capabilityField">
+              <span className="fieldLabel">{t("settings.capabilities")}</span>
+              <span className="fieldHint">{t("settings.capabilitiesHint")}</span>
               <div className="capabilityGrid">
                 {CAPABILITY_ROWS.map((row) => {
                   const item = capabilities[row.id];
@@ -257,115 +310,59 @@ export function CreatorSettingsCard({
               </div>
             </div>
           )}
-          <label className="field">
-            <span className="fieldLabel">{t("settings.libraryRoot" as CreatorKey)}</span>
-            <span className="fieldHint">{t("settings.libraryRootHint" as CreatorKey)}</span>
+          <label className="field libraryField">
+            <span className="fieldLabel">{t("settings.libraryRoot")}</span>
+            <span className="fieldHint">{t("settings.libraryRootHint")}</span>
             <span className="pathRow">
               <span className={draftRoot === "" ? "path empty" : "path"}>
-                {draftRoot === "" ? t("settings.libraryRootEmpty" as CreatorKey) : draftRoot}
+                {draftRoot === "" ? t("settings.libraryRootEmpty") : draftRoot}
               </span>
               <ActionButton onClick={() => { void onPick(); }}>
-                {t("settings.pick" as CreatorKey)}
+                {t("settings.pick")}
               </ActionButton>
             </span>
           </label>
-          <div className="field">
-            <span className="fieldLabel">{t("settings.enabledPlatforms" as CreatorKey)}</span>
-            <span className="fieldHint">{t("settings.enabledPlatformsHint" as CreatorKey)}</span>
-            {CREATOR_SETTINGS_PLATFORMS.map((platform) => (
-              <label className="inputLabel" key={platform.key}>
-                <span>
-                  <input
-                    type="checkbox"
-                    checked={draftProfile.enabledPlatforms.includes(platform.key)}
-                    onChange={(event) => { patchProfile(platform.key, event.target.checked); }}
-                  />
-                  {t(platform.label)}
-                </span>
-              </label>
-            ))}
-          </div>
-          <div className="field">
-            <span className="fieldLabel">{t("settings.scriptRules" as CreatorKey)}</span>
-            <span className="fieldHint">{t("settings.scriptRulesHint" as CreatorKey)}</span>
-            <textarea
-              className="input textarea"
-              rows={6}
-              placeholder={t("settings.scriptRulesPlaceholder" as CreatorKey)}
-              value={draftRules}
-              onChange={(event) => {
-                setDraftRules(event.target.value);
-                setSaved(false);
-                setFailed(false);
-              }}
-            />
-          </div>
-          <div className="field">
-            <span className="fieldLabel">{t("settings.secrets" as CreatorKey)}</span>
-            <span className="fieldHint">{t("settings.secretsHint" as CreatorKey)}</span>
-            {secrets.map((item) => (
-              <label className="inputLabel" key={item.kind}>
-                <span className="secretHead">
-                  <span>{t(`settings.secret.${item.kind}` as CreatorKey)}</span>
-                  <StatusPill tone={item.loadError ? "error" : item.configured ? "success" : "neutral"}>
-                    {t((
-                      item.loadError
-                        ? "settings.secret.loadFailed"
-                        : item.configured
-                          ? "settings.secret.configured"
-                          : "settings.secret.missing"
-                    ) as CreatorKey)}
-                  </StatusPill>
-                </span>
-                <span className="fieldHint">{t(`settings.secret.${item.kind}Hint` as CreatorKey)}</span>
-                <input
-                  className="input"
-                  type="password"
-                  autoComplete="off"
-                  placeholder={t("settings.secret.placeholder" as CreatorKey)}
-                  disabled={!item.writable || saving}
-                  value={item.nextValue}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setSecrets((current) => current.map((row) => (
-                      row.kind === item.kind ? { ...row, nextValue: value } : row
-                    )));
-                    setSaved(false);
-                    setFailed(false);
-                    setKeyFailed(false);
-                  }}
-                />
-                {!item.writable && (
-                  <span className="fieldHint">{t("settings.secret.readOnly" as CreatorKey)}</span>
-                )}
-              </label>
-            ))}
+          <div className="field accountsField">
+            <span className="fieldLabel">{t("settings.accounts")}</span>
+            <span className="fieldHint">{t("settings.accountsHint")}</span>
+            <div className="accountGroups">
+              {ACCOUNT_GROUPS.map(({ kind, label }) => {
+                const platforms = PUBLISH_PLATFORMS.filter((platform) =>
+                  PUBLISH_PLATFORM_DEFINITIONS[platform].kind === kind
+                );
+                return (
+                  <section key={kind} className={`accountGroup ${kind}Group`}>
+                    <header className="accountGroupHead">
+                      <span>{t(label)}</span>
+                      <strong>{String(platforms.length).padStart(2, "0")}</strong>
+                    </header>
+                    <div className="accountList">{platforms.map(renderAccount)}</div>
+                  </section>
+                );
+              })}
+            </div>
           </div>
           <div className="footer">
-            {failed && <p className="failed" role="status">{t("settings.saveFailed" as CreatorKey)}</p>}
-            {keyFailed && <p className="failed" role="status">{t("settings.secret.saveFailed" as CreatorKey)}</p>}
-            {saved && !dirty && <p className="ok" role="status">{t("settings.saved" as CreatorKey)}</p>}
+            {failed !== undefined && <p className="failed">{failed}</p>}
+            {saved && failed === undefined && <p className="ok">{t("settings.saved")}</p>}
             <ActionBar>
               <ActionButton
-                disabled={!dirty || saving || !loaded}
+                disabled={!dirty || saving}
                 onClick={() => {
                   setDraftRoot(savedRoot);
                   setDraftProfile(cloneProfile(savedProfile));
-                  setDraftRules(savedRules);
-                  setSecrets((current) => current.map((item) => ({ ...item, nextValue: "" })));
-                  setFailed(false);
-                  setKeyFailed(false);
+                  setFailed(undefined);
                   setSaved(false);
                 }}
               >
-                {t("settings.discard" as CreatorKey)}
+                {t("settings.discard")}
               </ActionButton>
               <ActionButton
                 tone="primary"
                 disabled={!dirty || saving || (dirtyRoot && draftRoot === "")}
                 onClick={() => { void onSave(); }}
               >
-                {t((saving ? "settings.saving" : "settings.save") as CreatorKey)}
+                {t(saving ? "settings.saving" : "settings.save")}
               </ActionButton>
             </ActionBar>
           </div>

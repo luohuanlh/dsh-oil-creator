@@ -1,4 +1,4 @@
-import { mkdir, utimes, writeFile } from "node:fs/promises";
+import { mkdir, readFile, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 
 import {
+  CONTENT_METADATA_NAME,
   countsOf,
   createContentFolder,
   folderDateAndTitle,
@@ -26,6 +27,7 @@ import {
 } from "../src/catalog.ts";
 import { emptyOverlay } from "../src/overlay.ts";
 import { emptyBurn, emptyPublish } from "../src/publishStatus.ts";
+import { DISTRIBUTION_PACKAGE_NAME } from "../src/distribution.ts";
 
 describe("folderNameForTitle", () => {
   it("prefixes today and strips path characters", () => {
@@ -40,14 +42,24 @@ describe("folderNameForTitle", () => {
 });
 
 describe("createContentFolder", () => {
-  it("makes an empty dated folder", async () => {
+  it("创建带默认视频类型元数据的日期目录", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-create-"));
     const created = await createContentFolder(root, "一期测试", new Date(2026, 7, 15));
     expect(created.id).toBe("2026-08-15_一期测试");
+    await expect(readFile(join(created.folderPath, CONTENT_METADATA_NAME), "utf8"))
+      .resolves.toContain('"contentType": "video"');
     const items = await scanLibrary(root, emptyOverlay());
     expect(items).toHaveLength(1);
     expect(items[0]?.title).toBe("一期测试");
+    expect(items[0]?.contentType).toBe("video");
     expect(items[0]?.pipeline).toBe("raw");
+  });
+
+  it("保存并扫描用户选择的音频类型", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-create-audio-"));
+    await createContentFolder(root, "一期播客", new Date(2026, 7, 15), "audio");
+    const [item] = await scanLibrary(root, emptyOverlay());
+    expect(item?.contentType).toBe("audio");
   });
 });
 
@@ -63,6 +75,38 @@ describe("scanLibrary video pick", () => {
     await utimes(newer, new Date(2026, 7, 15, 12), new Date(2026, 7, 15, 12));
     const items = await scanLibrary(root, emptyOverlay());
     expect(items[0]?.videoRaw).toBe(newer);
+  });
+});
+
+describe("scanLibrary workbench assets", () => {
+  it("返回全部候选素材，并识别 AI 冻结分发包", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-workbench-assets-"));
+    const created = await createContentFolder(root, "素材选择", new Date(2026, 7, 15));
+    await mkdir(join(created.folderPath, "公众号文章"));
+    await writeFile(join(created.folderPath, "take-a.mp4"), "a");
+    await writeFile(join(created.folderPath, "take-b.mov"), "b");
+    await writeFile(join(created.folderPath, "voice.srt"), "字幕");
+    await writeFile(join(created.folderPath, "cover.jpg"), "cover");
+    await writeFile(join(created.folderPath, "公众号文章", "article.md"), "# 正文");
+    await writeFile(join(created.folderPath, DISTRIBUTION_PACKAGE_NAME), JSON.stringify({
+      schemaVersion: 1,
+      id: created.id,
+      mode: "video",
+      createdAt: "2026-08-21T12:00:00.000Z",
+      selection: { mode: "video", videoPath: join(created.folderPath, "take-a.mp4") },
+      variants: {
+        bilibili: { title: "标题", summary: "摘要", body: "正文", tags: ["AI"] },
+      },
+    }));
+
+    const [item] = await scanLibrary(root, emptyOverlay());
+
+    expect(item?.assets.videos.map((asset) => asset.name)).toEqual(["take-a.mp4", "take-b.mov"]);
+    expect(item?.assets.subtitles.map((asset) => asset.name)).toEqual(["voice.srt"]);
+    expect(item?.assets.articles.map((asset) => asset.name)).toEqual(["article.md"]);
+    expect(item?.assets.covers.map((asset) => asset.name)).toEqual(["cover.jpg"]);
+    expect(item?.hasDistributionPackage).toBe(true);
+    expect(item?.pipeline).toBe("packaged");
   });
 });
 
@@ -101,7 +145,9 @@ describe("pipeline and filters", () => {
     createdMs: 1,
     covers: {},
     subtitles: {},
+    assets: { videos: [], subtitles: [], articles: [], covers: [] },
     hasPublishPackage: false,
+    hasDistributionPackage: false,
     hasArticle: false,
     waitingForExport: false,
     tags: ["AI"],
@@ -111,16 +157,21 @@ describe("pipeline and filters", () => {
     coverJob: emptyBurn(),
   };
 
-  it("derives workflow from studio, video, and overlay", () => {
+  it("只从发布包、视频和草稿状态推导简化流程", () => {
     expect(workflowOf(base)).toBe("idle");
-    expect(workflowOf(base, { readyToRecord: true })).toBe("record");
-    expect(workflowOf({ ...base, studioPath: "/p.screenstudio" })).toBe("cut");
-    expect(workflowOf({ ...base, videoRaw: "/a.mp4" })).toBe("finish");
+    expect(workflowOf(base, { readyToRecord: true })).toBe("idle");
+    expect(workflowOf({ ...base, studioPath: "/p.screenstudio" })).toBe("idle");
+    expect(workflowOf({ ...base, videoRaw: "/a.mp4" })).toBe("idle");
     expect(workflowOf({
       ...base,
       videoRaw: "/a.mp4",
-      subtitles: { srt: "/a.srt" },
-      covers: { "3x4": "/a.png" },
+      hasPublishPackage: true,
+    })).toBe("publish");
+    expect(workflowOf({
+      ...base,
+      hasArticle: true,
+      articlePath: "/article.md",
+      hasDistributionPackage: true,
     })).toBe("publish");
     expect(workflowOf({
       ...base,
@@ -240,7 +291,7 @@ describe("folderDateMs", () => {
 });
 
 describe("scanLibrary", () => {
-  it("自动识别内容目录中的 OpenScreen 工程", async () => {
+  it("旧工程文件不会改变简化后的内容流程", async () => {
     const root = await mkdtemp(join(tmpdir(), "dsh-oil-openscreen-"));
     const folder = join(root, "2026-08-20_demo");
     const projectPath = join(folder, "demo.openscreen");
@@ -250,7 +301,7 @@ describe("scanLibrary", () => {
     const items = await scanLibrary(root, emptyOverlay());
 
     expect(items[0]?.studioPath).toBe(projectPath);
-    expect(items[0]?.workflow).toBe("cut");
+    expect(items[0]?.workflow).toBe("idle");
   });
 
   it("reads one content folder", async () => {
@@ -317,6 +368,20 @@ describe("scanLibrary", () => {
     expect(countsOf(items).article).toBe(1);
   });
 
+  it("识别内容文件夹根目录中的 HTML 文章，但忽略脚本和选题", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dsh-oil-html-"));
+    const folder = join(root, "2026-04-07_html");
+    await mkdir(folder);
+    await writeFile(join(folder, "script.md"), "# script\n");
+    await writeFile(join(folder, "topic.md"), "# topic\n");
+    await writeFile(join(folder, "article.html"), "<h1>hello</h1>\n");
+
+    const items = await scanLibrary(root, emptyOverlay());
+
+    expect(items[0]?.hasArticle).toBe(true);
+    expect(items[0]?.articlePath?.endsWith("article.html")).toBe(true);
+  });
+
   it("reads publisher draft status from auto-publish.json", async () => {
     const root = await mkdtemp(join(tmpdir(), "dsh-oil-pub-"));
     const folder = join(root, "2026-08-13_demo");
@@ -331,9 +396,13 @@ describe("scanLibrary", () => {
       },
     }));
     const items = await scanLibrary(root, emptyOverlay());
-    expect(items[0]?.publish.xiaohongshu).toEqual({ status: "draft", source: "publisher" });
+    expect(items[0]?.publish.xiaohongshu).toEqual({
+      status: "unpublished",
+      source: "publisher",
+      draftState: "ready",
+    });
     expect(items[0]?.publish.douyin.status).toBe("unpublished");
-    expect(items[0]?.publish.wechat).toEqual({ status: "published", source: "publisher" });
+    expect(items[0]?.publish.channels).toEqual({ status: "published", source: "publisher" });
   });
 
   it("lets overlay publish status win", async () => {

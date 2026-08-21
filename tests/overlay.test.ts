@@ -1,15 +1,15 @@
-import { mkdir, readFile } from "node:fs/promises";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 import {
+  accountsFromOverlay,
   decodeOverlay,
   decodeProfile,
-  emptyProfile,
   emptyOverlay,
+  emptyProfile,
   loadOverlay,
   normalizeEnabledPlatforms,
   overlayPath,
@@ -20,81 +20,78 @@ import {
 import { creatorProfileSchema } from "../src/schemas.ts";
 
 describe("creator profile", () => {
-  it("enables all supported platforms by default", () => {
+  it("默认启用四个视频草稿平台和微信公众号文章草稿", () => {
     expect(emptyProfile()).toEqual({
-      enabledPlatforms: ["xiaohongshu", "douyin", "bilibili", "wechat"],
+      enabledPlatforms: [
+        "bilibili",
+        "douyin",
+        "xiaohongshu",
+        "channels",
+        "wechat-mp",
+      ],
     });
     expect(decodeProfile(undefined)).toEqual(emptyProfile());
   });
 
-  it("deduplicates enabled platforms and filters invalid values", () => {
-    expect(normalizeEnabledPlatforms([
-      "wechat",
-      "invalid",
-      "douyin",
-      "douyin",
-      "youtube",
-    ])).toEqual(["douyin", "wechat"]);
+  it("迁移旧视频号 id 并过滤无效值", () => {
+    expect(normalizeEnabledPlatforms(["wechat", "invalid", "douyin", "douyin"]))
+      .toEqual(["douyin", "channels"]);
   });
 
-  it.each([
-    ["empty legacy platforms", { platforms: {} }],
-    ["partial legacy homepages", {
-      name: "Example Creator",
-      platforms: {
-        xiaohongshu: "https://xiaohongshu.example/creator",
-        bilibili: "https://bilibili.example/creator",
-      },
-    }],
-  ])("ignores %s and defaults all platforms", (_label, legacy) => {
-    expect(decodeProfile(legacy)).toEqual(emptyProfile());
-    expect(decodeOverlay({ profile: legacy, items: {} }).profile).toEqual(emptyProfile());
-  });
-
-  it("keeps an explicit empty enabled list", () => {
-    const overlay = decodeOverlay({ profile: { name: "ignored", enabledPlatforms: [] }, items: {} });
+  it("保留显式空列表", () => {
+    const overlay = decodeOverlay({ profile: { enabledPlatforms: [] }, items: {} });
     expect(overlay.profile).toEqual({ enabledPlatforms: [] });
     expect(profileIsEmpty(overlay.profile!)).toBe(true);
   });
 
-  it("validates only the new profile shape", () => {
+  it("校验新的 24 平台 profile", () => {
     expect(creatorProfileSchema.parse({
-      name: "ignored",
-      enabledPlatforms: ["xiaohongshu", "wechat"],
-    })).toEqual({ enabledPlatforms: ["xiaohongshu", "wechat"] });
-    expect(() => creatorProfileSchema.parse({ platforms: {} })).toThrow();
+      enabledPlatforms: ["xiaohongshu", "wechat-mp"],
+    })).toEqual({ enabledPlatforms: ["xiaohongshu", "wechat-mp"] });
   });
 });
 
-describe("script rules", () => {
-  it("round-trips through save and load", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "oil-overlay-"));
-    const store = emptyOverlay();
-    store.scriptRules = "口语化，少用术语。";
-    await saveOverlay(dir, store);
-    expect((await loadOverlay(dir)).scriptRules).toBe("口语化，少用术语。");
-  });
-
-  it("trims and drops empty rules when decoding", () => {
-    expect(decodeOverlay({ scriptRules: "  开头抛结论。  " }).scriptRules).toBe("开头抛结论。");
-    expect(decodeOverlay({ scriptRules: "   " }).scriptRules).toBeUndefined();
-    expect(decodeOverlay({}).scriptRules).toBeUndefined();
+describe("platform accounts", () => {
+  it("解码账号状态并迁移旧视频号 id", () => {
+    const overlay = decodeOverlay({
+      accounts: {
+        wechat: { status: "active", checkedAt: 10, taskSpace: "42" },
+        zhihu: { status: "expired" },
+      },
+      items: {},
+    });
+    expect(accountsFromOverlay(overlay)).toEqual([
+      {
+        platform: "channels",
+        status: "active",
+        checkedAt: 10,
+        taskSpace: "42",
+        supportsAutoDraft: true,
+        draftCapability: "implemented-simulated",
+      },
+      {
+        platform: "zhihu",
+        status: "expired",
+        supportsAutoDraft: false,
+        draftCapability: "unsupported",
+      },
+    ]);
   });
 });
 
 describe("overlay lock", () => {
-  it("serializes overlapping writes", async () => {
+  it("串行保存重叠写入", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oil-overlay-"));
     await mkdir(dir, { recursive: true });
-    const order: number[] = [];
     await Promise.all([0, 1, 2].map((index) => withOverlayLock(dir, async () => {
       const store = await loadOverlay(dir);
       store.items[String(index)] = { title: String(index) };
       await saveOverlay(dir, store);
-      order.push(index);
     })));
-    const raw = JSON.parse(await readFile(overlayPath(dir), "utf8")) as { items: Record<string, { title: string }> };
+    const raw = JSON.parse(await readFile(overlayPath(dir), "utf8")) as {
+      items: Record<string, { title: string }>;
+    };
     expect(Object.keys(raw.items).sort()).toEqual(["0", "1", "2"]);
-    expect(order.sort()).toEqual([0, 1, 2]);
+    expect(emptyOverlay().schemaVersion).toBe(1);
   });
 });

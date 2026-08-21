@@ -32,6 +32,7 @@ describe("DeepSeek Harness bundle packaging", () => {
         bundle?: { patch?: string };
         client?: { inject?: string[] };
       };
+      dependencies?: Record<string, string>;
       peerDependencies?: Record<string, string>;
       repository?: { type?: string; url?: string };
       bugs?: { url?: string };
@@ -53,6 +54,12 @@ describe("DeepSeek Harness bundle packaging", () => {
     expect(manifest.files).toContain("assets/readme/hero.svg");
     expect(manifest.files).toContain("LICENSE");
     expect(manifest.files).toContain("docs/*.md");
+    expect(manifest.files).toContain("lib/article-draft.mjs");
+    expect(manifest.files).toContain("scripts/article-draft.mjs");
+    expect(manifest.files).toContain("lib/video-draft.mjs");
+    expect(manifest.files).toContain("scripts/video-draft.mjs");
+    expect(manifest.files).toContain("lib/video-draft-runner.mjs");
+    expect(manifest.files).toContain("scripts/video-draft-runner.mjs");
     expect(manifest.scripts?.prepare).toBe("npm run build");
     expect(manifest.scripts?.["release:check"]).toBe(
       "node scripts/check-release.mjs",
@@ -76,6 +83,9 @@ describe("DeepSeek Harness bundle packaging", () => {
       .toContain("0.1.0-rc.7");
     expect(manifest.peerDependencies?.["@deepseek-ai/dsh-client-ui-settings-plugins"])
       .toContain("0.1.0-rc.7");
+    expect(manifest.peerDependencies?.["@deepseek-ai/dsh-tools"])
+      .toContain("0.1.0-rc.7");
+    expect(manifest.dependencies?.["@deepseek-ai/dsh-tools"]).toBeUndefined();
     expect(patch).toMatch(/^- id: ui-sidebar\n  disabled: true$/m);
     expect(patch).toMatch(/^- insert:\n    - id: dsh-oil-creator\n      name: dsh-oil-creator$/m);
     expect(copyInplace).not.toContain(".dsh/profiles");
@@ -109,10 +119,14 @@ describe("DeepSeek Harness bundle packaging", () => {
       "lib/index.js",
       "lib/client.js",
       "lib/typert.host.js",
-      "lib/collect-publish.mjs",
+      "lib/platform-account.mjs",
+      "lib/article-draft.mjs",
+      "lib/video-draft.mjs",
+      "lib/video-draft-runner.mjs",
     ];
 
     try {
+      execFileSync("pnpm", ["build"], { cwd: root, stdio: "pipe" });
       for (const runtimeFile of runtimeFiles) {
         expect(existsSync(resolve(root, runtimeFile))).toBe(true);
       }
@@ -151,7 +165,10 @@ describe("DeepSeek Harness bundle packaging", () => {
         "lib/index.js",
         "lib/client.js",
         "lib/typert.host.js",
-        "lib/collect-publish.mjs",
+        "lib/platform-account.mjs",
+        "lib/article-draft.mjs",
+        "lib/video-draft.mjs",
+        "lib/video-draft-runner.mjs",
       ]));
       expect(
         [...packedFiles].some((entry) => entry.startsWith("assets/readme/source/")),
@@ -159,5 +176,5 @@ describe("DeepSeek Harness bundle packaging", () => {
     } finally {
       rmSync(packDirectory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });

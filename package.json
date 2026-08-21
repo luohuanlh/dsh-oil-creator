@@ -1,7 +1,7 @@
 {
   "name": "dsh-oil-creator",
   "version": "0.1.0",
-  "description": "AI-assisted local creator workbench for DeepSeek Harness",
+  "description": "Local content-to-draft workbench powered by Ego Browser",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -15,7 +15,7 @@
     "deepseek-harness",
     "creator",
     "content-workflow",
-    "video"
+    "draft-publishing"
   ],
   "engines": {
     "node": ">=22.19.0"
@@ -33,9 +33,15 @@
     "lib/index.js",
     "lib/client.js",
     "lib/typert.host.js",
-    "lib/collect-publish.mjs",
+    "lib/platform-account.mjs",
+    "lib/article-draft.mjs",
+    "lib/video-draft.mjs",
+    "lib/video-draft-runner.mjs",
     "cordis.patch.yml",
-    "scripts/collect-publish.mjs",
+    "scripts/platform-account.mjs",
+    "scripts/article-draft.mjs",
+    "scripts/video-draft.mjs",
+    "scripts/video-draft-runner.mjs",
     "README.md",
     "assets/readme/hero.svg",
     "docs/*.md",
@@ -60,7 +66,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown && node scripts/copy-inplace.mjs scripts/collect-publish.mjs lib/collect-publish.mjs",
+    "build": "tsdown && node scripts/copy-inplace.mjs scripts/platform-account.mjs lib/platform-account.mjs && node scripts/copy-inplace.mjs scripts/article-draft.mjs lib/article-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft.mjs lib/video-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft-runner.mjs lib/video-draft-runner.mjs",
     "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -68,7 +74,6 @@
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.6 || 0.1.0-rc.7",
     "@deepseek-ai/schemastery": "3.18.1",
     "zod": "^4.4.3"
   },
@@ -84,6 +89,7 @@
     "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.6 || 0.1.0-rc.7",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.6 || 0.1.0-rc.7",
     "@deepseek-ai/dsh-settings": "0.1.0-rc.6 || 0.1.0-rc.7",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6 || 0.1.0-rc.7",
     "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.6 || 0.1.0-rc.7",
     "react": "^18.2.0"
   },
@@ -99,6 +105,7 @@
     "@deepseek-ai/dsh-client-ui-settings-plugins": "0.1.0-rc.7",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.0-rc.7",
     "@deepseek-ai/dsh-settings": "0.1.0-rc.7",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
     "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.7",
     "@types/node": "^22.20.1",
     "@types/react": "^18.3.27",

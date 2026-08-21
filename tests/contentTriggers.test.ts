@@ -70,7 +70,7 @@ describe("registerContentTriggers", () => {
     });
   });
 
-  it("serializes a pick to the folder path", async () => {
+  it("serializes a pick to directory-aware content context", async () => {
     const sources: Array<{ codec?: { serialize: (ref: string, signal: AbortSignal) => Promise<string> } }> = [];
     registerContentTriggers(
       {
@@ -84,10 +84,12 @@ describe("registerContentTriggers", () => {
       } as never),
       async () => [],
     );
-    const path = await sources[0]?.codec?.serialize(
+    const context = await sources[0]?.codec?.serialize(
       "2026-08-10_做海外社媒第一个月经验分享",
       new AbortController().signal,
     );
-    expect(path).toBe("/tmp/videos/2026-08-10_做海外社媒第一个月经验分享");
+    expect(context).toContain("内容文件夹（目录）");
+    expect(context).toContain("/tmp/videos/2026-08-10_做海外社媒第一个月经验分享");
+    expect(context).toContain("不要把目录当作文件读取");
   });
 });

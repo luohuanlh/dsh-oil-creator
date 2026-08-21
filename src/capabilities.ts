@@ -4,17 +4,10 @@ import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 
 import { skillDirCandidates } from "./config.ts";
-import { resolveCoverSkill } from "./generate.ts";
-import {
-  egoInstallCandidates,
-  extraBinDirs,
-  pathEnvValue,
-} from "./runtimePaths.ts";
-import { resolveSubtitleSkill, subtitleInstallCommand } from "./subtitle.ts";
+import { egoInstallCandidates, extraBinDirs, pathEnvValue } from "./runtimePaths.ts";
 import type {
   CreatorCapabilities,
   CreatorCapability,
-  CreatorSecrets,
   CreatorSetupStatus,
   LibrarySettings,
 } from "./types.ts";
@@ -22,8 +15,6 @@ import type {
 interface InspectCreatorSetupOptions {
   libraryRoot: string;
   dataDir: string;
-  subtitleSkillDir: string;
-  coverSkillDir: string;
   settings: LibrarySettings;
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
@@ -32,7 +23,12 @@ interface InspectCreatorSetupOptions {
 }
 
 export function defaultFindSkillDir(skillName: string, home = homedir()): string | undefined {
-  return skillDirCandidates(skillName, home).find((candidate) => existsSync(join(candidate, "SKILL.md")));
+  for (const candidate of skillDirCandidates(skillName, home)) {
+    if (existsSync(join(candidate, "SKILL.md"))) return candidate;
+    const nested = join(candidate, skillName);
+    if (existsSync(join(nested, "SKILL.md"))) return nested;
+  }
+  return undefined;
 }
 
 function capability(
@@ -51,112 +47,22 @@ async function libraryCapability(path: string): Promise<CreatorCapability> {
   if (info === undefined || !info.isDirectory()) {
     return capability("missing", true, "内容目录不存在，需要先选择或创建目录。", path);
   }
-  const writable = await access(path, constants.R_OK | constants.W_OK).then(() => true, () => false);
+  const writable = await access(path, constants.R_OK | constants.W_OK)
+    .then(() => true, () => false);
   return writable
     ? capability("ready", true, "内容目录可读写。", path)
     : capability("missing", true, "内容目录存在，但当前进程没有读写权限。", path);
 }
 
-async function screenStudioCapability(
-  platform: NodeJS.Platform,
-  home: string,
-): Promise<CreatorCapability> {
-  if (platform !== "darwin") {
-    return capability("unsupported", false, "Screen Studio 仅支持 macOS；录制绑定和自动剪辑不可用，其他内容管理能力仍可使用。");
-  }
-  const candidates = [join(home, "Applications", "Screen Studio.app")];
-  if (home === homedir()) candidates.unshift("/Applications/Screen Studio.app");
-  for (const path of candidates) {
-    if (await access(path).then(() => true, () => false)) {
-      return capability("ready", false, "已发现 Screen Studio，可绑定工程和自动剪辑。", path);
-    }
-  }
-  return capability("missing", false, "未发现 Screen Studio；绑定工程、自动剪辑（screen-studio-editor）不可用。");
-}
-
-async function openScreenCapability(
-  platform: NodeJS.Platform,
-  env: NodeJS.ProcessEnv,
-  home: string,
-): Promise<CreatorCapability> {
-  const command = platform === "win32" ? "Openscreen" : "openscreen";
-  const executable = await findExecutable(command, env, platform, home);
-  if (executable !== undefined) {
-    return capability("ready", false, "已发现 OpenScreen，可绑定、打开工程并衔接导出成片。", executable);
-  }
-  if (platform === "darwin") {
-    const candidates = [
-      join(home, "Applications", "Openscreen.app"),
-      join(home, "Applications", "OpenScreen.app"),
-    ];
-    if (home === homedir()) {
-      candidates.unshift("/Applications/Openscreen.app", "/Applications/OpenScreen.app");
-    }
-    for (const path of candidates) {
-      if (await access(path).then(() => true, () => false)) {
-        return capability("ready", false, "已发现 OpenScreen，可绑定、打开工程并衔接导出成片。", path);
-      }
-    }
-  }
-  return capability(
-    "missing",
-    false,
-    "未发现 OpenScreen；可从官方 Releases 安装，片库和其他能力不受影响。",
-  );
-}
-
-async function subtitleCapability(
-  path: string,
-  platform: NodeJS.Platform,
-): Promise<CreatorCapability> {
-  const info = await stat(path).catch(() => undefined);
-  if (info === undefined || !info.isDirectory()) {
-    return capability(
-      "missing",
-      false,
-      `未发现 oil-subtitle；执行 ${subtitleInstallCommand(path)} 后重试。`,
-      path,
-    );
-  }
-  try {
-    const resolved = await resolveSubtitleSkill(path, platform);
-    return capability("ready", false, "已发现字幕工作流。", resolved.root);
-  } catch {
-    return capability(
-      "missing",
-      false,
-      `已发现 oil-subtitle 目录，但尚未完成 setup.sh；执行 bash "${join(path, "setup.sh")}" 后重试。字幕生成和预览暂不可用。`,
-      path,
-    );
-  }
-}
-
-async function coverCapability(
-  path: string,
-  platform: NodeJS.Platform,
-): Promise<CreatorCapability> {
-  try {
-    const resolved = await resolveCoverSkill(path, platform);
-    return capability("ready", false, "已发现封面工作流。", resolved.root);
-  } catch {
-    return capability("missing", false, "未发现 oil-cover；封面生成不可用。", path);
-  }
-}
-
-function credentialCapability(secret: CreatorSecrets[keyof CreatorSecrets], label: string): CreatorCapability {
-  return secret.configured
-    ? capability("ready", false, `${label}凭据已配置。`)
-    : capability("missing", false, `${label}凭据未配置。`);
-}
-
 function skillCapability(
   findSkillDir: (skillName: string) => string | undefined,
   skillName: string,
+  readyDetail: string,
 ): CreatorCapability {
   const found = findSkillDir(skillName);
   return found === undefined
     ? capability("missing", false, `未发现 ${skillName}。`)
-    : capability("ready", false, `已发现 ${skillName}。`, found);
+    : capability("ready", false, readyDetail, found);
 }
 
 export async function findExecutable(
@@ -165,13 +71,12 @@ export async function findExecutable(
   platform: NodeJS.Platform = process.platform,
   home = homedir(),
 ): Promise<string | undefined> {
-  const pathValue = pathEnvValue(env);
   const extensions = platform === "win32"
     ? ["", ...(env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean)]
     : [""];
   const mode = platform === "win32" ? constants.F_OK : constants.X_OK;
   const directories = [
-    ...pathValue.split(delimiter).filter(Boolean),
+    ...pathEnvValue(env).split(delimiter).filter(Boolean),
     ...extraBinDirs(platform, home, env),
   ];
   for (const directory of directories) {
@@ -199,51 +104,34 @@ async function findEgo(
   return undefined;
 }
 
-function egoCapability(found: { path: string; kind: "cli" | "app" } | undefined): CreatorCapability {
+function egoCapability(
+  found: { path: string; kind: "cli" | "app" } | undefined,
+): CreatorCapability {
   if (found === undefined) {
-    return capability("missing", false, "未发现 Ego Browser；自动发布和发布数据回收不可用。");
+    return capability("missing", true, "未发现 Ego Browser；平台绑定和自动草稿不可用。");
   }
   if (found.kind === "app") {
     return capability(
       "missing",
-      false,
-      "已发现 Ego Lite 应用，但 PATH 里没有 ego-browser 命令；把 CLI 加到 PATH 后再试。",
+      true,
+      "已发现 Ego Lite 应用，但 PATH 里没有 ego-browser 命令。",
       found.path,
     );
   }
-  return capability("ready", false, "已发现 Ego Browser，可自动发布和回收发布数据。", found.path);
+  return capability("ready", true, "已发现 Ego Browser，可绑定平台账号并运行草稿流程。", found.path);
 }
 
 function recommendationsOf(capabilities: CreatorCapabilities): string[] {
   const recommendations: string[] = [];
-  if (capabilities.library.state !== "ready") recommendations.push("先选择一个可读写的内容目录。");
-  if (capabilities.openScreen.state !== "ready" && capabilities.screenStudio.state !== "ready") {
-    recommendations.push("录屏与剪辑：优先安装 OpenScreen（https://github.com/getopenscreen/openscreen/releases），也可继续使用已有工具。");
+  if (capabilities.library.state !== "ready") {
+    recommendations.push("先选择一个可读写的内容目录。");
   }
-  if (capabilities.screenStudio.state === "missing") recommendations.push("需要录屏和自动剪辑时再安装 Screen Studio（screen.studio，仅 macOS）。");
-  if (capabilities.subtitleSkill.state !== "ready") {
-    const installedPath = capabilities.subtitleSkill.path;
-    recommendations.push(
-      capabilities.subtitleSkill.detail.includes("尚未完成 setup.sh") && installedPath !== undefined
-        ? `字幕：bash "${join(installedPath, "setup.sh")}"`
-        : installedPath === undefined
-          ? "字幕：git clone https://github.com/oil-oil/oil-subtitle ~/.agents/skills/oil-subtitle && bash ~/.agents/skills/oil-subtitle/setup.sh"
-          : `字幕：${subtitleInstallCommand(installedPath)}`,
-    );
+  if (capabilities.egoBrowser.state !== "ready") {
+    recommendations.push("安装 Ego Browser（https://lite.ego.app）并保证 PATH 中存在 ego-browser。");
   }
-  if (capabilities.subtitleCredential.state !== "ready") recommendations.push("字幕 Key：到百炼控制台（https://bailian.console.aliyun.com）申请 DASHSCOPE_API_KEY，在设置页填写。");
-  if (capabilities.coverSkill.state !== "ready") recommendations.push("封面：git clone https://github.com/oil-oil/oil-cover ~/.agents/skills/oil-cover");
-  if (capabilities.coverCredential.state !== "ready") recommendations.push("封面 Key：到 ZenMux（https://zenmux.ai）控制台申请 ZENMUX_API_KEY，在设置页填写。");
-  if (capabilities.publishSync.state !== "ready") {
-    recommendations.push(
-      capabilities.publishSync.detail.includes("PATH")
-        ? "自动发布和数据回收：已装 Ego Lite，还需要把 ego-browser 加到 PATH。"
-        : "自动发布和数据回收：安装 Ego Browser（https://lite.ego.app）并保证 PATH 里有 ego-browser，再登录各平台后台。",
-    );
+  if (capabilities.autoPublish.state !== "ready") {
+    recommendations.push("安装 video-publisher Skill，自动草稿只会停在最终发表前。");
   }
-  if (capabilities.editingSkill.state !== "ready") recommendations.push("自动剪辑：git clone https://github.com/oil-oil/screen-studio-editor ~/.agents/skills/screen-studio-editor");
-  if (capabilities.publishSkill.state !== "ready") recommendations.push("自动发布：git clone https://github.com/oil-oil/video-publisher-skill ~/.agents/skills/video-publisher");
-  if (capabilities.articleSkill.state !== "ready") recommendations.push("公众号图文：git clone https://github.com/oil-oil/oil-video-article ~/.agents/skills/oil-video-article");
   return recommendations;
 }
 
@@ -256,16 +144,17 @@ export async function inspectCreatorSetup(
   const findSkillDir = options.findSkillDir ?? ((name: string) => defaultFindSkillDir(name, home));
   const capabilities: CreatorCapabilities = {
     library: await libraryCapability(options.libraryRoot),
-    openScreen: await openScreenCapability(platform, env, home),
-    screenStudio: await screenStudioCapability(platform, home),
-    subtitleSkill: await subtitleCapability(options.subtitleSkillDir, platform),
-    subtitleCredential: credentialCapability(options.settings.secrets.subtitle, "字幕"),
-    coverSkill: await coverCapability(options.coverSkillDir, platform),
-    coverCredential: credentialCapability(options.settings.secrets.cover, "封面"),
-    publishSync: egoCapability(await findEgo(platform, env, home)),
-    editingSkill: skillCapability(findSkillDir, "screen-studio-editor"),
-    publishSkill: skillCapability(findSkillDir, "video-publisher"),
-    articleSkill: skillCapability(findSkillDir, "oil-video-article"),
+    autoPublish: skillCapability(
+      findSkillDir,
+      "video-publisher",
+      "已发现自动发布工作流；支持的平台会生成草稿并停在最终发表前。",
+    ),
+    article: capability(
+      "ready",
+      false,
+      "已内置微信公众号图文草稿适配器；实际运行仍需要 Ego Browser 登录态。",
+    ),
+    egoBrowser: egoCapability(await findEgo(platform, env, home)),
   };
   return {
     platform,

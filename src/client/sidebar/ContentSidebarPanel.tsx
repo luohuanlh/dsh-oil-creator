@@ -11,7 +11,8 @@ import {
   Tooltip,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 
-import type { ContentSummary, WorkflowStage } from "../../types.ts";
+import { resolveContentType } from "../../contentType.ts";
+import type { ContentSummary, ContentType, WorkflowStage } from "../../types.ts";
 import { CoverThumb, coverThumbRevision } from "../CoverThumb.tsx";
 import type { CreatorViewFace } from "../face.ts";
 import { useLibraryEpoch, useSelectedContentId } from "../contentSelection.ts";
@@ -28,6 +29,65 @@ export const WORKFLOW_TONE: Record<WorkflowStage, StatusTone> = {
   publish: "pending",
   live: "success",
 };
+
+const CREATE_CONTENT_TYPES: ReadonlyArray<{
+  id: ContentType;
+  label: CreatorKey;
+}> = [
+  { id: "video", label: "create.type.video" },
+  { id: "audio", label: "create.type.audio" },
+  { id: "article", label: "create.type.article" },
+];
+
+function ContentTypeGlyph({
+  type,
+  className,
+}: {
+  type: ContentType;
+  className: string;
+}) {
+  return (
+    <svg className={`contentTypeGlyph ${className}`} viewBox="0 0 16 16" aria-hidden="true">
+      {type === "video" && (
+        <>
+          <rect x="2.25" y="3.25" width="11.5" height="9.5" rx="2" />
+          <path className="glyphFill" d="m6.7 6 3.2 2-3.2 2z" />
+        </>
+      )}
+      {type === "article" && (
+        <>
+          <path d="M4 2.25h5.3L12 5v8.75H4z" />
+          <path d="M9.25 2.5V5H12M6 7.5h4M6 10h4" />
+        </>
+      )}
+      {type === "audio" && (
+        <>
+          <path d="M3 9V7a5 5 0 0 1 10 0v2" />
+          <path d="M3 8.5h1.5v3H3zM11.5 8.5H13v3h-1.5z" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function ContentTypeMark({
+  type,
+  label,
+}: {
+  type: ContentType;
+  label: string;
+}) {
+  return (
+    <span
+      className="rowTypeMark"
+      data-content-type={type}
+      aria-label={label}
+      title={label}
+    >
+      <ContentTypeGlyph type={type} className="rowTypeIcon" />
+    </span>
+  );
+}
 
 function sortByRecency(items: ContentSummary[]): ContentSummary[] {
   return [...items].sort((a, b) => {
@@ -60,6 +120,7 @@ export function ContentSidebarPanel({
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
+  const [createType, setCreateType] = useState<ContentType>("video");
   const [createError, setCreateError] = useState<string | undefined>(undefined);
 
   const loadList = async (nextQuery = query) => {
@@ -120,6 +181,7 @@ export function ContentSidebarPanel({
     if (creating) return;
     setCreateOpen(false);
     setCreateName("");
+    setCreateType("video");
     setCreateError(undefined);
   };
 
@@ -129,9 +191,10 @@ export function ContentSidebarPanel({
     setCreating(true);
     setCreateError(undefined);
     try {
-      const created = await createContent(title);
+      const created = await createContent(title, createType);
       setCreateOpen(false);
       setCreateName("");
+      setCreateType("video");
       await loadList(query);
       setSelectedId(created.id);
     } catch (cause) {
@@ -143,6 +206,14 @@ export function ContentSidebarPanel({
 
   return (
     <div className="contentPanel" data-surface="content-panel">
+      <div className="catalogMasthead">
+        <span className="catalogEyebrow">{t("catalog.eyebrow")}</span>
+        <span className="catalogTitle">{t("catalog.title")}</span>
+        <span className="catalogCount">
+          <strong>{String(items.length).padStart(2, "0")}</strong>
+          {t("catalog.unit")}
+        </span>
+      </div>
       <div className="contentHeader">
         <div className={searchOpen ? "searchSlot expanded" : "searchSlot"}>
           <div
@@ -237,6 +308,34 @@ export function ContentSidebarPanel({
         )}
       >
         <div data-plugin="dsh-oil-creator" data-surface="create-dialog">
+          <div className="createTypeField">
+            <span id="oil-create-type-label" className="createLabel">
+              {t("create.type")}
+            </span>
+            <div
+              className="createTypeTabs"
+              role="radiogroup"
+              aria-labelledby="oil-create-type-label"
+            >
+              {CREATE_CONTENT_TYPES.map(({ id, label }) => (
+                <label key={id} className="createTypeChoice">
+                  <input
+                    className="createTypeRadio"
+                    type="radio"
+                    name="oil-create-type"
+                    value={id}
+                    checked={createType === id}
+                    disabled={creating}
+                    onChange={() => { setCreateType(id); }}
+                  />
+                  <span className="createTypeOption">
+                    <ContentTypeGlyph type={id} className="createTypeIcon" />
+                    <span>{t(label)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
           <div className="createField">
             <label className="createLabel" htmlFor="oil-create-name">{t("create.name")}</label>
             <Input
@@ -262,34 +361,46 @@ export function ContentSidebarPanel({
         {error === undefined && items.length === 0 && !loading && (
           <div className="contentEmpty">{t("empty.library")}</div>
         )}
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={item.id === selectedId ? "contentRow selected" : "contentRow"}
-            onClick={() => {
-              setSelectedId(item.id === selectedId ? null : item.id);
-            }}
-          >
-            <span className="rowCover">
-              <CoverThumb
-                id={item.id}
-                load={getCoverThumb}
-                revision={coverThumbRevision(item.covers)}
-                fallback={<IconBrowseOutline16 className="coverFallback" size={20} />}
-              />
-            </span>
-            <span className="rowBody">
-              <span className="rowTitle">{item.title}</span>
-              <span className="rowMeta">
-                <StatusPill tone={WORKFLOW_TONE[item.workflow]}>
-                  {t(`inspector.stage.${item.workflow}` as CreatorKey)}
-                </StatusPill>
-                <span className="rowDate">{formatRelativeTime(item.recordedAt, Date.now(), t)}</span>
+        {items.map((item, index) => {
+          const contentType = resolveContentType(item);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={item.id === selectedId ? "contentRow selected" : "contentRow"}
+              data-workflow={item.workflow}
+              data-content-type={contentType}
+              onClick={() => {
+                setSelectedId(item.id === selectedId ? null : item.id);
+              }}
+            >
+              <span className="rowIndex" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+              <span className="rowCover">
+                <CoverThumb
+                  id={item.id}
+                  load={getCoverThumb}
+                  revision={coverThumbRevision(item.covers)}
+                  fallback={<IconBrowseOutline16 className="coverFallback" size={20} />}
+                />
               </span>
-            </span>
-          </button>
-        ))}
+              <span className="rowBody">
+                <span className="rowTitleLine">
+                  <ContentTypeMark
+                    type={contentType}
+                    label={t(`create.type.${contentType}` as CreatorKey)}
+                  />
+                  <span className="rowTitle">{item.title}</span>
+                </span>
+                <span className="rowMeta">
+                  <StatusPill tone={WORKFLOW_TONE[item.workflow]}>
+                    {t(`inspector.stage.${item.workflow}` as CreatorKey)}
+                  </StatusPill>
+                  <span className="rowDate">{formatRelativeTime(item.recordedAt, Date.now(), t)}</span>
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,0 +1,58 @@
+[data-plugin="dsh-oil-creator"] {
+  --oil-paper: color-mix(in srgb, var(--dsw-alias-bg-base) 90%, #efe2ca 10%);
+  --oil-paper-raised: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 94%, #fff8ea 6%);
+  --oil-paper-deep: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 88%, #dac9a9 12%);
+  --oil-ink: var(--dsw-alias-label-primary);
+  --oil-ink-soft: var(--dsw-alias-label-secondary);
+  --oil-ink-faint: var(--dsw-alias-label-tertiary);
+  --oil-line: color-mix(in srgb, var(--dsw-alias-border-l2) 82%, #9a7d58 18%);
+  --oil-accent: #d65a32;
+  --oil-accent-deep: #a83c20;
+  --oil-accent-soft: color-mix(in srgb, var(--oil-paper-raised) 82%, var(--oil-accent) 18%);
+  --oil-success: #438267;
+  --oil-shadow: 0 18px 50px rgba(63, 45, 25, 0.08);
+  --oil-font-body: "Avenir Next", "Hiragino Sans GB", "PingFang SC", sans-serif;
+  --oil-font-display: "Iowan Old Style", "Songti SC", "STSong", serif;
+  font-family: var(--oil-font-body);
+}
+
+body[data-ds-dark-theme] [data-plugin="dsh-oil-creator"] {
+  --oil-paper: color-mix(in srgb, var(--dsw-alias-bg-base) 92%, #2b211b 8%);
+  --oil-paper-raised: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 92%, #3b2c22 8%);
+  --oil-paper-deep: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 88%, #4d3527 12%);
+  --oil-line: color-mix(in srgb, var(--dsw-alias-border-l2) 76%, #8d654d 24%);
+  --oil-accent: #ff7a4e;
+  --oil-accent-deep: #ff9b77;
+  --oil-success: #70b892;
+  --oil-shadow: 0 20px 56px rgba(0, 0, 0, 0.24);
+}
+
+[data-plugin="dsh-oil-creator"] * {
+  box-sizing: border-box;
+}
+
+[data-plugin="dsh-oil-creator"] ::selection {
+  background: var(--oil-accent-soft);
+  color: var(--oil-ink);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-plugin="dsh-oil-creator"] .oilSurface,
+  [data-plugin="dsh-oil-creator"] .contentRow,
+  [data-plugin="dsh-oil-creator"] .accountRow {
+    animation: oil-paper-rise 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  [data-plugin="dsh-oil-creator"] .oilSurface:nth-of-type(2),
+  [data-plugin="dsh-oil-creator"] .contentRow:nth-child(2),
+  [data-plugin="dsh-oil-creator"] .accountRow:nth-child(2) { animation-delay: 35ms; }
+
+  [data-plugin="dsh-oil-creator"] .oilSurface:nth-of-type(3),
+  [data-plugin="dsh-oil-creator"] .contentRow:nth-child(3),
+  [data-plugin="dsh-oil-creator"] .accountRow:nth-child(3) { animation-delay: 70ms; }
+}
+
+@keyframes oil-paper-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

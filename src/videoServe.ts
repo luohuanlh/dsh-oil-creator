@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { extname } from "node:path";
 
-import { findFreePort } from "./subtitle.ts";
+import { findFreePort } from "./ports.ts";
 
 const MIME: Record<string, string> = {
   ".mp4": "video/mp4",

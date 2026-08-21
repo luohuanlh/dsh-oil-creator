@@ -1,10 +1,14 @@
-import { OIL_ICON_SRC } from "../assets/oilIcon.ts";
+import {
+  BrandWordmark,
+  FishLogo,
+} from "@deepseek-ai/dsh-client-ui-primitives";
 
-export function OilBrand({ compact = false, name = "Oil Creator" }: { compact?: boolean; name?: string }) {
+export function OilBrand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="oilBrand">
-      <img className="oilBrandIcon" src={OIL_ICON_SRC} alt="" aria-hidden="true" />
-      {!compact && <span className="oilBrandText">{name}</span>}
+      {compact
+        ? <FishLogo className="oilBrandIcon" size={24} />
+        : <BrandWordmark className="deepseekWordmark" size={22} />}
     </span>
   );
 }

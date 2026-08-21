@@ -25,3 +25,29 @@ button.statusPill:disabled {
   opacity: 0.5;
   cursor: default;
 }
+
+[data-plugin="dsh-oil-creator"] .statusPill {
+  min-height: 22px;
+  padding-inline: 8px;
+  border: 1px solid var(--oil-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--oil-paper-raised) 86%, transparent);
+  color: var(--oil-ink-soft);
+  font-family: var(--oil-font-body);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+[data-plugin="dsh-oil-creator"] .statusPill.pending,
+[data-plugin="dsh-oil-creator"] .statusPill.active {
+  border-color: color-mix(in srgb, var(--oil-accent) 48%, var(--oil-line));
+  background: var(--oil-accent-soft);
+  color: var(--oil-accent-deep);
+}
+
+[data-plugin="dsh-oil-creator"] .statusPill.success {
+  border-color: color-mix(in srgb, var(--oil-success) 48%, var(--oil-line));
+  background: color-mix(in srgb, var(--oil-paper-raised) 82%, var(--oil-success) 18%);
+  color: var(--oil-success);
+}

@@ -16,6 +16,23 @@
   color: var(--dsw-alias-label-primary);
 }
 
+[data-plugin="dsh-oil-creator"] .oilSurfaceHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurfaceHeading .oilSurfaceTitle {
+  margin-bottom: 0;
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurfaceHeadingAside {
+  display: inline-flex;
+  align-items: center;
+}
+
 [data-plugin="dsh-oil-creator"] .oilSurfaceHint {
   margin: 0 0 12px;
   color: var(--dsw-alias-label-tertiary);
@@ -25,4 +42,70 @@
 [data-plugin="dsh-oil-creator"] .oilSurfaceTitle + .oilActionBar,
 [data-plugin="dsh-oil-creator"] .oilSurfaceHint + .oilActionBar {
   margin-top: 12px;
+}
+
+/* Editorial workflow sheet */
+[data-plugin="dsh-oil-creator"] .oilSurface {
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  padding: 22px 22px 24px 16px;
+  overflow: hidden;
+  border: 1px solid var(--oil-line);
+  border-radius: 4px 18px 18px 4px;
+  background:
+    linear-gradient(90deg, var(--oil-accent-soft) 0 4px, transparent 4px),
+    var(--oil-paper-raised);
+  box-shadow: var(--oil-shadow);
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurface + .oilSurface,
+[data-plugin="dsh-oil-creator"] .oilSurface + .block,
+[data-plugin="dsh-oil-creator"] .lede + .oilSurface {
+  margin-top: 14px;
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurfaceMarker {
+  align-self: start;
+  color: var(--oil-accent);
+  font-family: var(--oil-font-display);
+  font-size: 31px;
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 1;
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurfaceContent {
+  min-width: 0;
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurfaceTitle {
+  margin-bottom: 5px;
+  color: var(--oil-ink);
+  font-family: var(--oil-font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+[data-plugin="dsh-oil-creator"] .oilSurfaceHint {
+  max-width: 60ch;
+  margin: 0 0 17px;
+  color: var(--oil-ink-faint);
+  font-family: var(--oil-font-body);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+[data-plugin="dsh-oil-creator"] .articleShelf {
+  background:
+    linear-gradient(90deg, var(--oil-success) 0 4px, transparent 4px),
+    var(--oil-paper-raised);
+}
+
+[data-plugin="dsh-oil-creator"] .articleShelf .oilSurfaceMarker {
+  color: var(--oil-success);
+  font-size: 27px;
 }

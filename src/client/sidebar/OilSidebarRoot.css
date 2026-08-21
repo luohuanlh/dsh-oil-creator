@@ -319,3 +319,98 @@
     animation: none;
   }
 }
+
+/* Oil editorial chrome */
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] {
+  --dsh-sidebar-inline-padding: 14px;
+  border-right: 1px solid var(--oil-line);
+  background:
+    radial-gradient(circle at 20% 2%, color-mix(in srgb, var(--oil-accent) 7%, transparent), transparent 24%),
+    var(--oil-paper);
+  color: var(--oil-ink);
+  font-family: var(--oil-font-body);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .logoRow {
+  height: 58px;
+  margin: 0 0 10px;
+  padding: 6px 2px 6px 6px;
+  border-bottom: 1px solid var(--oil-line);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .oilBrand {
+  gap: 0;
+  color: var(--oil-ink);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .oilBrandIcon {
+  display: block;
+  width: 24px;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .deepseekWordmark {
+  display: block;
+  width: auto;
+  height: 22px;
+  color: var(--oil-ink);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .iconButton {
+  border: 1px solid transparent;
+  color: var(--oil-ink-soft);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .iconButton:hover {
+  border-color: var(--oil-line);
+  background: var(--oil-paper-raised);
+  color: var(--oil-accent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .tabRow {
+  margin: 0 0 12px;
+  padding: 3px;
+  border: 1px solid var(--oil-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--oil-paper-deep) 46%, transparent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .tabButton {
+  height: 31px;
+  border-radius: 9px;
+  color: var(--oil-ink-faint);
+  font-family: var(--oil-font-body);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .tabButton.active {
+  border: 1px solid var(--oil-line);
+  background: var(--oil-paper-raised);
+  box-shadow: 0 5px 14px rgba(53, 38, 21, 0.08);
+  color: var(--oil-accent-deep);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .regionArea {
+  margin-right: -4px;
+  padding-right: 4px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .footArea {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--oil-line);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"].collapsed {
+  background: var(--oil-paper);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"].collapsed .oilBrandIcon {
+  width: 24px;
+  height: auto;
+}
