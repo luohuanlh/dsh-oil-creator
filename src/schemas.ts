@@ -164,10 +164,32 @@ export const idRequestSchema = z.object({
 
 export const importAssetRequestSchema = z.object({
   id: z.string().min(1),
-  kind: z.union([z.literal("article"), z.literal("cover")]),
+  kind: z.union([
+    z.literal("video"),
+    z.literal("subtitle"),
+    z.literal("article"),
+    z.literal("cover"),
+  ]),
   name: z.string().min(1).max(255),
   mimeType: z.string().max(128),
   base64: z.string().min(1).max(28_000_000),
+});
+
+export const prepareAssetUploadRequestSchema = z.object({
+  id: z.string().min(1),
+  kind: z.union([
+    z.literal("video"),
+    z.literal("subtitle"),
+    z.literal("article"),
+    z.literal("cover"),
+  ]),
+  name: z.string().min(1).max(255),
+  mimeType: z.string().max(128),
+  size: z.number().int().positive().max(16 * 1024 * 1024 * 1024),
+});
+
+export const prepareAssetUploadResultSchema = z.object({
+  url: z.string().url(),
 });
 
 export const contentDetailSchema = contentSummarySchema.and(

@@ -73,6 +73,25 @@ describe("content inspector distribution workbench", () => {
     expect(locales).toContain('"inspector.draft.staged": "页面已备，尚未远端保存"');
   });
 
+  it("把流程状态放进页头，两个工作章节保持展开", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.tsx"),
+      "utf8",
+    );
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.css"),
+      "utf8",
+    );
+
+    expect(implementation).toContain('className="titleMetaRow"');
+    expect(implementation).toContain("renderWorkflowRail");
+    expect(implementation).not.toContain("WorkflowDrawer");
+    expect(implementation).not.toContain("openWorkflowDrawer");
+    expect(implementation).not.toContain("contentId=");
+    expect(styles).toContain(".titleMetaRow");
+    expect(styles).not.toContain(".workflowSurface.drawerClosed");
+  });
+
   it("Client 工作台只排队到当前 Harness 会话，不暴露直接启动草稿旁路", () => {
     const face = readFileSync(resolve(process.cwd(), "src/client/face.ts"), "utf8");
 
@@ -110,7 +129,7 @@ describe("content inspector distribution workbench", () => {
       "utf8",
     );
 
-    expect(implementation.match(/type="file"/g)).toHaveLength(2);
+    expect(implementation.match(/type="file"/g)).toHaveLength(5);
     expect(implementation).toContain('onImportAsset("article", file)');
     expect(implementation).toContain('onImportAsset("cover", file)');
     expect(implementation).toContain("importAsset({");
@@ -125,7 +144,86 @@ describe("content inspector distribution workbench", () => {
     expect(locales).not.toContain("平台文案已冻结");
     expect(locales).toContain("平台文案已生成");
     expect(implementation).toContain("titleAside={(");
-    expect(implementation).toContain('className="packageHint"');
+    expect(implementation).not.toContain('className="packageHint"');
+    expect(locales).not.toContain("选了 .srt/.ass/.vtt/.txt");
     expect(implementation).not.toContain('className="packageState"');
+  });
+
+  it("视频和字幕支持选择本地文件，导入后立即成为当前素材", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.tsx"),
+      "utf8",
+    );
+
+    expect(implementation.match(/type="file"/g)).toHaveLength(5);
+    expect(implementation).toContain('onImportAsset("video", file)');
+    expect(implementation).toContain('onImportAsset("subtitle", file)');
+    expect(implementation).toContain('accept=".mp4,.mov,video/mp4,video/quicktime"');
+    expect(implementation).toContain('accept=".srt,.ass,.vtt,.txt"');
+    expect(implementation).toContain("prepareAssetUpload({");
+    expect(implementation).toContain("setVideoPath(imported.asset.path)");
+    expect(implementation).toContain("setSubtitlePath(imported.asset.path)");
+  });
+
+  it("视频素材区删除冗余说明，并在视频下方提供封面图导入", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.tsx"),
+      "utf8",
+    );
+    const locales = readFileSync(
+      resolve(process.cwd(), "src/client/locales.ts"),
+      "utf8",
+    );
+
+    expect(implementation).not.toContain('hint={t("inspector.content.hint")}');
+    expect(locales).not.toContain("可选择内容文件夹里的素材，也可从本机导入");
+    expect(implementation).toContain('className="assetField videoCoverField"');
+    expect(implementation).toContain('t("inspector.asset.videoCover")');
+    expect(implementation.match(/onImportAsset\("cover", file\)/g)).toHaveLength(2);
+    expect(locales).toContain('"inspector.asset.videoCover": "封面图"');
+  });
+
+  it("视频、字幕和封面标签收进各自的空选项", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.tsx"),
+      "utf8",
+    );
+    const locales = readFileSync(
+      resolve(process.cwd(), "src/client/locales.ts"),
+      "utf8",
+    );
+
+    expect(implementation).not.toContain('<span>{t("inspector.asset.video")}</span>');
+    expect(implementation).not.toContain('<span>{t("inspector.asset.subtitle")}</span>');
+    expect(implementation).not.toContain('<span>{t("inspector.asset.videoCover")}</span>');
+    expect(implementation).toContain('<option value="">{t("inspector.asset.video")}</option>');
+    expect(implementation).toContain('<option value="">{t("inspector.asset.subtitle")}</option>');
+    expect(implementation).toContain('<option value="">{t("inspector.asset.videoCover")}</option>');
+    expect(implementation).not.toContain('t("inspector.asset.none")');
+    expect(locales).not.toContain('"inspector.asset.none"');
+  });
+
+  it("压缩工作台页头，并把草稿主操作移到章节标题右侧", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.tsx"),
+      "utf8",
+    );
+    const locales = readFileSync(
+      resolve(process.cwd(), "src/client/locales.ts"),
+      "utf8",
+    );
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.css"),
+      "utf8",
+    );
+
+    expect(implementation).not.toContain('className="title"');
+    expect(implementation).toContain('className="workflowSurface draftSurface"');
+    expect(implementation).toContain('titleAside={(\n              <ActionButton');
+    expect(implementation.match(/<ActionBar>/g)).toHaveLength(1);
+    expect(implementation).not.toContain('t("inspector.distribution.ready")');
+    expect(implementation).not.toContain('t("inspector.distribution.hint")');
+    expect(locales).not.toContain("所选平台均已登录，可以创建草稿。");
+    expect(styles).toContain(".draftSurface .oilSurfaceHeadingAside");
   });
 });

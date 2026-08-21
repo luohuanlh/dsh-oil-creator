@@ -13,6 +13,8 @@ import type {
   ListContentsResult,
   OpenPlatformAccountResult,
   PlatformAccountsResult,
+  PrepareAssetUploadRequest,
+  PrepareAssetUploadResult,
   PublishPlatform,
   VideoPlaybackResult,
 } from "../types.ts";
@@ -23,6 +25,7 @@ export interface CreatorViewFace {
   getRevision: () => Promise<number>;
   getContent: (id: string) => Promise<ContentDetail>;
   importAsset: (request: ImportAssetRequest) => Promise<ImportAssetResult>;
+  prepareAssetUpload: (request: PrepareAssetUploadRequest) => Promise<PrepareAssetUploadResult>;
   getCoverThumb: (id: string) => Promise<CoverThumbResult>;
   getVideoPlayback: (id: string, path: string) => Promise<VideoPlaybackResult>;
   getArticleMedia: (id: string, path: string) => Promise<ArticleMediaResult>;

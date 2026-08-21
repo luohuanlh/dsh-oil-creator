@@ -181,7 +181,7 @@ export interface IdRequest {
   id: string;
 }
 
-export type AssetImportKind = "article" | "cover";
+export type AssetImportKind = "video" | "subtitle" | "article" | "cover";
 
 export interface ImportAssetRequest {
   id: string;
@@ -194,6 +194,18 @@ export interface ImportAssetRequest {
 export interface ImportAssetResult {
   asset: { name: string; path: string };
   detail: ContentDetail;
+}
+
+export interface PrepareAssetUploadRequest {
+  id: string;
+  kind: AssetImportKind;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface PrepareAssetUploadResult {
+  url: string;
 }
 
 export interface ContentDetail extends ContentSummary {

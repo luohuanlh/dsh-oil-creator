@@ -64,6 +64,23 @@ describe("importContentAsset", () => {
     expect(await readFile(imported.path, "utf8")).toBe("<h1>标题</h1>");
   });
 
+  it("支持导入视频和字幕", async () => {
+    const folder = await temporaryFolder();
+    const video = await importContentAsset(folder, {
+      kind: "video",
+      name: "clip.mp4",
+      base64: Buffer.from("video").toString("base64"),
+    });
+    const subtitle = await importContentAsset(folder, {
+      kind: "subtitle",
+      name: "clip.srt",
+      base64: Buffer.from("subtitle").toString("base64"),
+    });
+
+    expect(await readFile(video.path, "utf8")).toBe("video");
+    expect(await readFile(subtitle.path, "utf8")).toBe("subtitle");
+  });
+
   it("拒绝目录穿越、错误扩展名和无效内容", async () => {
     const folder = await temporaryFolder();
 

@@ -415,23 +415,32 @@
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .header {
   position: relative;
   z-index: 1;
-  padding: 20px 24px 0 28px;
+  padding: 13px 24px 11px 28px;
   border-bottom: 1px solid color-mix(in srgb, var(--oil-line) 72%, transparent);
   background: color-mix(in srgb, var(--oil-paper) 92%, transparent);
   backdrop-filter: blur(18px);
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .titleRow {
-  min-height: 48px;
+  min-height: 26px;
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .titleBlock {
   min-width: 0;
 }
 
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .titleMetaRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  min-height: 12px;
+  margin-bottom: 0;
+}
+
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .titleKicker {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 0;
   color: var(--oil-accent);
   font-size: 9px;
   font-weight: 750;
@@ -470,8 +479,13 @@
   align-items: center;
   width: max-content;
   max-width: 100%;
-  margin: 0 0 12px;
-  padding: 0 2px;
+  margin: 0;
+  padding: 0;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .titleMetaRow .workflowRail {
+  padding-left: 9px;
+  border-left: 1px solid color-mix(in srgb, var(--oil-line) 82%, transparent);
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .flowNode {
@@ -599,6 +613,27 @@
   border-color: color-mix(in srgb, var(--oil-accent) 42%, var(--oil-line));
 }
 
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .draftSurface .oilSurfaceHeading {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 14px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .draftSurface .oilSurfaceHeadingAside {
+  flex: none;
+  margin-left: auto;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .draftSurface .oilSurfaceHeadingAside button {
+  min-height: 30px;
+  border-radius: 999px;
+  font-family: var(--oil-font-body);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .assetFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -613,6 +648,10 @@
   color: var(--oil-ink-soft);
   font-size: 11px;
   font-weight: 650;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .videoCoverField {
+  grid-column: 1;
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .assetSelect {
@@ -726,13 +765,6 @@
   outline-offset: 2px;
 }
 
-[data-plugin="dsh-oil-creator"][data-surface="inspector"] .packageHint {
-  margin-top: 12px;
-  color: var(--oil-ink-faint);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .workflowPreview {
   margin-top: 18px;
 }
@@ -823,6 +855,10 @@
   [data-plugin="dsh-oil-creator"][data-surface="inspector"] .workList,
   [data-plugin="dsh-oil-creator"][data-surface="inspector"] .assetFields {
     grid-template-columns: 1fr;
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="inspector"] .videoCoverField {
+    grid-column: auto;
   }
 
   [data-plugin="dsh-oil-creator"] .oilSurface {

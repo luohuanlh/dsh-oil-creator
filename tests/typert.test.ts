@@ -16,6 +16,7 @@ describe("handwritten TYPERT", () => {
       "listContents",
       "getContent",
       "importAsset",
+      "prepareAssetUpload",
       "getCoverThumb",
       "getVideoPlayback",
       "getArticleMedia",

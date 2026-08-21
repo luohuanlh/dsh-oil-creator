@@ -84,6 +84,7 @@ function probe(dataDir: string, item: ContentSummary): OilCreatorService {
     catalogRevision: 0,
     videos: new Map(),
     articles: new Map(),
+    assetUploads: new Set(),
     draftStarts: new Set(),
     find: vi.fn(async () => item),
     invalidateCatalog: vi.fn(),
@@ -371,6 +372,26 @@ describe("OilCreatorService.getPlatformAccounts", () => {
 });
 
 describe("OilCreatorService Harness distribution", () => {
+  it("为视频创建一次性上传地址并在完成后刷新目录", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-upload-"));
+    const service = probe(root, summary(root, join(root, "missing.mp4")));
+    const bytes = new TextEncoder().encode("streamed-video");
+
+    const prepared = await service.prepareAssetUpload({
+      id: "2026-08-21_demo",
+      kind: "video",
+      name: "selected.mp4",
+      mimeType: "video/mp4",
+      size: bytes.byteLength,
+    }, new AbortController().signal);
+    const response = await fetch(prepared.url, { method: "PUT", body: bytes });
+
+    expect(response.status).toBe(201);
+    expect(await readFile(join(root, "selected.mp4"), "utf8")).toBe("streamed-video");
+    expect(service.invalidateCatalog).toHaveBeenCalled();
+    expect(service.assetUploads.size).toBe(0);
+  });
+
   it("预览严格使用工作台当前选择的素材并拒绝目录外路径", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-service-preview-"));
     const defaultVideo = join(root, "default.mp4");

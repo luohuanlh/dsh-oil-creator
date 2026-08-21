@@ -17,6 +17,7 @@ import type {
   AssetSelection,
   ContentDetail,
   ContentType,
+  ImportAssetResult,
   PlatformAccount,
   PublishPlatform,
   VideoPlaybackResult,
@@ -52,13 +53,15 @@ const PLATFORM_ICON = {
   channels: "wechat",
 } as const;
 
-const LOCAL_IMPORT_LIMIT: Record<AssetImportKind, number> = {
+type InlineAssetImportKind = Extract<AssetImportKind, "article" | "cover">;
+
+const LOCAL_IMPORT_LIMIT: Record<InlineAssetImportKind, number> = {
   article: 2 * 1024 * 1024,
   cover: 20 * 1024 * 1024,
 };
 const ARTICLE_META_MAX = 120;
 
-async function fileBase64(file: File, kind: AssetImportKind): Promise<string> {
+async function fileBase64(file: File, kind: InlineAssetImportKind): Promise<string> {
   if (file.size > LOCAL_IMPORT_LIMIT[kind]) {
     throw new Error(kind === "article"
       ? "Markdown 文章不能超过 2 MB"
@@ -118,6 +121,7 @@ export function ContentInspector({
   getSettings,
   getPlatformAccounts,
   importAsset,
+  prepareAssetUpload,
   queueDistribution,
   openPath,
   closeDetails,
@@ -150,6 +154,8 @@ export function ContentInspector({
   const [articleOrigin, setArticleOrigin] = useState<string>();
   const [articlePreview, setArticlePreview] = useState("");
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
+  const videoFileInput = useRef<HTMLInputElement>(null);
+  const subtitleFileInput = useRef<HTMLInputElement>(null);
   const articleFileInput = useRef<HTMLInputElement>(null);
   const coverFileInput = useRef<HTMLInputElement>(null);
   const contentType = detail === undefined ? undefined : resolveContentType(detail);
@@ -373,15 +379,46 @@ export function ContentInspector({
     setAssetError(undefined);
     setQueued(false);
     try {
-      const imported = await importAsset({
-        id: detail.id,
-        kind,
-        name: file.name,
-        mimeType: file.type,
-        base64: await fileBase64(file, kind),
-      });
+      let imported: ImportAssetResult;
+      if (kind === "video" || kind === "subtitle") {
+        const prepared = await prepareAssetUpload({
+          id: detail.id,
+          kind,
+          name: file.name,
+          mimeType: file.type,
+          size: file.size,
+        });
+        const response = await fetch(prepared.url, {
+          method: "PUT",
+          body: file,
+          ...(file.type === "" ? {} : { headers: { "Content-Type": file.type } }),
+        });
+        const uploaded = await response.json().catch(() => undefined) as
+          | { asset?: { name?: unknown; path?: unknown }; error?: unknown }
+          | undefined;
+        if (!response.ok) {
+          throw new Error(typeof uploaded?.error === "string" ? uploaded.error : "本地文件导入失败");
+        }
+        if (typeof uploaded?.asset?.name !== "string" || typeof uploaded.asset.path !== "string") {
+          throw new Error("本地文件导入结果无效");
+        }
+        imported = {
+          asset: { name: uploaded.asset.name, path: uploaded.asset.path },
+          detail: await getContent(detail.id),
+        };
+      } else {
+        imported = await importAsset({
+          id: detail.id,
+          kind,
+          name: file.name,
+          mimeType: file.type,
+          base64: await fileBase64(file, kind),
+        });
+      }
       setDetail(imported.detail);
-      if (kind === "article") setArticlePath(imported.asset.path);
+      if (kind === "video") setVideoPath(imported.asset.path);
+      else if (kind === "subtitle") setSubtitlePath(imported.asset.path);
+      else if (kind === "article") setArticlePath(imported.asset.path);
       else setCoverPath(imported.asset.path);
     } catch (cause) {
       setAssetError(friendlyError(cause, t));
@@ -389,6 +426,23 @@ export function ContentInspector({
       setImportingAsset(undefined);
     }
   };
+
+  const renderWorkflowRail = (workflowMode: AssetSelection["mode"]) => (
+    <div className="workflowRail" aria-label={t(CONTENT_TYPE_KEY[workflowMode])}>
+      {[
+        { label: t("inspector.flow.content"), done: contentReady },
+        { label: t("inspector.flow.distribute"), done: draftsReady },
+      ].map((step, index, all) => {
+        const current = !step.done && all.slice(0, index).every((item) => item.done);
+        return (
+          <div key={step.label} className={`flowNode ${step.done ? "done" : current ? "current" : ""}`}>
+            <span className="flowState" aria-hidden="true" />
+            <span className="flowLabel">{step.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const renderWorkflow = (workflowMode: AssetSelection["mode"]) => {
     if (detail === undefined) return null;
@@ -423,20 +477,6 @@ export function ContentInspector({
 
     return (
       <>
-        <div className="workflowRail" aria-label={t(CONTENT_TYPE_KEY[workflowMode])}>
-          {[
-            { label: t("inspector.flow.content"), done: contentReady },
-            { label: t("inspector.flow.distribute"), done: draftsReady },
-          ].map((step, index, all) => {
-            const current = !step.done && all.slice(0, index).every((item) => item.done);
-            return (
-              <div key={step.label} className={`flowNode ${step.done ? "done" : current ? "current" : ""}`}>
-                <span className="flowState" aria-hidden="true" />
-                <span className="flowLabel">{step.label}</span>
-              </div>
-            );
-          })}
-        </div>
         <div className="workflowStack">
           <Surface
             marker="01"
@@ -447,38 +487,119 @@ export function ContentInspector({
                 {detail.hasDistributionPackage
                   ? t("inspector.package.frozen")
                   : t("inspector.package.pending")}
-              </StatusPill>
+                </StatusPill>
             )}
-            hint={t("inspector.content.hint")}
           >
             {workflowMode === "video" ? (
               <div className="assetFields">
-                <label className="assetField">
-                  <span>{t("inspector.asset.video")}</span>
-                  <select
-                    className="assetSelect"
-                    value={videoPath}
-                    onChange={(event) => { setVideoPath(event.target.value); setQueued(false); }}
-                  >
-                    <option value="">{t("inspector.asset.choose")}</option>
-                    {detail.assets.videos.map((asset) => (
-                      <option key={asset.path} value={asset.path}>{asset.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="assetField">
-                  <span>{t("inspector.asset.subtitle")}</span>
-                  <select
-                    className="assetSelect"
-                    value={subtitlePath}
-                    onChange={(event) => { setSubtitlePath(event.target.value); setQueued(false); }}
-                  >
-                    <option value="">{t("inspector.asset.none")}</option>
-                    {detail.assets.subtitles.map((asset) => (
-                      <option key={asset.path} value={asset.path}>{asset.name}</option>
-                    ))}
-                  </select>
-                </label>
+                <div className="assetField">
+                  <div className="assetControl">
+                    <select
+                      aria-label={t("inspector.asset.video")}
+                      className="assetSelect"
+                      value={videoPath}
+                      onChange={(event) => { setVideoPath(event.target.value); setQueued(false); }}
+                    >
+                      <option value="">{t("inspector.asset.video")}</option>
+                      {detail.assets.videos.map((asset) => (
+                        <option key={asset.path} value={asset.path}>{asset.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="assetImportButton"
+                      disabled={importingAsset !== undefined}
+                      onClick={() => { videoFileInput.current?.click(); }}
+                    >
+                      {importingAsset === "video"
+                        ? t("inspector.asset.importing")
+                        : t("inspector.asset.import")}
+                    </button>
+                    <input
+                      ref={videoFileInput}
+                      className="assetFileInput"
+                      type="file"
+                      accept=".mp4,.mov,video/mp4,video/quicktime"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        event.currentTarget.value = "";
+                        if (file !== undefined) void onImportAsset("video", file);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="assetField">
+                  <div className="assetControl">
+                    <select
+                      aria-label={t("inspector.asset.subtitle")}
+                      className="assetSelect"
+                      value={subtitlePath}
+                      onChange={(event) => { setSubtitlePath(event.target.value); setQueued(false); }}
+                    >
+                      <option value="">{t("inspector.asset.subtitle")}</option>
+                      {detail.assets.subtitles.map((asset) => (
+                        <option key={asset.path} value={asset.path}>{asset.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="assetImportButton"
+                      disabled={importingAsset !== undefined}
+                      onClick={() => { subtitleFileInput.current?.click(); }}
+                    >
+                      {importingAsset === "subtitle"
+                        ? t("inspector.asset.importing")
+                        : t("inspector.asset.import")}
+                    </button>
+                    <input
+                      ref={subtitleFileInput}
+                      className="assetFileInput"
+                      type="file"
+                      accept=".srt,.ass,.vtt,.txt"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        event.currentTarget.value = "";
+                        if (file !== undefined) void onImportAsset("subtitle", file);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="assetField videoCoverField">
+                  <div className="assetControl">
+                    <select
+                      aria-label={t("inspector.asset.videoCover")}
+                      className="assetSelect"
+                      value={coverPath}
+                      onChange={(event) => { setCoverPath(event.target.value); setQueued(false); }}
+                    >
+                      <option value="">{t("inspector.asset.videoCover")}</option>
+                      {detail.assets.covers.map((asset) => (
+                        <option key={asset.path} value={asset.path}>{asset.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="assetImportButton"
+                      disabled={importingAsset !== undefined}
+                      onClick={() => { coverFileInput.current?.click(); }}
+                    >
+                      {importingAsset === "cover"
+                        ? t("inspector.asset.importing")
+                        : t("inspector.asset.import")}
+                    </button>
+                    <input
+                      ref={coverFileInput}
+                      className="assetFileInput"
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                      onChange={(event) => {
+                        const file = event.currentTarget.files?.[0];
+                        event.currentTarget.value = "";
+                        if (file !== undefined) void onImportAsset("cover", file);
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             ) : (
               <>
@@ -591,16 +712,19 @@ export function ContentInspector({
               </>
             )}
             {assetError !== undefined && <div className="assetImportError">{assetError}</div>}
-            <div className="packageHint">{t("inspector.package.hint")}</div>
             {preview}
           </Surface>
           <Surface
             marker="02"
             className="workflowSurface draftSurface"
             title={t("inspector.distribution.title")}
-            hint={accountsReady
-              ? t("inspector.distribution.ready")
-              : t("inspector.distribution.hint")}
+            titleAside={(
+              <ActionButton tone="primary" disabled={!canStart} onClick={onStartDrafts}>
+                {busy || hasRunningDraft
+                  ? t("inspector.draft.running")
+                  : t("inspector.draft.aiStart")}
+              </ActionButton>
+            )}
           >
             {workflowPlatforms.length === 0
               ? <div className="empty">{t("inspector.publish.noAdapter")}</div>
@@ -645,13 +769,6 @@ export function ContentInspector({
             {currentSessionId === undefined && (
               <div className="jobNote error">{t("inspector.draft.sessionRequired")}</div>
             )}
-            <ActionBar>
-              <ActionButton tone="primary" disabled={!canStart} onClick={onStartDrafts}>
-                {busy || hasRunningDraft
-                  ? t("inspector.draft.running")
-                  : t("inspector.draft.aiStart")}
-              </ActionButton>
-            </ActionBar>
           </Surface>
         </div>
         {queued && <div className="jobNote done">{t("inspector.draft.queued")}</div>}
@@ -701,8 +818,11 @@ export function ContentInspector({
       <header className="header">
         <div className="titleRow">
           <div className="titleBlock">
-            <span className="titleKicker">{t("settings.title")}</span>
-            <div className="title">{detail?.title ?? (error === undefined ? t("empty.loading") : "")}</div>
+            <div className="titleMetaRow">
+              <span className="titleKicker">{t("settings.title")}</span>
+              {contentType === "video" && renderWorkflowRail("video")}
+              {contentType === "article" && renderWorkflowRail("article")}
+            </div>
           </div>
           <div className="titleActions">
             <button

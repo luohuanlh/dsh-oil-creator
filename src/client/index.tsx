@@ -25,6 +25,8 @@ import type {
   ListContentsResult,
   OpenPlatformAccountResult,
   PlatformAccountsResult,
+  PrepareAssetUploadRequest,
+  PrepareAssetUploadResult,
   PublishPlatform,
   VideoPlaybackResult,
 } from "../types.ts";
@@ -67,6 +69,7 @@ interface OilCreatorRemote {
   listContents: (request: { query: string; filter: ContentFilter }) => Promise<RemoteAnswer<ListContentsResult>>;
   getContent: (request: { id: string }) => Promise<RemoteAnswer<ContentDetail>>;
   importAsset: (request: ImportAssetRequest) => Promise<RemoteAnswer<ImportAssetResult>>;
+  prepareAssetUpload: (request: PrepareAssetUploadRequest) => Promise<RemoteAnswer<PrepareAssetUploadResult>>;
   getCoverThumb: (request: { id: string }) => Promise<RemoteAnswer<CoverThumbResult>>;
   getVideoPlayback: (request: { id: string; path: string }) => Promise<RemoteAnswer<VideoPlaybackResult>>;
   getArticleMedia: (request: { id: string; path: string }) => Promise<RemoteAnswer<ArticleMediaResult>>;
@@ -125,6 +128,11 @@ export function apply(ctx: ClientContext): void {
       const imported = unwrap(await remote.importAsset(request), "asset import failed");
       bumpLibrary();
       return imported;
+    },
+    prepareAssetUpload: async (request) => {
+      const remote = remoteOf();
+      if (remote === undefined) throw new Error("remote unavailable");
+      return unwrap(await remote.prepareAssetUpload(request), "asset upload failed");
     },
     getCoverThumb: async (id) => {
       const remote = remoteOf();

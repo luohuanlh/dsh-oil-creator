@@ -20,6 +20,7 @@ import {
 import { inspectCreatorSetup } from "./capabilities.ts";
 import { expandHomePath, resolveDataDir, type Config } from "./config.ts";
 import { importContentAsset } from "./assetImport.ts";
+import { startAssetUploadServer } from "./assetUpload.ts";
 import { prepareDraftRun, startVideoDraftRun } from "./draftRunner.ts";
 import { prepareArticleDraftRun, startArticleDraftRun } from "./articleDraftRunner.ts";
 import {
@@ -78,6 +79,8 @@ import type {
   OverlayStore,
   PlatformAccountRequest,
   PlatformAccountsResult,
+  PrepareAssetUploadRequest,
+  PrepareAssetUploadResult,
   SetLibraryRootRequest,
   SetProfileRequest,
   StartDraftsRequest,
@@ -98,6 +101,7 @@ export class OilCreatorService extends TypertRemoteService {
   watchedRoot: string | undefined;
   videos = new Map<string, { url: string; path: string; close: () => void }>();
   articles = new Map<string, { origin: string; root: string; close: () => void }>();
+  assetUploads = new Set<() => void>();
   draftStarts = new Set<string>();
 
   constructor(ctx: Context, config: Config) {
@@ -116,6 +120,8 @@ export class OilCreatorService extends TypertRemoteService {
     this.videos.clear();
     for (const session of this.articles.values()) session.close();
     this.articles.clear();
+    for (const close of this.assetUploads) close();
+    this.assetUploads.clear();
   }
 
   invalidateCatalog(): void {
@@ -216,6 +222,27 @@ export class OilCreatorService extends TypertRemoteService {
       asset,
       detail: await this.getContent({ id: request.id }, signal),
     };
+  }
+
+  async prepareAssetUpload(
+    request: PrepareAssetUploadRequest,
+    signal: AbortSignal,
+  ): Promise<PrepareAssetUploadResult> {
+    signal.throwIfAborted();
+    const item = await this.find(request.id);
+    if (item === undefined) throw new Error(`content not found: ${request.id}`);
+    let close: () => void = () => {};
+    const upload = await startAssetUploadServer({
+      folderPath: item.folderPath,
+      kind: request.kind,
+      name: request.name,
+      expectedSize: request.size,
+      onImported: () => { this.invalidateCatalog(); },
+      onSettled: () => { this.assetUploads.delete(close); },
+    });
+    close = upload.close;
+    this.assetUploads.add(close);
+    return { url: upload.url };
   }
 
   async getCoverThumb(request: IdRequest, signal: AbortSignal): Promise<CoverThumbResult> {
