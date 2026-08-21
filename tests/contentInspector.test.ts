@@ -47,6 +47,8 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).toContain("queueDistribution");
     expect(implementation).toContain("selectedPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");
     expect(implementation).toContain("&& !queued");
+    expect(implementation).not.toContain("queueTimeout");
+    expect(implementation).not.toContain("120_000");
     expect(implementation).toContain("getVideoPlayback(selectedId, videoPath)");
     expect(implementation).toContain("getArticleMedia(selectedId, articlePath)");
     expect(implementation).not.toContain("enabledPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");

@@ -251,15 +251,6 @@ export function ContentInspector({
   }, [queueReachedRunner]);
 
   useEffect(() => {
-    if (!queued) return;
-    const timer = window.setTimeout(() => {
-      setQueued(false);
-      setActionError(t("inspector.draft.queueTimeout"));
-    }, 120_000);
-    return () => { window.clearTimeout(timer); };
-  }, [queued, t]);
-
-  useEffect(() => {
     if (contentType !== "video" || selectedId === null || videoPath === "" || !ready()) return;
     let cancelled = false;
     setVideoReady(false);

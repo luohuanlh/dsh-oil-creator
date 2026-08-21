@@ -14,9 +14,9 @@
 | 不包含最终发表动作 | Ego 可执行契约断言没有发送/群发接口；视频继续使用 safe runner | 已证明 |
 | 单个平台失败不污染其他平台 | `service.test.ts`、按平台隔离的临时包测试 | 已证明 |
 | 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`，标题与冻结包一致 | 已证明 |
-| Harness 主按钮到 UI 回显的完整黄金路径 | 浏览器授权尚未完成，本轮未执行 | 待真实验证 |
+| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮已真实点击，会话已调用 guide/source；尚未冻结或启动 Ego | 部分通过 |
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
-| 第二个视频平台远端草稿闭环 | 抖音、小红书、视频号目前只有页面 `READY` | 未完成 |
+| 第二个视频平台远端草稿闭环 | 抖音已验证登录并读到真实空投稿页；上传被 `USER_CONTROL` 阻止 | 外部阻塞 |
 
 ## 平台证据等级
 
@@ -24,21 +24,21 @@
 |---|---|---|
 | B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`，标题与冻结包一致 |
 | 微信公众号 | `IMPLEMENTED + SIMULATED` | 生产脚本模拟上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
-| 抖音 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
+| 抖音 | `IMPLEMENTED + AUTHENTICATED_PAGE` | 已登录真实投稿页、任务空间 `3`；未上传、未远端保存、无 id 回读 |
 | 小红书 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 视频号 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 其他平台 | `UNSUPPORTED` | 只有账号入口，没有草稿运行器 |
 
 ## 2026-08-21 本地验证
 
-- `pnpm check`：通过；45 个测试文件、224 项测试全部通过，类型检查和三个构建入口均成功。
+- `pnpm check`：通过；45 个测试文件、226 项测试全部通过，类型检查和三个构建入口均成功。
 - TypeScript 类型检查和 Host、Client、Typert 构建：通过。
 - `git diff --check`：通过。
 - npm dry-run：通过；包含账号、公众号、B站远端保存和稳定父运行器脚本，共 21 个打包条目。
-- `pnpm release:check`：在干净工作区通过；内部重新执行 45 个测试文件、224 项测试、类型检查、三端构建和 npm tarball 校验。
+- `pnpm release:check`：上一干净提交通过；内部重新执行 45 个测试文件、224 项测试、类型检查、三端构建和 npm tarball 校验。本轮运行时修复提交后必须重跑。
 - 真实 DSH Web Host：插件直接注册 8 个 oil tools；工具输出向当前 Harness 会话返回完整 canonical JSON；Host 内仅保留一份 `@deepseek-ai/dsh-tools` 运行时，真实工具调用可正常执行。
-- Ego Lite：`0.4.6.14`；本机已发现 `video-publisher`。
-- 微信公众号只读登录检查：未登录；没有创建草稿，临时任务空间已删除。
+- Ego Lite：`0.4.7.1`；本机已发现 `video-publisher`。
+- 微信公众号只读登录检查：登录失效；没有创建草稿，临时检查任务空间已删除。
 - B站创作中心只读登录检查：已登录；没有上传文件，临时任务空间已删除。
 - 隔离 Harness 实例真实 DOM：内容列表和工作台正常渲染；只默认选择已登录的 B站，未检查平台不自动勾选；主按钮可用但未点击。隔离实例、任务空间和临时补丁均已删除。
 
@@ -53,7 +53,17 @@
 - 移除可无证据手写 `draft` 的公开 `setPublish` RPC；旧 sidecar/overlay 只有同时带远端 id 和回读 URL 才保留草稿状态。
 - 视频和文章预览现在使用工作台当前选择的精确路径，避免“预览 A、提交 B”。
 - 平台设置页直接展示 `REMOTE_VERIFIED / IMPLEMENTED+SIMULATED / PAGE_READY / UNSUPPORTED` 对应的人类可读等级。
-- 浏览器验收当前阻塞在 Chrome 的远程调试授权弹窗；未把页面存在或单元测试当作黄金路径完成。
+- 修复账号检查引用已删除 Ego task space 时无法自愈的问题；真实抖音检查从旧空间 `4` 自动切换到新检查空间并得到“已绑定”。
+- 移除错误的 120 秒 Harness 队列超时。真实会话已开始调用工具但因深度推理超过两分钟，旧 UI 会误报并允许重复排队；现在只在选择变化或运行器状态出现时解除 queued 门禁。
+
+## 2026-08-21 Harness 与抖音真实推进
+
+- Chrome 远程调试授权完成，真实 DSH Web 由链接到本仓库的 `dsh-oil-creator` 重启加载。
+- 新建本地测试内容 `2026-08-21_RC 草稿验收`：3 秒 H.264 测试图样和静音音轨，无第三方素材；工作台视频预览与所选文件一致。
+- 工作台只选择抖音并真实点击“一键生成并保存草稿”；当前 Harness 会话收到固定输入，调用 `oil_creator_guide` 与 `oil_distribution_source`，证明 UI → 当前会话 → oil tools 链路成立。
+- 会话随后搜索原创策略，尚未调用冻结/启动工具；内容目录没有 `.oil-distribution.json`，overlay 没有伪造运行或草稿状态。
+- 抖音账号从真实设置页检查为“已绑定”。`video-publisher --inspect-only` 使用隔离配置读取真实空投稿页：认证通过，任务空间 id `3`，缺少项为 video/title/description/tags/settings/cover/finalButton。
+- 单平台 upload 阶段返回 typed blocker `USER_CONTROL`；所有 gate 失败关闭，`finalPublishClicked=false`。按 Ego 规则未自行夺回控制、未上传视频、未点击最终发布。
 
 ## 2026-08-21 B站真实草稿回归
 

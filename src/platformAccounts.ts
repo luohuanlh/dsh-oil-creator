@@ -51,6 +51,20 @@ export function parsePlatformAccountOutput(raw: string): AccountScriptResult {
   throw new Error("Ego Browser 未返回平台账号状态");
 }
 
+export async function withMissingTaskSpaceFallback<T>(
+  taskSpace: string | undefined,
+  run: (taskSpace?: string) => Promise<T>,
+): Promise<T> {
+  if (taskSpace === undefined) return run(undefined);
+  try {
+    return await run(taskSpace);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    if (!/task space not found/i.test(message)) throw cause;
+    return run(undefined);
+  }
+}
+
 async function runPlatformAccountScript(
   platform: PublishPlatform,
   mode: "open" | "check",
@@ -149,6 +163,14 @@ export async function checkPlatformAccount(
   signal: AbortSignal,
   taskSpace?: string,
 ): Promise<PlatformAccountStatus> {
-  const result = await runPlatformAccountScript(platform, "check", signal, taskSpace);
+  const result = await withMissingTaskSpaceFallback(
+    taskSpace,
+    (currentTaskSpace) => runPlatformAccountScript(
+      platform,
+      "check",
+      signal,
+      currentTaskSpace,
+    ),
+  );
   return result.status ?? "unknown";
 }
