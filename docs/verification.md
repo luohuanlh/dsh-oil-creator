@@ -14,7 +14,7 @@
 | 不包含最终发表动作 | Ego 可执行契约断言没有发送/群发接口；视频继续使用 safe runner | 已证明 |
 | 单个平台失败不污染其他平台 | `service.test.ts`、按平台隔离的临时包测试 | 已证明 |
 | 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`，标题与冻结包一致 | 已证明 |
-| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI 生成、冻结、Ego READY 与远端保存均真实通过；overlay/UI 回显待新保存器重试 | 部分通过 |
+| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI、冻结、Ego READY、远端保存、overlay 与 UI 回显全链路 | 已证明 |
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
 | 第二个视频平台远端草稿闭环 | 抖音 `READY` → “暂存离开” → draft 标题与 `video_id` 回读 | 已证明 |
 
@@ -67,7 +67,10 @@
 - 用户首次回复“继续”后，同一 task space 被精确接管；恢复检查证明视频已在投稿页内，运行器没有重复上传，只剩 title/description/tags。串行元数据修复在添加话题时再次遇到新的 `USER_CONTROL` 并安全停止；第二次明确“继续”后，同一作业从只缺 tags 的页面恢复，最终 `mutate` 与独立 `verify` 都返回 `READY`，`missing=[]`、`finalPublishClicked=false`。
 - 抖音 READY 页只有一个可见、启用的“暂存离开”和一个“发布”。真实保存只点击“暂存离开”，页面返回上传入口并显示“你还有上次未发布的视频，是否继续编辑？”。
 - 重新打开后 URL 为 `/content/post/video?enter_from=draft`，标题与冻结包一致；平台自身 `/web/api/media/video/transend/` 请求回读唯一 `video_id=v0200fg10000da438evog65gkcsbelp0`。生产保存器随后在同一页完成一次幂等回读，没有再次暂存，并把 task space `5` 交给用户。
-- 整个抖音回归没有点击“发布”，也没有正式发表；当前只缺插件 overlay/UI 使用新保存器重试后的最终回显证据。
+- 插件加载新保存器后，从真实工作台再次点击主操作；同一冻结包和原创确认被复用，video-publisher 没有重复上传，保存器幂等回读同一 `video_id`。
+- overlay 最终写入 `status=draft`、`url=https://creator.douyin.com/creator-micro/content/post/video?enter_from=draft`、`remoteId=v0200fg10000da438evog65gkcsbelp0`，且没有残留 `draftState`。
+- DSH 重启后，内容列表与抖音平台卡片都显示“远端草稿已保存”，证明刷新/重新进入后的状态与 overlay 一致。
+- 整个抖音回归没有点击“发布”，也没有正式发表。
 
 ## 2026-08-21 B站真实草稿回归
 

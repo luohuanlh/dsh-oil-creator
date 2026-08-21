@@ -69,6 +69,8 @@ describe("content inspector distribution workbench", () => {
     expect(styles).toContain("width: max-content");
     expect(locales).toContain('"inspector.flow.content": "内容"');
     expect(locales).toContain('"inspector.flow.distribute": "草稿"');
+    expect(locales).toContain('"inspector.publish.draft": "远端草稿已保存"');
+    expect(locales).toContain('"inspector.draft.staged": "页面已备，尚未远端保存"');
   });
 
   it("Client 工作台只排队到当前 Harness 会话，不暴露直接启动草稿旁路", () => {
