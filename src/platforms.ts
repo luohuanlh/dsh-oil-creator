@@ -209,9 +209,8 @@ export function supportsAutoDraft(platform: PublishPlatform): boolean {
 }
 
 export function draftCapability(platform: PublishPlatform): DraftCapability {
-  if (platform === "bilibili") return "remote-verified";
+  if (platform === "bilibili" || platform === "douyin") return "remote-verified";
   if (platform === "wechat-mp"
-    || platform === "douyin"
     || platform === "xiaohongshu"
     || platform === "channels") return "implemented-simulated";
   return "unsupported";

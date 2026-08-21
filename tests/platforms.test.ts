@@ -43,7 +43,7 @@ describe("platform catalog", () => {
     expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("implemented-simulated");
-    expect(draftCapability("douyin")).toBe("implemented-simulated");
+    expect(draftCapability("douyin")).toBe("remote-verified");
     expect(draftCapability("zhihu")).toBe("unsupported");
   });
 

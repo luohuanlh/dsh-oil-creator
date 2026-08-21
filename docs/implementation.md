@@ -17,7 +17,7 @@
 | `scripts/platform-account.mjs` | 浏览器内登录交接和登录状态检查 |
 | `src/draftRunner.ts` | 从冻结包派生视频运行包，串联 `video-publisher` 页面准备与远端草稿保存 |
 | `scripts/video-draft-runner.mjs` | 以一个稳定父进程覆盖页面准备和远端保存两阶段，避免状态核对误判中断 |
-| `scripts/video-draft.mjs` | 在 B站精确执行“存草稿”，从草稿箱回读标题与 `draftId` |
+| `scripts/video-draft.mjs` | 在 B站精确执行“存草稿”并回读 `draftId`；在抖音执行“暂存离开”并从 draft 入口回读标题与 `video_id` |
 | `src/articleDraftRunner.ts` | 准备微信公众号文章、封面和 Ego 运行输入 |
 | `scripts/article-draft.mjs` | 上传公众号封面、保存草稿、回读验证并交接页面 |
 | `src/service.ts` | 提供内容、设置、账号和草稿 RPC |
@@ -47,7 +47,7 @@
 
 视频 `draftRunner` 读取冻结分发包，把通用平台变体映射为 `video-publisher` 的 `bilibiliTitle`、`douyinDescription`、`xhsTopics` 等兼容字段，在插件数据目录创建临时运行包，再调用稳定父运行器。用户不需要维护兼容包。
 
-`video-publisher` 返回 `READY` 只证明上传和投稿页字段已经完成，不代表平台已保存远端草稿。B站会继续执行第二阶段：只点击精确的“存草稿”控件，进入草稿箱并核对标题与 `draftId`；只有回读成功才写入 `draft`。稳定父进程覆盖两个阶段，避免插件在阶段切换的短暂 PID 空窗中把任务误判为中断。抖音、小红书和视频号尚未完成各自的远端保存回归，因此当前只写入 `ready`，界面明确显示“页面已备，尚未远端保存”。
+`video-publisher` 返回 `READY` 只证明上传和投稿页字段已经完成，不代表平台已保存远端草稿。B站继续点击精确的“存草稿”控件，进入草稿箱并核对标题与 `draftId`；抖音继续点击唯一“暂存离开”，重新打开 draft 入口并核对标题与唯一 `video_id`。只有回读成功才写入 `draft`。稳定父进程覆盖两个阶段，避免插件在阶段切换的短暂 PID 空窗中把任务误判为中断。小红书和视频号尚未完成远端保存回归，因此当前只写入 `ready`，界面明确显示“页面已备，尚未远端保存”。
 
 目前验证通过的映射为：
 

@@ -8,7 +8,7 @@ describe("defaultDistributionPlatforms", () => {
       ["bilibili", "douyin", "xiaohongshu", "channels"],
       [
         { platform: "bilibili", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
-        { platform: "douyin", status: "unknown", supportsAutoDraft: true, draftCapability: "implemented-simulated" },
+        { platform: "douyin", status: "unknown", supportsAutoDraft: true, draftCapability: "remote-verified" },
         { platform: "xiaohongshu", status: "expired", supportsAutoDraft: true, draftCapability: "implemented-simulated" },
       ],
     )).toEqual(["bilibili"]);
@@ -20,7 +20,7 @@ describe("defaultDistributionPlatforms", () => {
       [
         { platform: "bilibili", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
         { platform: "wechat-mp", status: "active", supportsAutoDraft: true, draftCapability: "implemented-simulated" },
-        { platform: "douyin", status: "active", supportsAutoDraft: true, draftCapability: "implemented-simulated" },
+        { platform: "douyin", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
       ],
     )).toEqual(["douyin", "bilibili"]);
   });

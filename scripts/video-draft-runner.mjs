@@ -43,31 +43,31 @@ try {
     const detail = `${publisher.stdout}\n${publisher.stderr}`.trim();
     output({ ok: false, error: detail || `video-publisher exited ${publisher.code}` });
     process.exitCode = publisher.code;
-  } else if (input.platform !== "bilibili") {
-    // 其他视频平台继续保留 video-publisher 的页面 READY 语义；B站先完成远端保存闭环。
+  } else {
     const summary = JSON.parse(publisher.stdout.trim());
     const runnerPlatform = input.runnerPlatforms[0];
     const taskSpace = summary?.platforms?.[runnerPlatform]?.taskSpaceId;
-    if (summary?.ready !== true || !Number.isInteger(taskSpace)) {
-      throw new Error("video-publisher 未返回页面 READY 任务空间");
+    const savesRemoteDraft = input.platform === "bilibili" || input.platform === "douyin";
+    if (!savesRemoteDraft) {
+      if (summary?.ready !== true || !Number.isInteger(taskSpace)) {
+        throw new Error("video-publisher 未返回页面 READY 任务空间");
+      }
+      output({ ok: true, platform: input.platform, staged: true, taskSpace: String(taskSpace) });
+    } else {
+      if (summary?.ready !== true || !Number.isInteger(taskSpace)) {
+        throw new Error(`${input.platform} 未返回 READY 任务空间`);
+      }
+      const source = await readFile(input.saverScript, "utf8");
+      const prelude = `var OIL_VIDEO_DRAFT_INPUT = ${JSON.stringify({
+        platform: input.platform,
+        taskSpace: String(taskSpace),
+        expectedTitle: input.expectedTitle,
+      })};\n`;
+      const saver = await run("ego-browser", ["nodejs"], { stdin: `${prelude}${source}` });
+      process.stdout.write(saver.stdout);
+      if (saver.stderr) process.stderr.write(saver.stderr);
+      if (saver.code !== 0) process.exitCode = saver.code;
     }
-    output({ ok: true, platform: input.platform, staged: true, taskSpace: String(taskSpace) });
-  } else {
-    const summary = JSON.parse(publisher.stdout.trim());
-    const taskSpace = summary?.platforms?.bilibili?.taskSpaceId;
-    if (summary?.ready !== true || !Number.isInteger(taskSpace)) {
-      throw new Error("video-publisher 未返回 B站 READY 任务空间");
-    }
-    const source = await readFile(input.saverScript, "utf8");
-    const prelude = `var OIL_VIDEO_DRAFT_INPUT = ${JSON.stringify({
-      platform: "bilibili",
-      taskSpace: String(taskSpace),
-      expectedTitle: input.expectedTitle,
-    })};\n`;
-    const saver = await run("ego-browser", ["nodejs"], { stdin: `${prelude}${source}` });
-    process.stdout.write(saver.stdout);
-    if (saver.stderr) process.stderr.write(saver.stderr);
-    if (saver.code !== 0) process.exitCode = saver.code;
   }
 } catch (error) {
   output({ ok: false, error: error instanceof Error ? error.message : String(error) });

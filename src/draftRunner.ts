@@ -29,7 +29,7 @@ export interface DraftRunHandle {
 
 export interface VideoDraftResult {
   ok: true;
-  platform: "bilibili";
+  platform: "bilibili" | "douyin";
   verified: true;
   remoteId: string;
   draftUrl: string;
@@ -142,7 +142,11 @@ async function resolveRuntimeScript(name: string, preferred?: string): Promise<s
   throw new Error(`${name} is missing; rebuild dsh-oil-creator`);
 }
 
-export function parseVideoDraftOutput(raw: string): VideoDraftResult {
+export function parseVideoDraftOutput(
+  raw: string,
+  expectedPlatform: "bilibili" | "douyin" = "bilibili",
+): VideoDraftResult {
+  const platformName = expectedPlatform === "bilibili" ? "B站" : "抖音";
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
@@ -153,12 +157,14 @@ export function parseVideoDraftOutput(raw: string): VideoDraftResult {
         }
         continue;
       }
-      if (parsed.verified !== true) throw new Error("B站未通过远端草稿验证");
-      if (parsed.platform !== "bilibili"
+      if (parsed.verified !== true) throw new Error(`${platformName}未通过远端草稿验证`);
+      if (parsed.platform !== expectedPlatform
         || typeof parsed.remoteId !== "string"
+        || parsed.remoteId.trim() === ""
         || typeof parsed.draftUrl !== "string"
+        || parsed.draftUrl.trim() === ""
         || typeof parsed.taskSpace !== "string") {
-        throw new Error("Ego Browser 返回的 B站草稿结果不完整");
+        throw new Error(`Ego Browser 返回的${platformName}草稿结果不完整`);
       }
       return parsed as VideoDraftResult;
     } catch (cause) {
@@ -166,7 +172,7 @@ export function parseVideoDraftOutput(raw: string): VideoDraftResult {
       throw cause;
     }
   }
-  throw new Error("Ego Browser 未返回 B站远端草稿结果");
+  throw new Error(`Ego Browser 未返回${platformName}远端草稿结果`);
 }
 
 function parseVideoStagedOutput(raw: string): VideoStagedResult {
@@ -205,10 +211,19 @@ export async function startVideoDraftRun(
   const platform = prepared.platforms.length === 1 ? prepared.platforms[0] : undefined;
   const derived = JSON.parse(await readFile(prepared.packagePath, "utf8")) as {
     bilibiliTitle?: unknown;
+    douyinTitle?: unknown;
   };
-  if (platform === "bilibili"
-    && (typeof derived.bilibiliTitle !== "string" || derived.bilibiliTitle.trim() === "")) {
-    throw new Error("B站冻结标题缺失");
+  const remoteDraftPlatform = platform === "bilibili" || platform === "douyin"
+    ? platform
+    : undefined;
+  const expectedTitle = remoteDraftPlatform === "bilibili"
+    ? derived.bilibiliTitle
+    : remoteDraftPlatform === "douyin"
+      ? derived.douyinTitle
+      : undefined;
+  if (remoteDraftPlatform !== undefined
+    && (typeof expectedTitle !== "string" || expectedTitle.trim() === "")) {
+    throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[remoteDraftPlatform].name}冻结标题缺失`);
   }
   const child = spawn(process.execPath, [wrapper], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -221,7 +236,7 @@ export async function startVideoDraftRun(
         suffix,
         runnerPlatforms: prepared.runnerPlatforms,
         platform,
-        expectedTitle: platform === "bilibili" ? derived.bilibiliTitle : undefined,
+        expectedTitle,
         saverScript,
         confirmOriginalRights: options.confirmOriginalRights === true,
       }),
@@ -242,9 +257,13 @@ export async function startVideoDraftRun(
     });
     child.once("exit", (code) => {
       if (code === 0) {
-        if (prepared.platforms.length === 1 && prepared.platforms[0] === "bilibili") {
+        const completedPlatform = prepared.platforms.length === 1
+          && (prepared.platforms[0] === "bilibili" || prepared.platforms[0] === "douyin")
+          ? prepared.platforms[0]
+          : undefined;
+        if (completedPlatform !== undefined) {
           try {
-            const result = parseVideoDraftOutput(`${stdout}\n${stderr}`);
+            const result = parseVideoDraftOutput(`${stdout}\n${stderr}`, completedPlatform);
             resolve({
               ok: true,
               url: result.draftUrl,

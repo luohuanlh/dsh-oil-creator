@@ -14,9 +14,9 @@
 | 不包含最终发表动作 | Ego 可执行契约断言没有发送/群发接口；视频继续使用 safe runner | 已证明 |
 | 单个平台失败不污染其他平台 | `service.test.ts`、按平台隔离的临时包测试 | 已证明 |
 | 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`，标题与冻结包一致 | 已证明 |
-| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI 生成、冻结和 Ego 作业均已真实触发；抖音元数据阶段被 `USER_CONTROL` 中断 | 部分通过 |
+| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI 生成、冻结、Ego READY 与远端保存均真实通过；overlay/UI 回显待新保存器重试 | 部分通过 |
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
-| 第二个视频平台远端草稿闭环 | 抖音已验证登录并读到真实空投稿页；上传被 `USER_CONTROL` 阻止 | 外部阻塞 |
+| 第二个视频平台远端草稿闭环 | 抖音 `READY` → “暂存离开” → draft 标题与 `video_id` 回读 | 已证明 |
 
 ## 平台证据等级
 
@@ -24,18 +24,18 @@
 |---|---|---|
 | B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`，标题与冻结包一致 |
 | 微信公众号 | `IMPLEMENTED + SIMULATED` | 生产脚本模拟上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
-| 抖音 | `IMPLEMENTED + AUTHENTICATED_PAGE` | 已登录真实投稿页、任务空间 `3`；未上传、未远端保存、无 id 回读 |
+| 抖音 | `REMOTE_VERIFIED` | 真实草稿标题一致，远端 `video_id=v0200fg10000da438evog65gkcsbelp0`，draft 入口回读通过 |
 | 小红书 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 视频号 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 其他平台 | `UNSUPPORTED` | 只有账号入口，没有草稿运行器 |
 
 ## 2026-08-21 本地验证
 
-- `pnpm check`：通过；45 个测试文件、226 项测试全部通过，类型检查和三个构建入口均成功。
+- `pnpm check`：通过；45 个测试文件、230 项测试全部通过，类型检查和三个构建入口均成功。
 - TypeScript 类型检查和 Host、Client、Typert 构建：通过。
 - `git diff --check`：通过。
-- npm dry-run：通过；包含账号、公众号、B站远端保存和稳定父运行器脚本，共 21 个打包条目。
-- `pnpm release:check`：在运行时修复后的干净提交通过；内部重新执行 45 个测试文件、226 项测试、类型检查、三端构建和 npm tarball 校验。
+- npm dry-run：通过；包含账号、公众号、B站/抖音远端保存和稳定父运行器脚本，共 21 个打包条目。
+- `pnpm release:check`：上一干净提交通过；内部重新执行 45 个测试文件、226 项测试、类型检查、三端构建和 npm tarball 校验。抖音保存器提交后必须重跑。
 - 真实 DSH Web Host：插件直接注册 8 个 oil tools；工具输出向当前 Harness 会话返回完整 canonical JSON；Host 内仅保留一份 `@deepseek-ai/dsh-tools` 运行时，真实工具调用可正常执行。
 - Ego Lite：`0.4.7.1`；本机已发现 `video-publisher`。
 - 微信公众号只读登录检查：登录失效；没有创建草稿，临时检查任务空间已删除。
@@ -64,7 +64,10 @@
 - 内容目录生成 `.oil-distribution.json`，只包含当前视频和 `douyin` variant；真实作业 id 为 `123461d780c92595`，task space id 为 `5`。
 - 抖音账号从真实设置页检查为“已绑定”。`video-publisher --inspect-only` 使用隔离配置读取真实空投稿页：认证通过，任务空间 id `3`，缺少项为 video/title/description/tags/settings/cover/finalButton。
 - 前置独立诊断 task space `3` 的 upload 阶段返回 typed blocker `USER_CONTROL`；所有 gate 失败关闭，`finalPublishClicked=false`。该诊断没有上传视频或点击最终发布。
-- 用户首次回复“继续”后，同一 task space 被精确接管；恢复检查证明视频已在投稿页内，运行器没有重复上传，只剩 title/description/tags。串行元数据修复在添加话题时再次遇到新的 `USER_CONTROL` 并安全停止；`finalPublishClicked=false`，没有远端草稿 id 证据。
+- 用户首次回复“继续”后，同一 task space 被精确接管；恢复检查证明视频已在投稿页内，运行器没有重复上传，只剩 title/description/tags。串行元数据修复在添加话题时再次遇到新的 `USER_CONTROL` 并安全停止；第二次明确“继续”后，同一作业从只缺 tags 的页面恢复，最终 `mutate` 与独立 `verify` 都返回 `READY`，`missing=[]`、`finalPublishClicked=false`。
+- 抖音 READY 页只有一个可见、启用的“暂存离开”和一个“发布”。真实保存只点击“暂存离开”，页面返回上传入口并显示“你还有上次未发布的视频，是否继续编辑？”。
+- 重新打开后 URL 为 `/content/post/video?enter_from=draft`，标题与冻结包一致；平台自身 `/web/api/media/video/transend/` 请求回读唯一 `video_id=v0200fg10000da438evog65gkcsbelp0`。生产保存器随后在同一页完成一次幂等回读，没有再次暂存，并把 task space `5` 交给用户。
+- 整个抖音回归没有点击“发布”，也没有正式发表；当前只缺插件 overlay/UI 使用新保存器重试后的最终回显证据。
 
 ## 2026-08-21 B站真实草稿回归
 
@@ -78,7 +81,7 @@
 
 ## 页面 READY 与远端草稿
 
-真实回归同时证明 `video-publisher` 的 `READY` 只表示平台投稿页已填好并通过最终按钮前的安全验证，不等于远端草稿已保存。现在 B站会继续执行独立“存草稿 → 草稿箱标题 + draftId 回读”阶段；只有取得远端 id 才写入 `status=draft`。其他尚未实现远端保存器的视频平台只记录 `draftState=ready`（页面已备），不会再伪装成远端草稿。
+真实回归同时证明 `video-publisher` 的 `READY` 只表示平台投稿页已填好并通过最终按钮前的安全验证，不等于远端草稿已保存。B站继续执行“存草稿 → 草稿箱标题 + draftId 回读”；抖音继续执行“暂存离开 → draft 入口标题 + video_id 回读”。只有取得远端 id 才写入 `status=draft`。小红书和视频号仍只记录 `draftState=ready`（页面已备），不会伪装成远端草稿。
 
 ## 真实草稿回归门槛
 
