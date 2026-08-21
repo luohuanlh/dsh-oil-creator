@@ -35,7 +35,7 @@
 - TypeScript 类型检查和 Host、Client、Typert 构建：通过。
 - `git diff --check`：通过。
 - npm dry-run：通过；包含账号、公众号、B站远端保存和稳定父运行器脚本，共 21 个打包条目。
-- `pnpm release:check`：上一干净提交通过；内部重新执行 45 个测试文件、224 项测试、类型检查、三端构建和 npm tarball 校验。本轮运行时修复提交后必须重跑。
+- `pnpm release:check`：在运行时修复后的干净提交通过；内部重新执行 45 个测试文件、226 项测试、类型检查、三端构建和 npm tarball 校验。
 - 真实 DSH Web Host：插件直接注册 8 个 oil tools；工具输出向当前 Harness 会话返回完整 canonical JSON；Host 内仅保留一份 `@deepseek-ai/dsh-tools` 运行时，真实工具调用可正常执行。
 - Ego Lite：`0.4.7.1`；本机已发现 `video-publisher`。
 - 微信公众号只读登录检查：登录失效；没有创建草稿，临时检查任务空间已删除。
