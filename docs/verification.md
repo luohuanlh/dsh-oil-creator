@@ -14,7 +14,7 @@
 | 不包含最终发表动作 | Ego 可执行契约断言没有发送/群发接口；视频继续使用 safe runner | 已证明 |
 | 单个平台失败不污染其他平台 | `service.test.ts`、按平台隔离的临时包测试 | 已证明 |
 | 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`，标题与冻结包一致 | 已证明 |
-| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮已真实点击，会话已调用 guide/source；尚未冻结或启动 Ego | 部分通过 |
+| Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI 生成、冻结和 Ego 作业均已真实触发；抖音元数据阶段被 `USER_CONTROL` 中断 | 部分通过 |
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
 | 第二个视频平台远端草稿闭环 | 抖音已验证登录并读到真实空投稿页；上传被 `USER_CONTROL` 阻止 | 外部阻塞 |
 
@@ -60,10 +60,11 @@
 
 - Chrome 远程调试授权完成，真实 DSH Web 由链接到本仓库的 `dsh-oil-creator` 重启加载。
 - 新建本地测试内容 `2026-08-21_RC 草稿验收`：3 秒 H.264 测试图样和静音音轨，无第三方素材；工作台视频预览与所选文件一致。
-- 工作台只选择抖音并真实点击“一键生成并保存草稿”；当前 Harness 会话收到固定输入，调用 `oil_creator_guide` 与 `oil_distribution_source`，证明 UI → 当前会话 → oil tools 链路成立。
-- 会话随后搜索原创策略，尚未调用冻结/启动工具；内容目录没有 `.oil-distribution.json`，overlay 没有伪造运行或草稿状态。
+- 工作台只选择抖音并真实点击“一键生成并保存草稿”；当前 Harness 会话收到固定输入，调用 `oil_creator_guide` 与 `oil_distribution_source`，并在用户确认原创后调用冻结/启动工具，证明 UI → 当前会话 → oil tools → Ego 作业链路成立。
+- 内容目录生成 `.oil-distribution.json`，只包含当前视频和 `douyin` variant；真实作业 id 为 `123461d780c92595`，task space id 为 `5`。
 - 抖音账号从真实设置页检查为“已绑定”。`video-publisher --inspect-only` 使用隔离配置读取真实空投稿页：认证通过，任务空间 id `3`，缺少项为 video/title/description/tags/settings/cover/finalButton。
-- 单平台 upload 阶段返回 typed blocker `USER_CONTROL`；所有 gate 失败关闭，`finalPublishClicked=false`。按 Ego 规则未自行夺回控制、未上传视频、未点击最终发布。
+- 前置独立诊断 task space `3` 的 upload 阶段返回 typed blocker `USER_CONTROL`；所有 gate 失败关闭，`finalPublishClicked=false`。该诊断没有上传视频或点击最终发布。
+- 用户首次回复“继续”后，同一 task space 被精确接管；恢复检查证明视频已在投稿页内，运行器没有重复上传，只剩 title/description/tags。串行元数据修复在添加话题时再次遇到新的 `USER_CONTROL` 并安全停止；`finalPublishClicked=false`，没有远端草稿 id 证据。
 
 ## 2026-08-21 B站真实草稿回归
 
