@@ -19,12 +19,23 @@ describe("视频平台远端草稿保存脚本", () => {
     expect(source).toContain("verified");
   });
 
-  it("抖音只点击暂存离开并从 draft 入口回读 video_id", () => {
+  it("抖音点击暂存离开并保留可用的 video_id", () => {
     expect(source).toContain("暂存离开");
     expect(source).toContain("继续编辑");
-    expect(source).toContain("enter_from");
     expect(source).toContain("/web/api/media/video/transend/");
     expect(source).toContain("video_id");
+  });
+
+  it("小红书暂存离开并验证编辑器已经退出", () => {
+    expect(source).toContain("oil-save-xiaohongshu-draft");
+    expect(source).toContain("inspectXiaohongshuTemporaryExit");
+    expect(source).toContain('actionReceipt("temporary-leave")');
+  });
+
+  it("视频号保存草稿并验证提示、路由或编辑器退出", () => {
+    expect(source).toContain("保存视频号草稿");
+    expect(source).toContain("inspectWechatDraftSaved");
+    expect(source).toContain('actionReceipt("save-draft")');
   });
 
   it("快手从服务器 snapshot 回读 fileId、文件名与精确描述", () => {
@@ -34,6 +45,8 @@ describe("视频平台远端草稿保存脚本", () => {
     expect(source).toContain("expectedCaption");
     expect(source).toContain("photoStatus");
     expect(source).toContain("mediaId");
+    expect(source).toContain("oil-cancel-kuaishou-draft");
+    expect(source).toContain('actionReceipt("cancel-editor")');
   });
 
   it("成功后把远端草稿页交给用户", () => {
@@ -61,8 +74,11 @@ describe("视频平台远端草稿保存脚本", () => {
     ].join("\n"));
     writeFileSync(ego, [
       "#!/bin/sh",
-      "cat >/dev/null",
-      "printf '%s\\n' '{\"platform\":\"bilibili\",\"ok\":true,\"verified\":true,\"remoteId\":\"42\",\"draftUrl\":\"https://member.bilibili.com/draft/42\",\"taskSpace\":\"12\"}'",
+      "payload=$(cat)",
+      "case \"$payload\" in",
+      "  *'\"platform\":\"channels\"'*) printf '%s\\n' '{\"platform\":\"channels\",\"ok\":true,\"verified\":true,\"draftReceipt\":\"channels:save-draft:task-space:13\",\"draftUrl\":\"https://channels.weixin.qq.com/platform/post/create\",\"taskSpace\":\"13\"}' ;;",
+      "  *) printf '%s\\n' '{\"platform\":\"bilibili\",\"ok\":true,\"verified\":true,\"remoteId\":\"42\",\"draftUrl\":\"https://member.bilibili.com/draft/42\",\"taskSpace\":\"12\"}' ;;",
+      "esac",
     ].join("\n"), { mode: 0o755 });
     try {
       const result = await execFileAsync(process.execPath, [
@@ -107,8 +123,11 @@ describe("视频平台远端草稿保存脚本", () => {
     ].join("\n"));
     writeFileSync(ego, [
       "#!/bin/sh",
-      "cat >/dev/null",
-      "printf '%s\\n' '{\"platform\":\"bilibili\",\"ok\":true,\"verified\":true,\"remoteId\":\"42\",\"draftUrl\":\"https://member.bilibili.com/draft/42\",\"taskSpace\":\"12\"}'",
+      "payload=$(cat)",
+      "case \"$payload\" in",
+      "  *'\"platform\":\"channels\"'*) printf '%s\\n' '{\"platform\":\"channels\",\"ok\":true,\"verified\":true,\"draftReceipt\":\"channels:save-draft:task-space:13\",\"draftUrl\":\"https://channels.weixin.qq.com/platform/post/create\",\"taskSpace\":\"13\"}' ;;",
+      "  *) printf '%s\\n' '{\"platform\":\"bilibili\",\"ok\":true,\"verified\":true,\"remoteId\":\"42\",\"draftUrl\":\"https://member.bilibili.com/draft/42\",\"taskSpace\":\"12\"}' ;;",
+      "esac",
     ].join("\n"), { mode: 0o755 });
     try {
       const result = await execFileAsync(process.execPath, [
@@ -138,7 +157,11 @@ describe("视频平台远端草稿保存脚本", () => {
         ok: true,
         results: {
           bilibili: { ok: true, remoteId: "42", taskSpace: "12" },
-          channels: { ok: true, staged: true, taskSpace: "13" },
+          channels: {
+            ok: true,
+            draftReceipt: "channels:save-draft:task-space:13",
+            taskSpace: "13",
+          },
         },
       });
     } finally {
@@ -255,12 +278,43 @@ describe("视频平台远端草稿保存脚本", () => {
       ok: true,
       verified: true,
       remoteId: "v0200fg10000fixture",
-      draftUrl: "https://creator.douyin.com/creator-micro/content/post/video?enter_from=draft",
+      draftReceipt: "douyin:temporary-leave:task-space:5",
+      draftUrl: "https://creator.douyin.com/creator-micro/content/upload",
       taskSpace: "5",
       handedOff: true,
     });
     expect(lines.find((line) => line.fixture === true)).toMatchObject({
       handedOff: ["5"],
+    });
+  });
+
+  it("小红书暂存离开后写入动作回执", async () => {
+    const result = await execFileAsync(process.execPath, [
+      resolve(process.cwd(), "tests/fixtures/video-draft-xiaohongshu-ego-runtime.mjs"),
+      resolve(process.cwd(), "scripts/video-draft.mjs"),
+    ]);
+    const lines = result.stdout.split(/\r?\n/).filter((line) => line.startsWith("{")).map((line) => JSON.parse(line));
+    expect(lines.find((line) => line.platform === "xiaohongshu")).toMatchObject({
+      ok: true,
+      verified: true,
+      draftReceipt: "xiaohongshu:temporary-leave:task-space:21",
+      taskSpace: "21",
+      handedOff: true,
+    });
+  });
+
+  it("视频号保存草稿后写入动作回执", async () => {
+    const result = await execFileAsync(process.execPath, [
+      resolve(process.cwd(), "tests/fixtures/video-draft-channels-ego-runtime.mjs"),
+      resolve(process.cwd(), "scripts/video-draft.mjs"),
+    ]);
+    const lines = result.stdout.split(/\r?\n/).filter((line) => line.startsWith("{")).map((line) => JSON.parse(line));
+    expect(lines.find((line) => line.platform === "channels")).toMatchObject({
+      ok: true,
+      verified: true,
+      draftReceipt: "channels:save-draft:task-space:23",
+      taskSpace: "23",
+      handedOff: true,
     });
   });
 
@@ -278,6 +332,7 @@ describe("视频平台远端草稿保存脚本", () => {
       ok: true,
       verified: true,
       remoteId: "3931743938",
+      draftReceipt: "kuaishou:cancel-editor:task-space:17",
       draftUrl: "https://cp.kuaishou.com/article/publish/video",
       taskSpace: "17",
       handedOff: true,

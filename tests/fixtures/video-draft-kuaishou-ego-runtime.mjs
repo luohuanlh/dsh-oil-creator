@@ -11,7 +11,7 @@ const input = {
   expectedCaption,
   expectedFileName: "demo.mp4",
 };
-const state = { handedOff: [] };
+const state = { handedOff: [], editorVisible: true };
 const editor = {
   innerText: expectedCaption,
   getBoundingClientRect: () => ({ width: 521, height: 167 }),
@@ -24,13 +24,29 @@ const finalButton = {
   getBoundingClientRect: () => ({ width: 96, height: 36 }),
   getAttribute: () => null,
 };
+const cancelButton = {
+  innerText: "取消",
+  textContent: "取消",
+  className: "_button_3a3lq_1",
+  disabled: false,
+  id: "",
+  children: [],
+  getBoundingClientRect: () => ({ width: 96, height: 36 }),
+  getAttribute: () => null,
+  scrollIntoView() {},
+};
+const continueButton = {
+  ...cancelButton,
+  innerText: "继续编辑",
+  textContent: "继续编辑",
+};
 const document = {
   querySelector(selector) {
-    return selector.includes("work-description-edit") ? editor : null;
+    return state.editorVisible && selector.includes("work-description-edit") ? editor : null;
   },
   querySelectorAll(selector) {
-    if (selector.includes("work-description-edit")) return [editor];
-    return [finalButton];
+    if (selector.includes("work-description-edit")) return state.editorVisible ? [editor] : [];
+    return state.editorVisible ? [cancelButton, finalButton] : [continueButton];
   },
 };
 const window = {
@@ -73,7 +89,9 @@ await execute(
   async () => ({ id: 17 }),
   async () => ({ url: "https://cp.kuaishou.com/article/publish/video" }),
   runBrowserExpression,
-  async () => undefined,
+  async (selector) => {
+    if (String(selector).includes("oil-cancel-kuaishou-draft")) state.editorVisible = false;
+  },
   async () => undefined,
   async () => undefined,
   async (id) => {

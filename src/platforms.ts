@@ -212,10 +212,12 @@ export function supportsAutoDraft(platform: PublishPlatform): boolean {
 }
 
 export function draftCapability(platform: PublishPlatform): DraftCapability {
-  if (platform === "bilibili" || platform === "douyin" || platform === "kuaishou") return "remote-verified";
-  if (platform === "wechat-mp"
+  if (platform === "bilibili"
+    || platform === "douyin"
     || platform === "xiaohongshu"
-    || platform === "channels") return "implemented-simulated";
+    || platform === "channels"
+    || platform === "kuaishou") return "remote-verified";
+  if (platform === "wechat-mp") return "implemented-simulated";
   return "unsupported";
 }
 

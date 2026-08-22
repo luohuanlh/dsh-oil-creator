@@ -529,12 +529,17 @@ export class OilCreatorService extends TypertRemoteService {
             return next;
           }
           const url = "url" in result ? result.url.trim() : "";
-          const remoteId = "remoteId" in result ? result.remoteId.trim() : "";
-          if (url === "" || remoteId === "") {
+          const remoteId = "remoteId" in result && typeof result.remoteId === "string"
+            ? result.remoteId.trim()
+            : "";
+          const draftReceipt = "draftReceipt" in result && typeof result.draftReceipt === "string"
+            ? result.draftReceipt.trim()
+            : "";
+          if (url === "" || (remoteId === "" && draftReceipt === "")) {
             const next: OverlayPublish = {
               ...current,
               draftState: "error",
-              draftError: "草稿运行器未返回远端 ID 与回读 URL，拒绝标记为草稿",
+              draftError: "草稿运行器未返回远端 ID/动作回执与回读 URL，拒绝标记为草稿",
             };
             delete next.draftPid;
             return next;
@@ -543,8 +548,11 @@ export class OilCreatorService extends TypertRemoteService {
             ...current,
             status: "draft",
             url,
-            remoteId,
+            ...(remoteId === "" ? {} : { remoteId }),
+            ...(draftReceipt === "" ? {} : { draftReceipt }),
           };
+          if (remoteId === "") delete next.remoteId;
+          if (draftReceipt === "") delete next.draftReceipt;
           delete next.draftState;
           delete next.draftError;
           delete next.draftPid;

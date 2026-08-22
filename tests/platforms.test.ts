@@ -46,6 +46,8 @@ describe("platform catalog", () => {
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("implemented-simulated");
     expect(draftCapability("douyin")).toBe("remote-verified");
+    expect(draftCapability("xiaohongshu")).toBe("remote-verified");
+    expect(draftCapability("channels")).toBe("remote-verified");
     expect(draftCapability("kuaishou")).toBe("remote-verified");
     expect(draftCapability("zhihu")).toBe("unsupported");
   });

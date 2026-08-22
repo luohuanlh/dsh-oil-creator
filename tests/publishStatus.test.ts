@@ -47,14 +47,14 @@ describe("publishFromAutoPublish", () => {
     expect(publishFromAutoPublish({ title: "x" })).toEqual(emptyPublish());
   });
 
-  it("只有同时带远端 ID 和回读 URL 的旧 sidecar 才能标记草稿", () => {
+  it("远端 ID 或已验证动作回执配合 URL 才能标记草稿", () => {
     const publish = publishFromAutoPublish({
       publisher: {
         platforms: {
           bilibili: { status: "draft" },
           channels: {
             status: "draft",
-            remoteId: "remote-42",
+            draftReceipt: "channels:save-draft:task-space:23",
             url: "https://channels.example/draft/42",
           },
         },
@@ -66,7 +66,7 @@ describe("publishFromAutoPublish", () => {
       status: "draft",
       source: "publisher",
       url: "https://channels.example/draft/42",
-      remoteId: "remote-42",
+      draftReceipt: "channels:save-draft:task-space:23",
     });
   });
 });
@@ -148,5 +148,26 @@ describe("decodeOverlay", () => {
       remoteId: "42",
     });
     expect(store.items.demo?.publish?.["wechat-mp"]?.url).not.toContain("token=");
+  });
+
+  it("保留带动作回执的视频草稿", () => {
+    const store = decodeOverlay({
+      items: {
+        demo: {
+          publish: {
+            xiaohongshu: {
+              status: "draft",
+              url: "https://creator.xiaohongshu.com/publish/publish",
+              draftReceipt: "xiaohongshu:temporary-leave:task-space:21",
+            },
+          },
+        },
+      },
+    });
+
+    expect(store.items.demo?.publish?.xiaohongshu).toMatchObject({
+      status: "draft",
+      draftReceipt: "xiaohongshu:temporary-leave:task-space:21",
+    });
   });
 });

@@ -96,7 +96,12 @@ function platformFromField(field: unknown, fallback: PublishMark): PlatformPubli
   const remoteId = typeof record.remoteId === "string" && record.remoteId.trim() !== ""
     ? record.remoteId.trim()
     : undefined;
-  const verifiedDraft = rawStatus === "draft" && url !== undefined && remoteId !== undefined;
+  const draftReceipt = typeof record.draftReceipt === "string" && record.draftReceipt.trim() !== ""
+    ? record.draftReceipt.trim()
+    : undefined;
+  const verifiedDraft = rawStatus === "draft"
+    && url !== undefined
+    && (remoteId !== undefined || draftReceipt !== undefined);
   const status = verifiedDraft
     ? "draft"
     : typeof record.status === "string"
@@ -108,6 +113,7 @@ function platformFromField(field: unknown, fallback: PublishMark): PlatformPubli
         source: "publisher",
         ...(publisherReady(record.status) ? { draftState: "ready" as const } : {}),
         ...(remoteId === undefined ? {} : { remoteId }),
+        ...(draftReceipt === undefined ? {} : { draftReceipt }),
       }
     : {
         status,
@@ -115,6 +121,7 @@ function platformFromField(field: unknown, fallback: PublishMark): PlatformPubli
         url,
         ...(publisherReady(record.status) ? { draftState: "ready" as const } : {}),
         ...(remoteId === undefined ? {} : { remoteId }),
+        ...(draftReceipt === undefined ? {} : { draftReceipt }),
       };
 }
 
@@ -170,6 +177,9 @@ export function decodeOverlayPublish(raw: unknown): OverlayItem["publish"] {
     if (typeof record.remoteId === "string" && record.remoteId.trim() !== "") {
       entry.remoteId = record.remoteId.trim();
     }
+    if (typeof record.draftReceipt === "string" && record.draftReceipt.trim() !== "") {
+      entry.draftReceipt = record.draftReceipt.trim();
+    }
     if (typeof record.views === "number" && Number.isFinite(record.views)) entry.views = record.views;
     if (typeof record.likes === "number" && Number.isFinite(record.likes)) entry.likes = record.likes;
     if (typeof record.comments === "number" && Number.isFinite(record.comments)) {
@@ -192,7 +202,9 @@ export function decodeOverlayPublish(raw: unknown): OverlayItem["publish"] {
     if (typeof record.draftPid === "number" && Number.isInteger(record.draftPid) && record.draftPid > 0) {
       entry.draftPid = record.draftPid;
     }
-    if (entry.status === "draft" && (entry.remoteId === undefined || entry.url === undefined)) {
+    if (entry.status === "draft"
+      && (entry.url === undefined
+        || (entry.remoteId === undefined && entry.draftReceipt === undefined))) {
       entry.status = "unpublished";
     }
     next[key] = entry;
@@ -220,11 +232,12 @@ export function decodeBurnJob(raw: unknown): BurnJob | undefined {
 
 function copyOverlayFields(over: OverlayPublish): Pick<
   OverlayPublish,
-  "url" | "remoteId" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"
+  "url" | "remoteId" | "draftReceipt" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"
 > {
-  const next: Pick<OverlayPublish, "url" | "remoteId" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"> = {};
+  const next: Pick<OverlayPublish, "url" | "remoteId" | "draftReceipt" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"> = {};
   if (over.url !== undefined) next.url = over.url;
   if (over.remoteId !== undefined) next.remoteId = over.remoteId;
+  if (over.draftReceipt !== undefined) next.draftReceipt = over.draftReceipt;
   if (over.views !== undefined) next.views = over.views;
   if (over.likes !== undefined) next.likes = over.likes;
   if (over.comments !== undefined) next.comments = over.comments;

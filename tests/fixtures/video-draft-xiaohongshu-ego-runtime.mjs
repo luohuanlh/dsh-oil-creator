@@ -4,12 +4,13 @@ const [scriptPath] = process.argv.slice(2);
 if (!scriptPath) throw new Error("video draft script path is required");
 
 const input = {
-  platform: "douyin",
-  taskSpace: "5",
-  expectedTitle: "RC草稿流程验证：本地测试画面",
+  platform: "xiaohongshu",
+  taskSpace: "21",
+  expectedTitle: "小红书草稿验证",
 };
 const state = {
-  href: "https://creator.douyin.com/creator-micro/content/post/video?enter_from=draft",
+  href: "https://creator.xiaohongshu.com/publish/publish?source=official&from=menu&target=video",
+  editorVisible: true,
   handedOff: [],
 };
 function element(text, extra = {}) {
@@ -18,7 +19,6 @@ function element(text, extra = {}) {
     textContent: text,
     disabled: false,
     id: "",
-    className: "",
     children: [],
     getBoundingClientRect: () => ({ width: 96, height: 36 }),
     getAttribute: () => null,
@@ -26,47 +26,39 @@ function element(text, extra = {}) {
     ...extra,
   };
 }
-const titleInput = element("", { placeholder: "作品标题", value: input.expectedTitle });
+const titleInput = element("", { placeholder: "填写标题", value: input.expectedTitle });
 const saveButton = element("暂存离开");
-const finalButton = element("发布");
-const continueButton = element("继续编辑");
+const finalButton = element("发布笔记");
+const continueButton = element("继续发布");
 const document = {
-  body: { innerText: "上传成功 重新上传" },
   querySelectorAll(selector) {
-    const landing = state.href.includes("/content/upload");
-    if (selector === "input") {
-      return landing ? [] : [titleInput];
+    if (selector.includes("input") || selector.includes("textarea")) {
+      return state.editorVisible ? [titleInput] : [];
     }
-    if (selector.includes("button") || selector.includes("[role=\"button\"]") || selector.includes("div") || selector.includes("span")) {
-      return landing ? [continueButton] : [saveButton, finalButton];
+    if (selector.includes("button") || selector.includes("div") || selector.includes("span")) {
+      return state.editorVisible ? [saveButton, finalButton] : [continueButton];
     }
     return [];
   },
 };
+const window = {
+  __VIDEO_PUBLISHER_FINAL_GUARD__: { armed: true, version: 2, blockedAttempts: [] },
+};
 const location = {
   get href() { return state.href; },
   set href(value) { state.href = String(value); },
-};
-const performance = {
-  getEntriesByType() {
-    return [{
-      name: "https://creator.douyin.com/web/api/media/video/transend/?video_id=v0200fg10000fixture",
-    }];
-  },
-  clearResourceTimings() {},
 };
 
 async function runBrowserExpression(source) {
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const execute = new AsyncFunction(
     "document",
+    "window",
     "location",
-    "performance",
-    "URL",
     "getComputedStyle",
     `return await (${source});`,
   );
-  return execute(document, location, performance, URL, () => ({ display: "block", visibility: "visible" }));
+  return execute(document, window, location, () => ({ display: "block", visibility: "visible" }));
 }
 
 const source = await readFile(scriptPath, "utf8");
@@ -88,12 +80,13 @@ const execute = new AsyncFunction(
 await execute(
   input,
   (value) => { console.log(value); },
-  async () => ({ id: 5 }),
+  async () => ({ id: 21 }),
   async () => ({ url: state.href }),
   runBrowserExpression,
   async (selector) => {
-    if (String(selector).includes("oil-save-douyin-draft")) {
-      state.href = "https://creator.douyin.com/creator-micro/content/upload";
+    if (String(selector).includes("oil-save-xiaohongshu-draft")) {
+      state.editorVisible = false;
+      state.href = "https://creator.xiaohongshu.com/publish/publish";
     }
   },
   async () => undefined,

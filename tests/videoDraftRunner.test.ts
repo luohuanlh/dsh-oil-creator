@@ -62,4 +62,40 @@ describe("video draft runner output", () => {
       taskSpace: "17",
     });
   });
+
+  it("小红书和视频号可用已验证动作回执替代远端内容 ID", () => {
+    expect(parseVideoDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "xiaohongshu",
+      verified: true,
+      draftReceipt: "xiaohongshu:temporary-leave:task-space:21",
+      draftUrl: "https://creator.xiaohongshu.com/publish/publish",
+      taskSpace: "21",
+    }), "xiaohongshu")).toMatchObject({
+      platform: "xiaohongshu",
+      draftReceipt: "xiaohongshu:temporary-leave:task-space:21",
+    });
+
+    expect(parseVideoDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "channels",
+      verified: true,
+      draftReceipt: "channels:save-draft:task-space:23",
+      draftUrl: "https://channels.weixin.qq.com/platform/post/create",
+      taskSpace: "23",
+    }), "channels")).toMatchObject({
+      platform: "channels",
+      draftReceipt: "channels:save-draft:task-space:23",
+    });
+  });
+
+  it("没有远端 ID 或动作回执时拒绝标记草稿", () => {
+    expect(() => parseVideoDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "channels",
+      verified: true,
+      draftUrl: "https://channels.weixin.qq.com/platform/post/create",
+      taskSpace: "23",
+    }), "channels")).toThrow("视频号草稿结果不完整");
+  });
 });

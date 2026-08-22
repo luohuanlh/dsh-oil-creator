@@ -38,7 +38,7 @@ import { DISTRIBUTION_PACKAGE_NAME } from "../src/distribution.ts";
 import type { ContentSummary } from "../src/types.ts";
 
 type MockVideoOutcome =
-  | { ok: true; url: string; remoteId: string; taskSpace: string }
+  | { ok: true; url: string; remoteId?: string; draftReceipt?: string; taskSpace: string }
   | { ok: true; staged: true; taskSpace: string }
   | { ok: false; error: string };
 
@@ -341,8 +341,18 @@ describe("OilCreatorService.startDrafts", () => {
       results: {
         bilibili: { ok: true, url: "https://bilibili/draft/1", remoteId: "1", taskSpace: "1" },
         douyin: { ok: true, url: "https://douyin/draft/2", remoteId: "2", taskSpace: "2" },
-        xiaohongshu: { ok: true, staged: true, taskSpace: "3" },
-        channels: { ok: true, staged: true, taskSpace: "4" },
+        xiaohongshu: {
+          ok: true,
+          url: "https://xiaohongshu/draft",
+          draftReceipt: "xiaohongshu:temporary-leave:task-space:3",
+          taskSpace: "3",
+        },
+        channels: {
+          ok: true,
+          url: "https://channels/draft",
+          draftReceipt: "channels:save-draft:task-space:4",
+          taskSpace: "4",
+        },
         kuaishou: { ok: true, url: "https://kuaishou/draft/5", remoteId: "5", taskSpace: "5" },
       },
     });
@@ -350,8 +360,10 @@ describe("OilCreatorService.startDrafts", () => {
       const saved = await loadOverlay(root);
       expect(saved.items["2026-08-21_demo"]?.publish?.bilibili?.status).toBe("draft");
       expect(saved.items["2026-08-21_demo"]?.publish?.douyin?.status).toBe("draft");
-      expect(saved.items["2026-08-21_demo"]?.publish?.xiaohongshu?.draftState).toBe("ready");
-      expect(saved.items["2026-08-21_demo"]?.publish?.channels?.draftState).toBe("ready");
+      expect(saved.items["2026-08-21_demo"]?.publish?.xiaohongshu)
+        .toMatchObject({ status: "draft", draftReceipt: "xiaohongshu:temporary-leave:task-space:3" });
+      expect(saved.items["2026-08-21_demo"]?.publish?.channels)
+        .toMatchObject({ status: "draft", draftReceipt: "channels:save-draft:task-space:4" });
       expect(saved.items["2026-08-21_demo"]?.publish?.kuaishou?.status).toBe("draft");
     });
   });

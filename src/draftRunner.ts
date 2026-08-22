@@ -25,7 +25,7 @@ export interface DraftRunHandle {
 }
 
 export type VideoDraftOutcome =
-  | { ok: true; url: string; remoteId: string; taskSpace: string }
+  | { ok: true; url: string; remoteId?: string; draftReceipt?: string; taskSpace: string }
   | { ok: true; staged: true; taskSpace: string }
   | { ok: false; error: string };
 
@@ -36,9 +36,10 @@ export interface VideoDraftBatchResult {
 
 export interface VideoDraftResult {
   ok: true;
-  platform: "bilibili" | "douyin" | "kuaishou";
+  platform: "bilibili" | "douyin" | "xiaohongshu" | "channels" | "kuaishou";
   verified: true;
-  remoteId: string;
+  remoteId?: string;
+  draftReceipt?: string;
   draftUrl: string;
   taskSpace: string;
 }
@@ -53,6 +54,7 @@ interface VideoDraftPlatformInput {
   platform: PublishPlatform;
   runnerPlatform: string;
   expectedTitle?: string;
+  expectedDescription?: string;
   expectedCaption?: string;
   expectedFileName?: string;
 }
@@ -207,13 +209,9 @@ async function resolveRuntimeScript(name: string, preferred?: string): Promise<s
 
 export function parseVideoDraftOutput(
   raw: string,
-  expectedPlatform: "bilibili" | "douyin" | "kuaishou" = "bilibili",
+  expectedPlatform: "bilibili" | "douyin" | "xiaohongshu" | "channels" | "kuaishou" = "bilibili",
 ): VideoDraftResult {
-  const platformName = expectedPlatform === "bilibili"
-    ? "B站"
-    : expectedPlatform === "douyin"
-      ? "抖音"
-      : "快手";
+  const platformName = PUBLISH_PLATFORM_DEFINITIONS[expectedPlatform].name;
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
@@ -226,11 +224,11 @@ export function parseVideoDraftOutput(
       }
       if (parsed.verified !== true) throw new Error(`${platformName}未通过远端草稿验证`);
       if (parsed.platform !== expectedPlatform
-        || typeof parsed.remoteId !== "string"
-        || parsed.remoteId.trim() === ""
         || typeof parsed.draftUrl !== "string"
         || parsed.draftUrl.trim() === ""
-        || typeof parsed.taskSpace !== "string") {
+        || typeof parsed.taskSpace !== "string"
+        || !((typeof parsed.remoteId === "string" && parsed.remoteId.trim() !== "")
+          || (typeof parsed.draftReceipt === "string" && parsed.draftReceipt.trim() !== ""))) {
         throw new Error(`Ego Browser 返回的${platformName}草稿结果不完整`);
       }
       return parsed as VideoDraftResult;
@@ -272,7 +270,8 @@ function isVideoDraftOutcome(value: unknown): value is VideoDraftOutcome {
   if (candidate.ok !== true || typeof candidate.taskSpace !== "string") return false;
   if (candidate.staged === true) return true;
   return typeof candidate.url === "string" && candidate.url.trim() !== ""
-    && typeof candidate.remoteId === "string" && candidate.remoteId.trim() !== "";
+    && ((typeof candidate.remoteId === "string" && candidate.remoteId.trim() !== "")
+      || (typeof candidate.draftReceipt === "string" && candidate.draftReceipt.trim() !== ""));
 }
 
 function parseVideoDraftBatchOutput(
@@ -326,6 +325,8 @@ export async function startVideoDraftRun(
   const derived = JSON.parse(await readFile(prepared.packagePath, "utf8")) as {
     bilibiliTitle?: unknown;
     douyinTitle?: unknown;
+    xhsTitle?: unknown;
+    wechatDescription?: unknown;
     kuaishouTitle?: unknown;
     kuaishouDescription?: unknown;
     kuaishouTopics?: unknown;
@@ -340,11 +341,16 @@ export async function startVideoDraftRun(
       ? derived.bilibiliTitle
       : platform === "douyin"
         ? derived.douyinTitle
-        : platform === "kuaishou"
-          ? derived.kuaishouTitle
-          : undefined;
-    const savesRemoteDraft = platform === "bilibili" || platform === "douyin" || platform === "kuaishou";
-    if (savesRemoteDraft
+        : platform === "xiaohongshu"
+          ? derived.xhsTitle
+          : platform === "kuaishou"
+            ? derived.kuaishouTitle
+            : undefined;
+    const requiresTitle = platform === "bilibili"
+      || platform === "douyin"
+      || platform === "xiaohongshu"
+      || platform === "kuaishou";
+    if (requiresTitle
       && (typeof expectedTitleValue !== "string" || expectedTitleValue.trim() === "")) {
       throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}冻结标题缺失`);
     }
@@ -357,6 +363,13 @@ export async function startVideoDraftRun(
             : "",
         ].filter(Boolean).join("\n")
       : undefined;
+    const expectedDescription = platform === "channels"
+      && typeof derived.wechatDescription === "string"
+      ? derived.wechatDescription
+      : undefined;
+    if (platform === "channels" && (!expectedDescription || expectedDescription.trim() === "")) {
+      throw new Error("视频号冻结描述缺失");
+    }
     const expectedFileName = platform === "kuaishou" && typeof derived.videoPath === "string"
       ? basename(derived.videoPath)
       : undefined;
@@ -364,6 +377,7 @@ export async function startVideoDraftRun(
       platform,
       runnerPlatform,
       ...(typeof expectedTitleValue === "string" ? { expectedTitle: expectedTitleValue } : {}),
+      ...(expectedDescription === undefined ? {} : { expectedDescription }),
       ...(expectedCaption === undefined ? {} : { expectedCaption }),
       ...(expectedFileName === undefined ? {} : { expectedFileName }),
     };

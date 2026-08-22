@@ -68,7 +68,7 @@ describe("platform accounts", () => {
         checkedAt: 10,
         taskSpace: "42",
         supportsAutoDraft: true,
-        draftCapability: "implemented-simulated",
+        draftCapability: "remote-verified",
       },
       {
         platform: "zhihu",

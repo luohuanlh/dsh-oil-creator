@@ -63,6 +63,7 @@ try {
         platform: input.platform,
         runnerPlatform: input.runnerPlatforms[0],
         expectedTitle: input.expectedTitle,
+        expectedDescription: input.expectedDescription,
         expectedCaption: input.expectedCaption,
         expectedFileName: input.expectedFileName,
       }]
@@ -124,6 +125,8 @@ try {
         }
         const savesRemoteDraft = platformInput.platform === "bilibili"
           || platformInput.platform === "douyin"
+          || platformInput.platform === "xiaohongshu"
+          || platformInput.platform === "channels"
           || platformInput.platform === "kuaishou";
         if (!savesRemoteDraft) {
           results[platformInput.platform] = {
@@ -137,6 +140,7 @@ try {
           platform: platformInput.platform,
           taskSpace: String(taskSpace),
           expectedTitle: platformInput.expectedTitle,
+          expectedDescription: platformInput.expectedDescription,
           expectedCaption: platformInput.expectedCaption,
           expectedFileName: platformInput.expectedFileName,
         })};\n`;
@@ -144,15 +148,22 @@ try {
         if (saver.stderr) process.stderr.write(saver.stderr);
         const saved = parseJsonOutput(saver.stdout);
         if (saver.code === 0 && saved?.ok === true
-          && typeof saved.remoteId === "string"
+          && saved.platform === platformInput.platform
           && typeof saved.draftUrl === "string"
-          && typeof saved.taskSpace === "string") {
+          && typeof saved.taskSpace === "string"
+          && ((typeof saved.remoteId === "string" && saved.remoteId.trim() !== "")
+            || (typeof saved.draftReceipt === "string" && saved.draftReceipt.trim() !== ""))) {
           results[platformInput.platform] = {
             ok: true,
             platform: platformInput.platform,
             verified: true,
             url: saved.draftUrl,
-            remoteId: saved.remoteId,
+            ...(typeof saved.remoteId === "string" && saved.remoteId.trim() !== ""
+              ? { remoteId: saved.remoteId }
+              : {}),
+            ...(typeof saved.draftReceipt === "string" && saved.draftReceipt.trim() !== ""
+              ? { draftReceipt: saved.draftReceipt }
+              : {}),
             taskSpace: saved.taskSpace,
           };
         } else {

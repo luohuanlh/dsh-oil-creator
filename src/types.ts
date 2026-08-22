@@ -37,6 +37,7 @@ export interface PlatformPublish extends PublishMetrics {
   source: PublishSource;
   url?: string;
   remoteId?: string;
+  draftReceipt?: string;
   draftState?: "running" | "ready" | "error";
   draftError?: string;
   draftStartedAt?: number;
@@ -61,6 +62,7 @@ export interface OverlayPublish extends PublishMetrics {
   status: PublishMark;
   url?: string;
   remoteId?: string;
+  draftReceipt?: string;
   draftState?: "running" | "ready" | "error";
   draftError?: string;
   draftStartedAt?: number;

@@ -60,6 +60,7 @@ const platformPublishSchema = z.object({
   ]),
   url: z.string().optional(),
   remoteId: z.string().optional(),
+  draftReceipt: z.string().optional(),
   views: z.number().optional(),
   likes: z.number().optional(),
   comments: z.number().optional(),
