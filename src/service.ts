@@ -21,7 +21,11 @@ import { inspectCreatorSetup } from "./capabilities.ts";
 import { expandHomePath, resolveDataDir, type Config } from "./config.ts";
 import { importContentAsset } from "./assetImport.ts";
 import { startAssetUploadServer } from "./assetUpload.ts";
-import { prepareDraftRun, startVideoDraftRun } from "./draftRunner.ts";
+import {
+  prepareDraftRun,
+  startVideoDraftRun,
+  type VideoDraftOutcome,
+} from "./draftRunner.ts";
 import { prepareArticleDraftRun, startArticleDraftRun } from "./articleDraftRunner.ts";
 import {
   freezeDistributionPackage,
@@ -46,6 +50,7 @@ import {
   PUBLISH_PLATFORMS,
   platformGenerationRule,
   supportsAutoDraft,
+  type PublishPlatform,
 } from "./platforms.ts";
 import { pidAlive } from "./processAlive.ts";
 import { coverThumb } from "./thumbs.ts";
@@ -508,85 +513,123 @@ export class OilCreatorService extends TypertRemoteService {
     for (const key of startKeys) this.draftStarts.add(key);
     let started = false;
     const startErrors: string[] = [];
-    try {
-      for (const platform of platforms) {
-        try {
-          const runner = PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner;
-          const run = runner === "video-publisher"
-            ? await startVideoDraftRun(
-                await prepareDraftRun(item, this.dataDir, [platform]),
-                request.confirmOriginalRights === true ? { confirmOriginalRights: true } : {},
-              )
-            : runner === "wechat-article-ego"
-              ? await startArticleDraftRun(await prepareArticleDraftRun(item, platform))
-              : undefined;
-          if (run === undefined) throw new Error(`尚未接入自动草稿：${platform}`);
-          started = true;
-          const startedAt = Date.now();
-          await this.patchDraftRows(item.id, [platform], (current) => {
+    const applyOutcome = async (
+      platform: PublishPlatform,
+      result: VideoDraftOutcome,
+    ): Promise<void> => {
+      await this.patchDraftRows(item.id, [platform], (current) => {
+        if (result.ok) {
+          if ("staged" in result && result.staged === true) {
             const next: OverlayPublish = {
               ...current,
-              status: current.status,
-              draftState: "running",
-              draftStartedAt: startedAt,
-              draftPid: run.pid,
+              draftState: "ready",
             };
             delete next.draftError;
+            delete next.draftPid;
             return next;
-          });
+          }
+          const url = "url" in result ? result.url.trim() : "";
+          const remoteId = "remoteId" in result ? result.remoteId.trim() : "";
+          if (url === "" || remoteId === "") {
+            const next: OverlayPublish = {
+              ...current,
+              draftState: "error",
+              draftError: "草稿运行器未返回远端 ID 与回读 URL，拒绝标记为草稿",
+            };
+            delete next.draftPid;
+            return next;
+          }
+          const next: OverlayPublish = {
+            ...current,
+            status: "draft",
+            url,
+            remoteId,
+          };
+          delete next.draftState;
+          delete next.draftError;
+          delete next.draftPid;
+          return next;
+        }
+        const next: OverlayPublish = {
+          ...current,
+          draftState: "error",
+          draftError: result.error,
+        };
+        delete next.draftPid;
+        return next;
+      });
+    };
+    const markRunning = async (
+      targets: readonly PublishPlatform[],
+      pid: number,
+    ): Promise<void> => {
+      const startedAt = Date.now();
+      await this.patchDraftRows(item.id, targets, (current) => {
+        const next: OverlayPublish = {
+          ...current,
+          status: current.status,
+          draftState: "running",
+          draftStartedAt: startedAt,
+          draftPid: pid,
+        };
+        delete next.draftError;
+        return next;
+      });
+    };
+    try {
+      const videoPlatforms = platforms.filter((platform) =>
+        PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner === "video-publisher"
+      );
+      if (videoPlatforms.length > 0) {
+        try {
+          const run = await startVideoDraftRun(
+            await prepareDraftRun(item, this.dataDir, videoPlatforms),
+            request.confirmOriginalRights === true ? { confirmOriginalRights: true } : {},
+          );
+          started = true;
+          await markRunning(videoPlatforms, run.pid);
           void run.completion.then(async (result) => {
-            await this.patchDraftRows(item.id, [platform], (current) => {
-              if (result.ok) {
-                const successful = result as unknown as {
-                  url?: unknown;
-                  remoteId?: unknown;
-                  staged?: unknown;
-                };
-                if (successful.staged === true) {
-                  const next: OverlayPublish = {
-                    ...current,
-                    draftState: "ready",
-                  };
-                  delete next.draftError;
-                  delete next.draftPid;
-                  return next;
-                }
-                const url = typeof successful.url === "string"
-                  ? successful.url.trim()
-                  : "";
-                const remoteId = typeof successful.remoteId === "string"
-                  ? successful.remoteId.trim()
-                  : "";
-                if (url === "" || remoteId === "") {
-                  const next: OverlayPublish = {
-                    ...current,
-                    draftState: "error",
-                    draftError: "草稿运行器未返回远端 ID 与回读 URL，拒绝标记为草稿",
-                  };
-                  delete next.draftPid;
-                  return next;
-                }
-                const next: OverlayPublish = {
-                  ...current,
-                  status: "draft",
-                  url,
-                  remoteId,
-                };
-                delete next.draftState;
-                delete next.draftError;
-                delete next.draftPid;
-                return next;
-              }
-              const next: OverlayPublish = {
-                ...current,
-                draftState: "error",
-                draftError: result.error,
-              };
-              delete next.draftPid;
-              return next;
-            });
+            const results = "results" in result
+              ? result.results
+              : videoPlatforms.length === 1
+                ? { [videoPlatforms[0]!]: result }
+                : Object.fromEntries(videoPlatforms.map((platform) => [platform, {
+                    ok: false as const,
+                    error: result.ok ? "多平台草稿结果缺少逐平台状态" : result.error,
+                  }]));
+            for (const platform of videoPlatforms) {
+              await applyOutcome(platform, results[platform] ?? {
+                ok: false,
+                error: `${PUBLISH_PLATFORM_DEFINITIONS[platform].name}草稿结果缺失`,
+              });
+            }
           }).catch((cause) => {
-            // 强制触发一次目录重读；已退出的 PID 会被 reconcileInterruptedDrafts 纠正为 error。
+            this.invalidateCatalog();
+            process.emitWarning(
+              `视频草稿结果写入失败（${videoPlatforms.join("、")}）：${cause instanceof Error ? cause.message : String(cause)}`,
+              { code: "OIL_DRAFT_STATE_WRITE_FAILED" },
+            );
+          });
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          startErrors.push(`${videoPlatforms.map((platform) => PUBLISH_PLATFORM_DEFINITIONS[platform].name).join("、")}：${message}`);
+          for (const platform of videoPlatforms) {
+            await applyOutcome(platform, { ok: false, error: message });
+          }
+        }
+      }
+      for (const platform of platforms.filter((candidate) =>
+        PUBLISH_PLATFORM_DEFINITIONS[candidate].draftRunner !== "video-publisher"
+      )) {
+        try {
+          const runner = PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner;
+          const run = runner === "wechat-article-ego"
+            ? await startArticleDraftRun(await prepareArticleDraftRun(item, platform))
+            : undefined;
+          if (run === undefined) throw new Error(`尚未接入自动草稿：${platform}`);
+          started = true;
+          await markRunning([platform], run.pid);
+          void run.completion.then((result) => applyOutcome(platform, result)).catch((cause) => {
             this.invalidateCatalog();
             process.emitWarning(
               `草稿结果写入失败（${platform}）：${cause instanceof Error ? cause.message : String(cause)}`,
@@ -596,15 +639,7 @@ export class OilCreatorService extends TypertRemoteService {
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause);
           startErrors.push(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}：${message}`);
-          await this.patchDraftRows(item.id, [platform], (current) => {
-            const next: OverlayPublish = {
-              ...current,
-              draftState: "error",
-              draftError: message,
-            };
-            delete next.draftPid;
-            return next;
-          });
+          await applyOutcome(platform, { ok: false, error: message });
         }
       }
       if (!started) throw new Error(startErrors.join("；") || "草稿运行器未启动");

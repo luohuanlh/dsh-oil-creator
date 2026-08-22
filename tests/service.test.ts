@@ -11,16 +11,8 @@ const draft = vi.hoisted(() => ({
     runnerPlatforms: [...platforms],
   })),
   start: vi.fn(),
-  finish: undefined as undefined | ((result:
-    | { ok: true; url: string; remoteId: string; taskSpace: string }
-    | { ok: true; staged: true; taskSpace: string }
-    | { ok: false; error: string }
-  ) => void),
-  finishes: [] as Array<(result:
-    | { ok: true; url: string; remoteId: string; taskSpace: string }
-    | { ok: true; staged: true; taskSpace: string }
-    | { ok: false; error: string }
-  ) => void>,
+  finish: undefined as undefined | ((result: MockVideoCompletion) => void),
+  finishes: [] as Array<(result: MockVideoCompletion) => void>,
 }));
 
 const articleDraft = vi.hoisted(() => ({
@@ -44,6 +36,16 @@ import { emptyOverlay, loadOverlay, saveOverlay } from "../src/overlay.ts";
 import { emptyBurn, emptyPublish } from "../src/publishStatus.ts";
 import { DISTRIBUTION_PACKAGE_NAME } from "../src/distribution.ts";
 import type { ContentSummary } from "../src/types.ts";
+
+type MockVideoOutcome =
+  | { ok: true; url: string; remoteId: string; taskSpace: string }
+  | { ok: true; staged: true; taskSpace: string }
+  | { ok: false; error: string };
+
+type MockVideoCompletion = MockVideoOutcome | {
+  ok: true;
+  results: Record<string, MockVideoOutcome>;
+};
 
 function summary(folderPath: string, videoPath: string): ContentSummary {
   return {
@@ -98,11 +100,7 @@ beforeEach(() => {
   draft.finish = undefined;
   draft.finishes = [];
   draft.start.mockImplementation(async () => {
-    const completion = new Promise<
-      | { ok: true; url: string; remoteId: string; taskSpace: string }
-      | { ok: true; staged: true; taskSpace: string }
-      | { ok: false; error: string }
-    >((resolve) => {
+    const completion = new Promise<MockVideoCompletion>((resolve) => {
       draft.finish = resolve;
       draft.finishes.push(resolve);
     });
@@ -271,7 +269,7 @@ describe("OilCreatorService.startDrafts", () => {
     expect(draft.start).toHaveBeenCalledTimes(1);
   });
 
-  it("逐平台启动并隔离成功与失败状态", async () => {
+  it("单个 publisher 调度多平台并隔离成功与失败状态", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-service-isolation-"));
     const video = join(root, "demo.mp4");
     await writeFile(video, "video");
@@ -289,20 +287,72 @@ describe("OilCreatorService.startDrafts", () => {
       new AbortController().signal,
     );
 
-    expect(draft.prepare.mock.calls.map((call) => call[2])).toEqual([["bilibili"], ["douyin"]]);
-    expect(draft.start).toHaveBeenCalledTimes(2);
+    expect(draft.prepare.mock.calls.map((call) => call[2])).toEqual([["bilibili", "douyin"]]);
+    expect(draft.start).toHaveBeenCalledTimes(1);
     draft.finishes[0]?.({
       ok: true,
-      url: "https://member.bilibili.com/draft/42",
-      remoteId: "42",
-      taskSpace: "7",
+      results: {
+        bilibili: {
+          ok: true,
+          url: "https://member.bilibili.com/draft/42",
+          remoteId: "42",
+          taskSpace: "7",
+        },
+        douyin: { ok: false, error: "抖音页面失败" },
+      },
     });
-    draft.finishes[1]?.({ ok: false, error: "抖音页面失败" });
     await vi.waitFor(async () => {
       const saved = await loadOverlay(root);
       expect(saved.items["2026-08-21_demo"]?.publish?.bilibili?.status).toBe("draft");
       expect(saved.items["2026-08-21_demo"]?.publish?.douyin)
         .toMatchObject({ status: "unpublished", draftState: "error", draftError: "抖音页面失败" });
+    });
+  });
+
+  it("五个视频平台共享一个 publisher 作业", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-five-platforms-"));
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    const platforms = [
+      "bilibili",
+      "douyin",
+      "xiaohongshu",
+      "channels",
+      "kuaishou",
+    ] as const;
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: [...platforms] };
+    overlay.accounts = Object.fromEntries(platforms.map((platform) => [
+      platform,
+      { status: "active" as const, checkedAt: 1 },
+    ]));
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, video));
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: [...platforms] },
+      new AbortController().signal,
+    );
+
+    expect(draft.prepare.mock.calls.map((call) => call[2])).toEqual([[...platforms]]);
+    expect(draft.start).toHaveBeenCalledTimes(1);
+    draft.finishes[0]?.({
+      ok: true,
+      results: {
+        bilibili: { ok: true, url: "https://bilibili/draft/1", remoteId: "1", taskSpace: "1" },
+        douyin: { ok: true, url: "https://douyin/draft/2", remoteId: "2", taskSpace: "2" },
+        xiaohongshu: { ok: true, staged: true, taskSpace: "3" },
+        channels: { ok: true, staged: true, taskSpace: "4" },
+        kuaishou: { ok: true, url: "https://kuaishou/draft/5", remoteId: "5", taskSpace: "5" },
+      },
+    });
+    await vi.waitFor(async () => {
+      const saved = await loadOverlay(root);
+      expect(saved.items["2026-08-21_demo"]?.publish?.bilibili?.status).toBe("draft");
+      expect(saved.items["2026-08-21_demo"]?.publish?.douyin?.status).toBe("draft");
+      expect(saved.items["2026-08-21_demo"]?.publish?.xiaohongshu?.draftState).toBe("ready");
+      expect(saved.items["2026-08-21_demo"]?.publish?.channels?.draftState).toBe("ready");
+      expect(saved.items["2026-08-21_demo"]?.publish?.kuaishou?.status).toBe("draft");
     });
   });
 

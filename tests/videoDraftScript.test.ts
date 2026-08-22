@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -90,6 +90,107 @@ describe("视频平台远端草稿保存脚本", () => {
         remoteId: "42",
         taskSpace: "12",
       });
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  it("多平台只调用一次 publisher，并分别返回远端草稿与页面 READY", async () => {
+    const fixture = mkdtempSync(join(tmpdir(), "oil-video-draft-batch-runner-"));
+    const publisher = join(fixture, "publisher.sh");
+    const ego = join(fixture, "ego-browser");
+    const countPath = join(fixture, "publisher-count.txt");
+    writeFileSync(publisher, [
+      "#!/bin/sh",
+      "printf x >> \"$PUBLISHER_COUNT\"",
+      "printf '%s\\n' '{\"ready\":true,\"platforms\":{\"bilibili\":{\"taskSpaceId\":12,\"ready\":true},\"wechat_channels\":{\"taskSpaceId\":13,\"ready\":true}}}'",
+    ].join("\n"));
+    writeFileSync(ego, [
+      "#!/bin/sh",
+      "cat >/dev/null",
+      "printf '%s\\n' '{\"platform\":\"bilibili\",\"ok\":true,\"verified\":true,\"remoteId\":\"42\",\"draftUrl\":\"https://member.bilibili.com/draft/42\",\"taskSpace\":\"12\"}'",
+    ].join("\n"), { mode: 0o755 });
+    try {
+      const result = await execFileAsync(process.execPath, [
+        resolve(process.cwd(), "scripts/video-draft-runner.mjs"),
+      ], {
+        env: {
+          ...process.env,
+          PATH: `${fixture}${delimiter}${process.env.PATH ?? ""}`,
+          PUBLISHER_COUNT: countPath,
+          OIL_VIDEO_DRAFT_RUN: JSON.stringify({
+            publisherRunner: publisher,
+            publisherCwd: fixture,
+            packagePath: join(fixture, "package.json"),
+            suffix: "fixture",
+            runnerPlatforms: ["bilibili", "wechat_channels"],
+            platforms: [
+              { platform: "bilibili", runnerPlatform: "bilibili", expectedTitle: "测试标题" },
+              { platform: "channels", runnerPlatform: "wechat_channels" },
+            ],
+            saverScript: resolve(process.cwd(), "scripts/video-draft.mjs"),
+            confirmOriginalRights: true,
+          }),
+        },
+      });
+      expect(readFileSync(countPath, "utf8")).toBe("x");
+      expect(JSON.parse(result.stdout.trim())).toMatchObject({
+        ok: true,
+        results: {
+          bilibili: { ok: true, remoteId: "42", taskSpace: "12" },
+          channels: { ok: true, staged: true, taskSpace: "13" },
+        },
+      });
+    } finally {
+      rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  it("任一平台由用户接管时停止全部后续浏览器保存动作", async () => {
+    const fixture = mkdtempSync(join(tmpdir(), "oil-video-draft-user-control-"));
+    const publisher = join(fixture, "publisher.sh");
+    const ego = join(fixture, "ego-browser");
+    const saverCalled = join(fixture, "saver-called.txt");
+    writeFileSync(publisher, [
+      "#!/bin/sh",
+      "printf '%s\\n' '{\"ready\":false,\"platforms\":{\"bilibili\":{\"taskSpaceId\":12,\"ready\":true},\"xiaohongshu\":{\"taskSpaceId\":14,\"ready\":false,\"missing\":[\"video\"],\"blocker\":{\"code\":\"USER_CONTROL\",\"message\":\"任务空间已由用户接管\",\"requiresUser\":true}}}}'",
+      "exit 10",
+    ].join("\n"));
+    writeFileSync(ego, [
+      "#!/bin/sh",
+      "printf called > \"$SAVER_CALLED\"",
+      "exit 1",
+    ].join("\n"), { mode: 0o755 });
+    try {
+      const result = await execFileAsync(process.execPath, [
+        resolve(process.cwd(), "scripts/video-draft-runner.mjs"),
+      ], {
+        env: {
+          ...process.env,
+          PATH: `${fixture}${delimiter}${process.env.PATH ?? ""}`,
+          SAVER_CALLED: saverCalled,
+          OIL_VIDEO_DRAFT_RUN: JSON.stringify({
+            publisherRunner: publisher,
+            publisherCwd: fixture,
+            packagePath: join(fixture, "package.json"),
+            suffix: "fixture",
+            runnerPlatforms: ["bilibili", "xiaohongshu"],
+            platforms: [
+              { platform: "bilibili", runnerPlatform: "bilibili", expectedTitle: "测试标题" },
+              { platform: "xiaohongshu", runnerPlatform: "xiaohongshu" },
+            ],
+            saverScript: resolve(process.cwd(), "scripts/video-draft.mjs"),
+            confirmOriginalRights: true,
+          }),
+        },
+      });
+      const parsed = JSON.parse(result.stdout.trim()) as {
+        results: Record<string, { ok: boolean; error: string }>;
+      };
+      expect(parsed.results.bilibili).toMatchObject({ ok: false });
+      expect(parsed.results.xiaohongshu).toMatchObject({ ok: false });
+      expect(parsed.results.xiaohongshu?.error).toContain("USER_CONTROL");
+      expect(existsSync(saverCalled)).toBe(false);
     } finally {
       rmSync(fixture, { recursive: true, force: true });
     }

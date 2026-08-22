@@ -21,11 +21,17 @@ export interface PreparedDraftRun {
 
 export interface DraftRunHandle {
   pid: number;
-  completion: Promise<
-    | { ok: true; url: string; remoteId: string; taskSpace: string }
-    | { ok: true; staged: true; taskSpace: string }
-    | { ok: false; error: string }
-  >;
+  completion: Promise<VideoDraftBatchResult | VideoDraftOutcome>;
+}
+
+export type VideoDraftOutcome =
+  | { ok: true; url: string; remoteId: string; taskSpace: string }
+  | { ok: true; staged: true; taskSpace: string }
+  | { ok: false; error: string };
+
+export interface VideoDraftBatchResult {
+  ok: true;
+  results: Partial<Record<PublishPlatform, VideoDraftOutcome>>;
 }
 
 export interface VideoDraftResult {
@@ -41,6 +47,14 @@ interface VideoStagedResult {
   ok: true;
   staged: true;
   taskSpace: string;
+}
+
+interface VideoDraftPlatformInput {
+  platform: PublishPlatform;
+  runnerPlatform: string;
+  expectedTitle?: string;
+  expectedCaption?: string;
+  expectedFileName?: string;
 }
 
 function safePackageName(id: string, maxLength = 120): string {
@@ -249,6 +263,54 @@ function parseVideoStagedOutput(raw: string): VideoStagedResult {
   throw new Error("video-publisher 未返回页面 READY 结果");
 }
 
+function isVideoDraftOutcome(value: unknown): value is VideoDraftOutcome {
+  if (typeof value !== "object" || value === null || !("ok" in value)) return false;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.ok === false) {
+    return typeof candidate.error === "string" && candidate.error.trim() !== "";
+  }
+  if (candidate.ok !== true || typeof candidate.taskSpace !== "string") return false;
+  if (candidate.staged === true) return true;
+  return typeof candidate.url === "string" && candidate.url.trim() !== ""
+    && typeof candidate.remoteId === "string" && candidate.remoteId.trim() !== "";
+}
+
+function parseVideoDraftBatchOutput(
+  raw: string,
+  expectedPlatforms: readonly PublishPlatform[],
+): VideoDraftBatchResult {
+  const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const parsed = JSON.parse(lines[index]!) as {
+        ok?: unknown;
+        error?: unknown;
+        results?: unknown;
+      };
+      if (parsed.ok !== true) {
+        if (typeof parsed.error === "string" && parsed.error.trim() !== "") {
+          throw new Error(parsed.error);
+        }
+        continue;
+      }
+      if (typeof parsed.results !== "object" || parsed.results === null) {
+        throw new Error("video-publisher 多平台结果不完整");
+      }
+      const results = parsed.results as Partial<Record<PublishPlatform, unknown>>;
+      for (const platform of expectedPlatforms) {
+        if (!isVideoDraftOutcome(results[platform])) {
+          throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}草稿结果不完整`);
+        }
+      }
+      return parsed as VideoDraftBatchResult;
+    } catch (cause) {
+      if (cause instanceof SyntaxError) continue;
+      throw cause;
+    }
+  }
+  throw new Error("video-publisher 未返回多平台草稿结果");
+}
+
 export async function startVideoDraftRun(
   prepared: PreparedDraftRun,
   options: { confirmOriginalRights?: boolean } = {},
@@ -261,7 +323,6 @@ export async function startVideoDraftRun(
   const wrapper = await resolveRuntimeScript("video-draft-runner.mjs");
   const saverScript = await resolveRuntimeScript("video-draft.mjs");
   const suffix = `oil-${basename(prepared.packagePath, ".json")}`;
-  const platform = prepared.platforms.length === 1 ? prepared.platforms[0] : undefined;
   const derived = JSON.parse(await readFile(prepared.packagePath, "utf8")) as {
     bilibiliTitle?: unknown;
     douyinTitle?: unknown;
@@ -270,32 +331,43 @@ export async function startVideoDraftRun(
     kuaishouTopics?: unknown;
     videoPath?: unknown;
   };
-  const remoteDraftPlatform = platform === "bilibili" || platform === "douyin" || platform === "kuaishou"
-    ? platform
-    : undefined;
-  const expectedTitle = remoteDraftPlatform === "bilibili"
-    ? derived.bilibiliTitle
-    : remoteDraftPlatform === "douyin"
-      ? derived.douyinTitle
-      : remoteDraftPlatform === "kuaishou"
-        ? derived.kuaishouTitle
+  const platformInputs = prepared.platforms.map((platform): VideoDraftPlatformInput => {
+    const runnerPlatform = toVideoPublisherPlatform(platform);
+    if (runnerPlatform === undefined) {
+      throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}缺少 video-publisher 平台映射`);
+    }
+    const expectedTitleValue = platform === "bilibili"
+      ? derived.bilibiliTitle
+      : platform === "douyin"
+        ? derived.douyinTitle
+        : platform === "kuaishou"
+          ? derived.kuaishouTitle
+          : undefined;
+    const savesRemoteDraft = platform === "bilibili" || platform === "douyin" || platform === "kuaishou";
+    if (savesRemoteDraft
+      && (typeof expectedTitleValue !== "string" || expectedTitleValue.trim() === "")) {
+      throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}冻结标题缺失`);
+    }
+    const expectedCaption = platform === "kuaishou"
+      ? [
+          String(derived.kuaishouTitle || "").trim(),
+          String(derived.kuaishouDescription || "").trim(),
+          Array.isArray(derived.kuaishouTopics)
+            ? derived.kuaishouTopics.map((topic) => `#${String(topic).replace(/^#+/, "").trim()}`).filter((topic) => topic !== "#").join(" ")
+            : "",
+        ].filter(Boolean).join("\n")
       : undefined;
-  if (remoteDraftPlatform !== undefined
-    && (typeof expectedTitle !== "string" || expectedTitle.trim() === "")) {
-    throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[remoteDraftPlatform].name}冻结标题缺失`);
-  }
-  const expectedCaption = remoteDraftPlatform === "kuaishou"
-    ? [
-        String(derived.kuaishouTitle || "").trim(),
-        String(derived.kuaishouDescription || "").trim(),
-        Array.isArray(derived.kuaishouTopics)
-          ? derived.kuaishouTopics.map((topic) => `#${String(topic).replace(/^#+/, "").trim()}`).filter((topic) => topic !== "#").join(" ")
-          : "",
-      ].filter(Boolean).join("\n")
-    : undefined;
-  const expectedFileName = remoteDraftPlatform === "kuaishou" && typeof derived.videoPath === "string"
-    ? basename(derived.videoPath)
-    : undefined;
+    const expectedFileName = platform === "kuaishou" && typeof derived.videoPath === "string"
+      ? basename(derived.videoPath)
+      : undefined;
+    return {
+      platform,
+      runnerPlatform,
+      ...(typeof expectedTitleValue === "string" ? { expectedTitle: expectedTitleValue } : {}),
+      ...(expectedCaption === undefined ? {} : { expectedCaption }),
+      ...(expectedFileName === undefined ? {} : { expectedFileName }),
+    };
+  });
   const child = spawn(process.execPath, [wrapper], {
     stdio: ["ignore", "pipe", "pipe"],
     env: {
@@ -306,10 +378,7 @@ export async function startVideoDraftRun(
         packagePath: prepared.packagePath,
         suffix,
         runnerPlatforms: prepared.runnerPlatforms,
-        platform,
-        expectedTitle,
-        expectedCaption,
-        expectedFileName,
+        platforms: platformInputs,
         saverScript,
         confirmOriginalRights: options.confirmOriginalRights === true,
       }),
@@ -320,37 +389,14 @@ export async function startVideoDraftRun(
   let stderr = "";
   child.stdout?.on("data", (chunk: Buffer | string) => { stdout = `${stdout}${String(chunk)}`.slice(-24_000); });
   child.stderr?.on("data", (chunk: Buffer | string) => { stderr = `${stderr}${String(chunk)}`.slice(-12_000); });
-  const completion = new Promise<
-    | { ok: true; url: string; remoteId: string; taskSpace: string }
-    | { ok: true; staged: true; taskSpace: string }
-    | { ok: false; error: string }
-  >((resolve) => {
+  const completion = new Promise<VideoDraftBatchResult | { ok: false; error: string }>((resolve) => {
     child.once("error", (cause) => {
       resolve({ ok: false, error: cause.message });
     });
     child.once("exit", (code) => {
       if (code === 0) {
-        const completedPlatform = prepared.platforms.length === 1
-          && (prepared.platforms[0] === "bilibili" || prepared.platforms[0] === "douyin" || prepared.platforms[0] === "kuaishou")
-          ? prepared.platforms[0]
-          : undefined;
-        if (completedPlatform !== undefined) {
-          try {
-            const result = parseVideoDraftOutput(`${stdout}\n${stderr}`, completedPlatform);
-            resolve({
-              ok: true,
-              url: result.draftUrl,
-              remoteId: result.remoteId,
-              taskSpace: result.taskSpace,
-            });
-          } catch (cause) {
-            resolve({ ok: false, error: cause instanceof Error ? cause.message : String(cause) });
-          }
-          return;
-        }
         try {
-          const staged = parseVideoStagedOutput(`${stdout}\n${stderr}`);
-          resolve(staged);
+          resolve(parseVideoDraftBatchOutput(`${stdout}\n${stderr}`, prepared.platforms));
         } catch (cause) {
           resolve({ ok: false, error: cause instanceof Error ? cause.message : String(cause) });
         }

@@ -20,6 +20,13 @@
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
 | 第二个视频平台远端草稿闭环 | 抖音 `READY` → “暂存离开” → draft 标题与 `video_id` 回读 | 已证明 |
 
+## 2026-08-23 五平台单作业并发调度
+
+- 真实失败记录中，视频号与快手在同一次点击后相隔 3 毫秒返回 `JobBusyError`；错误发生在 publisher 全局锁入口，尚未进入任何平台适配器。根因是 Host 把一个五平台请求拆成多个独立 orchestrator。
+- `OilCreatorService.startDrafts` 现在把 B站、抖音、小红书、视频号、快手合并为一份冻结运行包和一个父进程；服务层回归明确要求五个平台只调用一次 `prepareDraftRun` 和一次 `startVideoDraftRun`。
+- 父进程回归证明同一个 publisher 汇总结果能分别写回远端草稿与页面 `READY`；若任一平台返回 `USER_CONTROL`，即使其他平台已 READY，也不会调用任何远端保存器。
+- Video Publisher 账号配置已确认五个平台均为 available，检查和上传并发显式设置为 `5/5`；共享 Ego 输入上的元数据、封面和远端保存仍保持串行。
+
 ## 平台证据等级
 
 | 平台 | 当前等级 | 证据 |
