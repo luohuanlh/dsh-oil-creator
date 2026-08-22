@@ -7,13 +7,14 @@
 | 项目简报要求 | 当前证据 | 状态 |
 |---|---|---|
 | 工作台列出并固定选择视频/字幕或文章/封面 | `distribution.test.ts`、`contentInspector.test.ts` | 已证明 |
+| 工作台可导入本地素材且不覆盖同名文件 | `assetImport.test.ts`、`assetUpload.test.ts`、2026-08-22 真实 DSH Web 导入回归 | 已证明 |
 | 复用当前 Harness 会话生成平台变体 | `distributionPrompt.test.ts` 验证当前 session 的 queued prompt | 已证明 |
 | 选择与平台字段原子冻结、重试不改写 | `distribution.test.ts`、`.oil-distribution.json` 契约 | 已证明 |
 | Ego 只消费已验证的本地冻结包 | 消费端重新校验 schema、realpath、目录边界和扩展名 | 已证明 |
 | 无远端证据不得标记草稿 | `service.test.ts`、旧 `READY` sidecar 降级回归 | 已证明 |
 | 不包含最终发表动作 | Ego 可执行契约断言没有发送/群发接口；视频继续使用 safe runner | 已证明 |
 | 单个平台失败不污染其他平台 | `service.test.ts`、按平台隔离的临时包测试 | 已证明 |
-| 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`，标题与冻结包一致 | 已证明 |
+| 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`、本地导入回归草稿 `draftId=3782858`，标题均与冻结包一致 | 已证明 |
 | Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI、冻结、Ego READY、远端保存、overlay 与 UI 回显全链路 | 已证明 |
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
 | 第二个视频平台远端草稿闭环 | 抖音 `READY` → “暂存离开” → draft 标题与 `video_id` 回读 | 已证明 |
@@ -22,12 +23,24 @@
 
 | 平台 | 当前等级 | 证据 |
 |---|---|---|
-| B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`，标题与冻结包一致 |
+| B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`；本地导入黄金路径再次回归 `draftId=3782858`，标题与冻结包一致 |
 | 微信公众号 | `IMPLEMENTED + SIMULATED` | 生产脚本模拟上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
 | 抖音 | `REMOTE_VERIFIED` | 真实草稿标题一致，远端 `video_id=v0200fg10000da438evog65gkcsbelp0`，draft 入口回读通过 |
 | 小红书 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 视频号 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 其他平台 | `UNSUPPORTED` | 只有账号入口，没有草稿运行器 |
+
+## 2026-08-22 本地素材导入与 B站真实草稿回归
+
+- 以 `HEAD=9db8f65` 重启真实 DSH Web Host，运行新建内容 → 本地文件导入 → 当前 Harness 会话 → Ego Browser → B站远端草稿的完整链路。
+- 新建隔离测试内容 `2026-08-22_本地素材导入回归`，从已有 3 秒 H.264 测试图样导入视频，并导入一份 SRT 字幕和 PNG 封面；工作台均自动回显并选中新素材。
+- 同一个 `rc-draft-verification.mp4` 连续导入两次后，目标目录同时保留原名与 `rc-draft-verification-2.mp4`；两份目标文件和源文件的 SHA-256 均为 `dc588d1d349089b7e5a44a203aefe196051cc2f671ac2d6e3af6439d557233bf`，证明没有覆盖或改写源文件。
+- 流式导入完成后没有残留 `.oil-upload-*.part`；工作台精确选择 `rc-draft-verification-2.mp4`、导入的 SRT 和仅 B站平台。
+- 当前 Harness 会话读取固定输入；用户对本条测试内容明确确认原创/自制后，以 `confirmOriginalRights=true` 冻结 B站字段并启动安全运行器。
+- `video-publisher` 作业 `98a3ebde5edb6d8e`、Ego task space `7` 完成 `inspect → upload → mutate → verify`；最终 `status=ready`、`missing=[]`，标题、简介、5 个标签、自制声明、上传完成状态和最终按钮保护均由页面重新验证。
+- B站保存器只执行“存草稿”，回读标题“本地素材导入回归测试”和远端 `draftId=3782858`；编辑 URL 为 `https://member.bilibili.com/platform/upload/video/frame?type=draft&draftId=3782858`。
+- `overlay.json` 最终只把该内容的 B站写为 `status=draft`、`remoteId=3782858`，工作台平台卡片回显“远端草稿已保存”；抖音、小红书和视频号保持“未生成”。最终“立即投稿”未点击。
+- `pnpm check`：通过；46 个测试文件、239 项测试全部通过，类型检查和 Host、Client、Typert 构建均成功。
 
 ## 2026-08-21 本地验证
 
