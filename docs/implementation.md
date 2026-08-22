@@ -96,9 +96,9 @@ Ego 图文运行器由轻量平台注册表驱动。每个平台注册一个且�
 
 源文件在构建时拼成单个自包含 Ego bundle，避免 stdin 执行环境依赖相对模块解析。bundle 一致性、每个 Adapter 的三阶段契约、core/dispatch 不含平台分支均有自动回归。
 
-知乎、搜狐号、雪球号、东方财富号和微博已基于现有 Wechatsync 草稿实现完成本地契约与 fixture 回归，但 2026-08-23 只读浏览器探针均显示未登录。它们的证据等级是 `local-tested`，`draftRunner` 仍为 `null`，所以设置页会展示实现状态但禁用 checkbox；完成真实账号的保存与标题/ID 回读前，不加入 `ARTICLE_DRAFT_PLATFORMS`。其中知乎、搜狐、雪球和微博暂不上传封面，东方财富还需验证页面是否能读取 `ct/ut` 及跨域草稿代理请求。
+知乎、搜狐号、雪球号、东方财富号、微博，以及企鹅号、网易号、一点号、大鱼号、顶端新闻、同顺号、维科网、老虎财经和富途牛牛共十四个隐藏 Adapter 已完成本地契约与 fixture 回归。它们的证据等级是 `local-tested`，`draftRunner` 仍为 `null`，所以设置页会展示实现状态但禁用 checkbox；完成真实账号的保存与标题/ID 回读前，不加入 `ARTICLE_DRAFT_PLATFORMS`。其中网易号和顶端新闻使用当前官方前端源码确认的草稿协议；一点号、大鱼号使用可审计的 Wechatsync 协议；企鹅、同顺号、维科、老虎和富途使用只允许明确草稿动作的浏览器表单门禁。
 
-平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手为 `remote-verified`；小红书、视频号为 `page-ready`；微信公众号、百家号及上述五个隐藏 Adapter 为 `local-tested`；头条号为 `manual-handoff`；其余平台为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
+平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手为 `remote-verified`；小红书、视频号为 `page-ready`；微信公众号、百家号及上述十四个隐藏 Adapter 为 `local-tested`；头条号为 `manual-handoff`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
 
 ## Ego Browser 会话
 

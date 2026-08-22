@@ -57,8 +57,221 @@ function assertSaved(result, fallbackMessage) {
     || typeof result.draftUrl !== "string"
     || result.draftUrl.trim() === "") {
     throw articleFailure(result?.error || fallbackMessage, {
+      status: result?.status,
+      exitCode: result?.exitCode,
       evidence: result?.evidence,
     });
   }
   return result;
+}
+
+function firstMatchingPattern(value, patterns = []) {
+  return patterns.find((pattern) => {
+    try {
+      return new RegExp(pattern, "i").test(String(value || ""));
+    } catch {
+      return false;
+    }
+  });
+}
+
+async function inspectBrowserDraftForm(config) {
+  await openOrReuseTab(config.workspaceUrl, { wait: true, timeout: 30 });
+  await wait(2);
+  const current = await pageInfo();
+  const text = await snapshotText();
+  const inspection = await js(String.raw`/* OIL_BROWSER_FORM_INSPECT */ ((config) => {
+    const first = selectors => selectors.find(selector => {
+      try {
+        return Boolean(document.querySelector(selector));
+      } catch {
+        return false;
+      }
+    }) || '';
+    return {
+      titleSelector: first(config.titleSelectors),
+      contentSelector: first(config.contentSelectors),
+      url: location.href,
+    };
+  })(${JSON.stringify(config)})`);
+
+  if (inspection?.titleSelector && inspection?.contentSelector) return inspection;
+
+  const loggedOut = Boolean(
+    firstMatchingPattern(current?.url, config.loggedOutUrlPatterns)
+    || firstMatchingPattern(text, config.loggedOutTextPatterns)
+  );
+  if (loggedOut) {
+    throw articleFailure(`${config.platformName}登录态已失效，请在 Ego Browser 完成登录后重试`, {
+      status: "BLOCKED_AUTH",
+      exitCode: 2,
+      evidence: {
+        editorFound: false,
+        url: publicDraftUrl(current?.url),
+      },
+    });
+  }
+  throw articleFailure(`${config.platformName}当前页面未找到可审计的图文草稿编辑器`, {
+    evidence: {
+      editorFound: false,
+      url: publicDraftUrl(current?.url),
+    },
+  });
+}
+
+async function saveBrowserDraftForm({ config, articleInput, inspection }) {
+  const saved = await js(String.raw`/* OIL_BROWSER_FORM_SAVE */ (async (config, input, inspected) => {
+    const titleElement = document.querySelector(inspected.titleSelector);
+    const contentElement = document.querySelector(inspected.contentSelector);
+    if (!titleElement || !contentElement) {
+      return { ok: false, error: config.platformName + '草稿编辑器已离开当前页面' };
+    }
+
+    const dispatchChange = element => {
+      element.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: null,
+      }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      element.dispatchEvent(new Event('blur', { bubbles: true }));
+    };
+    const setFormValue = (element, value) => {
+      const tag = String(element.tagName || '').toLowerCase();
+      const prototype = tag === 'textarea'
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+      if (setter) setter.call(element, value);
+      else element.value = value;
+      dispatchChange(element);
+    };
+    const setRichValue = (element, html) => {
+      if (String(element.tagName || '').toLowerCase() === 'iframe') {
+        const body = element.contentDocument?.body;
+        if (!body) return false;
+        body.innerHTML = html;
+        dispatchChange(body);
+        return true;
+      }
+      if (element.matches('input,textarea')) setFormValue(element, html);
+      else {
+        element.innerHTML = html;
+        dispatchChange(element);
+      }
+      return true;
+    };
+    if (titleElement.matches('input,textarea')) setFormValue(titleElement, input.title);
+    else {
+      titleElement.textContent = input.title;
+      dispatchChange(titleElement);
+    }
+    if (!setRichValue(contentElement, input.html)) {
+      return { ok: false, error: config.platformName + '正文编辑器尚未就绪' };
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+    const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
+    const candidates = [...document.querySelectorAll(
+      'button,[role="button"],a,.btn,.button,[class*="draft"],[class*="save"]'
+    )];
+    const saveControl = candidates.find(element => {
+      const label = normalize(element.innerText || element.textContent || element.value);
+      return config.saveLabels.includes(label)
+        && !/(发布|发表|提交审核|上线|群发)/.test(label);
+    });
+    let saveClicked = false;
+    if (saveControl) {
+      saveControl.click();
+      saveClicked = true;
+    }
+    await new Promise(resolve => setTimeout(resolve, config.settleMs || 2500));
+
+    const bodyText = String(document.body?.innerText || '');
+    const autoSaved = config.allowAutosave === true
+      && config.savedTextPatterns.some(pattern => new RegExp(pattern, 'i').test(bodyText));
+    if (!saveClicked && !autoSaved) {
+      return {
+        ok: false,
+        error: config.platformName + '页面没有明确的“保存草稿”控件或自动保存证据',
+        evidence: { titleFilled: true, contentFilled: true, saveControlFound: false },
+      };
+    }
+
+    const currentUrl = location.href;
+    const parsed = new URL(currentUrl);
+    const idKeys = config.idKeys || [];
+    let remoteId = '';
+    for (const key of idKeys) {
+      remoteId = parsed.searchParams.get(key) || '';
+      if (remoteId) break;
+      const match = parsed.hash.match(new RegExp('(?:[?&/]|^)' + key + '[=/]([^&#/]+)', 'i'));
+      if (match?.[1]) {
+        remoteId = decodeURIComponent(match[1]);
+        break;
+      }
+    }
+    if (!remoteId) {
+      const element = document.querySelector(
+        '[data-draft-id],[data-article-id],[data-post-id],[data-content-id]'
+      );
+      remoteId = element?.dataset?.draftId
+        || element?.dataset?.articleId
+        || element?.dataset?.postId
+        || element?.dataset?.contentId
+        || '';
+    }
+    if (!remoteId) {
+      return {
+        ok: false,
+        status: 'REMOTE_UNVERIFIED',
+        exitCode: 4,
+        error: config.platformName + '已触发草稿保存，但页面没有返回可验证的草稿 ID',
+        evidence: { titleFilled: true, contentFilled: true, saveClicked, autoSaved },
+      };
+    }
+    return {
+      ok: true,
+      remoteId: String(remoteId),
+      draftUrl: currentUrl,
+      evidence: {
+        browserFormFallback: true,
+        saveClicked,
+        autoSaved,
+        finalPublishBlocked: true,
+      },
+    };
+  })(${JSON.stringify(config)}, ${JSON.stringify(articleInput)}, ${JSON.stringify(inspection)})`);
+  return assertSaved(saved, `${config.platformName}草稿保存失败`);
+}
+
+async function verifyBrowserDraftForm({ config, articleInput, saved }) {
+  await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
+  await wait(2);
+  const verification = await js(String.raw`/* OIL_BROWSER_FORM_VERIFY */ ((config, expectedTitle, expectedId) => {
+    const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
+      .flatMap(element => [element.value, element.textContent])
+      .map(value => String(value || '').trim())
+      .filter(Boolean);
+    const bodyText = String(document.body?.innerText || '');
+    const url = location.href;
+    const idMatched = url.includes(encodeURIComponent(expectedId))
+      || Boolean(document.querySelector(
+        '[data-draft-id="' + CSS.escape(expectedId) + '"],'
+        + '[data-article-id="' + CSS.escape(expectedId) + '"],'
+        + '[data-post-id="' + CSS.escape(expectedId) + '"]'
+      ));
+    const titleMatched = values.includes(expectedTitle) || bodyText.includes(expectedTitle);
+    const loggedOut = config.loggedOutUrlPatterns.some(pattern =>
+      new RegExp(pattern, 'i').test(url));
+    return { verified: titleMatched && idMatched && !loggedOut, titleMatched, idMatched, loggedOut, url };
+  })(${JSON.stringify(config)}, ${JSON.stringify(articleInput.title)}, ${JSON.stringify(saved.remoteId)})`);
+  if (verification?.verified !== true) {
+    throw articleFailure(`${config.platformName}未通过草稿页面验证`, {
+      status: "REMOTE_UNVERIFIED",
+      exitCode: 4,
+      evidence: { ...verification, url: publicDraftUrl(verification?.url) },
+    });
+  }
+  return verification;
 }

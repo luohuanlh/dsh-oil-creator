@@ -33,6 +33,12 @@ describe("platform catalog", () => {
       .toContain("/collect/pc_article/index.html#/");
     expect(PUBLISH_PLATFORM_DEFINITIONS.weibo.workspaceUrl)
       .toBe("https://card.weibo.com/article/v5/editor");
+    expect(PUBLISH_PLATFORM_DEFINITIONS.netease.workspaceUrl)
+      .toBe("https://mp.163.com/index.html#/post/article");
+    expect(PUBLISH_PLATFORM_DEFINITIONS.dingduan.workspaceUrl)
+      .toBe("https://mp.topnews.cn/#/scriptWrite");
+    expect(PUBLISH_PLATFORM_DEFINITIONS.ofweek.workspaceUrl)
+      .toBe("https://mp.ofweek.com/article/publish.html");
   });
 
   it("只把七个真实运行器平台标为自动草稿", () => {
@@ -68,7 +74,31 @@ describe("platform catalog", () => {
     expect(draftCapability("xueqiu")).toBe("local-tested");
     expect(draftCapability("eastmoney")).toBe("local-tested");
     expect(draftCapability("weibo")).toBe("local-tested");
-    const hiddenLocalAdapters = ["zhihu", "sohu", "xueqiu", "eastmoney", "weibo"] as const;
+    expect(draftCapability("penguin")).toBe("local-tested");
+    expect(draftCapability("netease")).toBe("local-tested");
+    expect(draftCapability("yidian")).toBe("local-tested");
+    expect(draftCapability("dayu")).toBe("local-tested");
+    expect(draftCapability("dingduan")).toBe("local-tested");
+    expect(draftCapability("10jqka")).toBe("local-tested");
+    expect(draftCapability("ofweek")).toBe("local-tested");
+    expect(draftCapability("laohu")).toBe("local-tested");
+    expect(draftCapability("futu")).toBe("local-tested");
+    const hiddenLocalAdapters = [
+      "penguin",
+      "netease",
+      "yidian",
+      "dayu",
+      "dingduan",
+      "xueqiu",
+      "eastmoney",
+      "10jqka",
+      "sohu",
+      "weibo",
+      "zhihu",
+      "ofweek",
+      "laohu",
+      "futu",
+    ] as const;
     expect(hiddenLocalAdapters.every((platform) => !supportsAutoDraft(platform))).toBe(true);
   });
 

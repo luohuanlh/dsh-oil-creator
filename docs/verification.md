@@ -35,6 +35,15 @@
 | B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`；本地导入黄金路径再次回归 `draftId=3782858`，标题与冻结包一致 |
 | 微信公众号 | `LOCAL_TESTED` | 生产脚本 fixture 覆盖上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
 | 百家号 | `LOCAL_TESTED` | 生产脚本 fixture 覆盖账号检查、封面上传、草稿保存、`article_id` 与标题回读；无真实账号写入证据 |
+| 企鹅号 | `LOCAL_TESTED + BLOCKED_AUTH` | 当前编辑器入口与标题/ProseMirror 选择器已核对；浏览器表单 Adapter 只接受明确草稿控件或自动保存证据，当前只读探针停在登录页 |
+| 网易号 | `LOCAL_TESTED + BLOCKED_AUTH` | 当前官方前端源码确认 `operation=saveDraft`、内容管理列表与 `/edit/article/{id}`；fixture 覆盖保存和 ID/标题回读，当前未登录 |
+| 一点号 | `LOCAL_TESTED + BLOCKED_AUTH` | Adapter 使用 `POST /model/Article`、`status=0` 和 `#/Writing/{id}`；fixture 覆盖保存和页面回读，当前未登录 |
+| 大鱼号 | `LOCAL_TESTED + BLOCKED_AUTH` | Adapter 使用 `globalConfig.utoken`、`/dashboard/save-draft` 和 `draft_id`；fixture 覆盖保存和页面回读，当前未登录 |
+| 顶端新闻 | `LOCAL_TESTED + BLOCKED_AUTH` | 当前官方 bundle 确认 `save_type=1`、`/api/article/add`、草稿库与 `/api/draft/show`；fixture 覆盖 ID/标题回读，当前扫码登录页 |
+| 同顺号 | `LOCAL_TESTED + BLOCKED_AUTH` | 已定位独立创作平台；浏览器表单 Adapter 只点击“保存草稿/存草稿/保存”，当前未登录且真实编辑器选择器待回归 |
+| 维科网 | `LOCAL_TESTED + BLOCKED_AUTH` | 官方文章入口为 `/article/publish.html`；浏览器表单 Adapter 拒绝只有发布动作的页面，当前重定向到登录页 |
+| 老虎财经 | `LOCAL_TESTED + REMOTE_PENDING` | 浏览器表单 Adapter 已编码安全草稿门禁；境内 Web 端当前仅展示服务调整页，真实长文草稿入口和 ID 待账号环境验证 |
+| 富途牛牛 | `LOCAL_TESTED + REMOTE_PENDING` | 浏览器表单 Adapter 已编码安全草稿门禁；境内 Web 端当前暂停服务，牛牛圈主要证据来自 App，Web 草稿入口和 ID 待验证 |
 | 知乎 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖 draft create/PATCH/标题与 ID 回读；2026-08-23 只读探针进入短信/扫码登录页，未执行保存 |
 | 搜狐号 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖子账号、设备头、draft v2、标题与 ID 回读；只读探针进入账号登录页，未执行保存 |
 | 雪球号 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖草稿保存、HTML 转换与 `/write/draft/{id}` 回读；只读探针显示“未登录” |
@@ -45,7 +54,7 @@
 | 小红书 | `PAGE_READY` | 已接入 `video-publisher`，本仓库没有逐平台远端保存或 id 回读证据 |
 | 视频号 | `PAGE_READY` | 已接入 `video-publisher`，本仓库没有逐平台远端保存或 id 回读证据 |
 | 头条号 | `MANUAL_HANDOFF` | 只生成平台版本并打开编辑页；无可靠自动文章草稿证据 |
-| 其他平台 | `UNSUPPORTED` | 只有账号入口，没有 Article Adapter 或草稿运行器 |
+| 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 音频入口，不在 Article Publisher 范围 |
 
 ## 2026-08-23 统一 Article Publisher 与五平台本地适配
 
@@ -57,6 +66,16 @@
 - Chrome 只读探针分别确认：知乎、搜狐、雪球、东方财富、微博当前均未登录。探针只打开创作入口并读取 URL/页面文本，没有创建草稿、上传封面或执行发表。
 - `pnpm check` 通过：51 个测试文件、307 项测试，TypeScript 与 Host/Client/Typert 构建成功；`git diff --check` 和 npm package dry-run 通过，发布包继续包含生成后的自包含 `article-draft.mjs`。
 
+## 2026-08-23 九个平台批量编码
+
+- 新增企鹅号、网易号、一点号、大鱼号、顶端新闻、同顺号、维科网、老虎财经、富途牛牛九个三阶段 Adapter；manifest 和生成后的自包含 bundle 统一注册，不向 Dispatcher 增加平台分支。
+- 网易号协议来自当前官方 `index.html` bundle/source map：草稿使用 `/wemedia/article/status/api/publish.do` 且固定 `operation=saveDraft`，随后从 `/wemedia/content/manage/list.do` 取 `articleId`，再用 `/wemedia/article/editpage.do` 回读标题。
+- 顶端新闻协议来自当前官方动态 chunk：`save_type=1` 调用 `https://resource.topnews.cn/api/article/add`，草稿库返回 `nd_id`，`/api/draft/show?id=` 回读标题；请求复用页面自己的 Axios 签名拦截器，不复制或绕过登录安全逻辑。
+- 一点号和大鱼号分别基于可审计的 Wechatsync 草稿协议实现；企鹅号、同顺号、维科、老虎和富途使用共同的浏览器表单安全门禁，只匹配“保存草稿”“存草稿”“保存”，显式排除“发布”“发表”“提交审核”“上线”“群发”。
+- 九个平台均完成成功、登录失效、保存失败和回读失败的 fixture 回归；聚焦检查为 3 个测试文件、61 项测试全部通过。它们仍为 `draftRunner=null`，真实账号保存并回读远端 ID 前不能勾选，也不能宣称远端已验证。
+- 只读浏览器探针没有保存或发布内容：企鹅、网易、一点、大鱼、顶端、维科均确认未登录；同顺号确认独立创作平台但未登录；老虎和富途确认境内 Web 服务限制。
+- `pnpm check` 通过：51 个测试文件、334 项测试，TypeScript 与 Host/Client/Typert 构建全部成功。
+
 ## Tomorrow Verification Queue
 
 1. **微信公众号、百家号**：指定一条允许创建测试草稿的内容并确认账号已登录；Agent 下一步分别保存一次并回读 `appmsgid` / `article_id` 和标题，把已经开放的能力从 `LOCAL_TESTED` 升级为 `REMOTE_VERIFIED`。
@@ -65,14 +84,21 @@
 4. **雪球号**：登录雪球创作平台；Agent 下一步只保存一份测试长文草稿，确认返回 ID 和 `/write/draft/{id}` 标题，不点击“预览发布”。
 5. **东方财富号**：登录创作平台；Agent 下一步先做只读 token/CORS 探针，确认页面可读取 `ct/ut` 且 `Tran/GetData` 可调用，再决定是否执行测试草稿；若 token 为 HttpOnly，则调整 Ego 能力而不是绕过安全机制。
 6. **微博**：登录微博文章编辑器；Agent 下一步验证账号配置、draft create/save 与 hash 回读，明确页面只有草稿动作后再开放。
+7. **企鹅号**：登录后确认编辑器是否提供显式草稿按钮或可回读的自动保存 ID；只有标题、正文、ID 三项都回读一致才晋级。
+8. **网易号**：登录后执行一次 `operation=saveDraft`，从内容管理列表回读 `articleId`，再打开 `/edit/article/{id}` 核对标题。
+9. **一点号**：登录后验证 `/model/Article` 的 `status=0` 响应 ID 与 `#/Writing/{id}` 标题。
+10. **大鱼号**：登录后验证 `utoken`、`/dashboard/save-draft` 的 `_id` 与编辑页标题；不上传封面。
+11. **顶端新闻**：扫码登录后确认页面 Axios 签名器可调用草稿 API、`nd_id` 与标题回读一致。
+12. **同顺号、维科网**：先核对真实编辑器选择器与明确草稿控件；若页面只有发布动作，保持阻塞而不执行。
+13. **老虎财经、富途牛牛**：在平台允许的账号/地域环境确认是否存在 Web 草稿；若只有 App 发布能力，保留禁用，不模拟远端成功。
 
 ## Remaining Platform Audit
 
 | 平台 | 状态 | 阻塞证据与下一步 |
 |---|---|---|
-| 企鹅号、网易号、一点号、大鱼号 | `BLOCKED_PLATFORM` | 当前产品只有账号入口，Wechatsync 现有 core 没有对应 Adapter；需先取得可靠草稿端点、ID 与编辑页规则，不能从旧扩展运行时猜测。 |
-| 顶端新闻、同顺号、维科网 | `BLOCKED_PLATFORM` | 没有已审计的草稿参考实现；需先做登录后的只读网络/页面探针，确认存在明确“保存草稿”动作。 |
-| 老虎财经、富途牛牛 | `BLOCKED_PLATFORM` | 涉及财经社区账号与平台风控，当前无可靠 Article Adapter 证据；不尝试绕过登录或私有安全机制。 |
+| 企鹅号、网易号、一点号、大鱼号 | `LOCAL_TESTED / REMOTE_PENDING` | Adapter 与 fixture 已完成；当前均缺真实账号草稿 ID 和标题回读，保持禁用。 |
+| 顶端新闻、同顺号、维科网 | `LOCAL_TESTED / REMOTE_PENDING` | 顶端已有当前 API 证据；同顺号、维科先验证真实草稿控件，只有发布动作时必须阻断。 |
+| 老虎财经、富途牛牛 | `LOCAL_TESTED / WEB_LIMITED` | 安全表单 Adapter 已编码，但境内 Web 环境受限；不绕过地域、登录、风控或 App 限制。 |
 | 小红书图文笔记 | `UNSUPPORTED` | 当前 `xiaohongshu` 定义是视频运行器，不能据此升级为图文笔记能力；需要独立的 note 输入、草稿证据和安全回归。 |
 | 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 属于音频平台，不在 Article Publisher 范围。 |
 

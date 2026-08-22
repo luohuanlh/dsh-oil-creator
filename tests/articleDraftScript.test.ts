@@ -31,7 +31,22 @@ const weiboRuntimeFixture = resolve(
   process.cwd(),
   "tests/fixtures/weibo-article-draft-ego-runtime.mjs",
 );
+const extendedPlatformsRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/extended-platforms-article-draft-ego-runtime.mjs",
+);
 const articleDraftScript = resolve(process.cwd(), "scripts/article-draft.mjs");
+
+type ExtendedArticlePlatform =
+  | "penguin"
+  | "netease"
+  | "yidian"
+  | "dayu"
+  | "dingduan"
+  | "10jqka"
+  | "ofweek"
+  | "laohu"
+  | "futu";
 
 interface FixtureRun {
   code: number;
@@ -160,6 +175,28 @@ async function runWeiboFixture(
     const result = await execFileAsync(process.execPath, [
       weiboRuntimeFixture,
       articleDraftScript,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
+async function runExtendedPlatformFixture(
+  platform: ExtendedArticlePlatform,
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      extendedPlatformsRuntimeFixture,
+      articleDraftScript,
+      platform,
       scenario,
     ]);
     return { code: 0, stdout: result.stdout, stderr: result.stderr };
@@ -375,7 +412,10 @@ describe("百家号 Ego 草稿脚本", () => {
 });
 
 describe("知乎 Article Adapter", () => {
-  const source = readFileSync(articleDraftScript, "utf8");
+  const source = readFileSync(
+    resolve(process.cwd(), "scripts/article/platforms/zhihu.mjs"),
+    "utf8",
+  );
 
   it("只创建和更新草稿，不包含最终发布请求", () => {
     expect(source).toContain('platform: "zhihu"');
@@ -656,6 +696,114 @@ describe("微博 Article Adapter", () => {
     const verificationFailure = await runWeiboFixture("verification-failure");
     expect(verificationFailure.code).toBe(4);
     expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "weibo"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+const extendedPlatformCases = [
+  {
+    platform: "penguin",
+    name: "企鹅号",
+    markers: ["om.qq.com/main/creation/article", ".omui-articletitle__title1", ".ProseMirror"],
+  },
+  {
+    platform: "netease",
+    name: "网易号",
+    markers: ["/wemedia/article/status/api/publish.do", "operation: 'saveDraft'", "/wemedia/content/manage/list.do"],
+  },
+  {
+    platform: "yidian",
+    name: "一点号",
+    markers: ["mp.yidianzixun.com/model/Article", "status: '0'", "/#/Writing/"],
+  },
+  {
+    platform: "dayu",
+    name: "大鱼号",
+    markers: ["mp.dayu.com/dashboard/save-draft", "article_type: '1'", "draft_id="],
+  },
+  {
+    platform: "dingduan",
+    name: "顶端新闻",
+    markers: ["resource.topnews.cn/api/article/add", "save_type: 1", "/api/draft/show?id="],
+  },
+  {
+    platform: "10jqka",
+    name: "同顺号",
+    markers: ["newcircle/creation/adviserEnterGuide", "saveBrowserDraftForm", "保存草稿"],
+  },
+  {
+    platform: "ofweek",
+    name: "维科网",
+    markers: ["mp.ofweek.com/article/publish.html", "saveBrowserDraftForm", "保存草稿"],
+  },
+  {
+    platform: "laohu",
+    name: "老虎财经",
+    markers: ["www.laohu8.com", "saveBrowserDraftForm", "保存草稿"],
+  },
+  {
+    platform: "futu",
+    name: "富途牛牛",
+    markers: ["www.futunn.com", "saveBrowserDraftForm", "保存草稿"],
+  },
+] as const satisfies ReadonlyArray<{
+  platform: ExtendedArticlePlatform;
+  name: string;
+  markers: readonly string[];
+}>;
+
+describe.each(extendedPlatformCases)("$name Article Adapter", ({ platform, name, markers }) => {
+  const adapterSource = readFileSync(
+    resolve(process.cwd(), `scripts/article/platforms/${platform}.mjs`),
+    "utf8",
+  );
+
+  it("编码了草稿入口、保存协议和回读门禁", () => {
+    expect(adapterSource).toContain(`platform: "${platform}"`);
+    for (const marker of markers) expect(adapterSource).toContain(marker);
+    expect(adapterSource).not.toContain("operation: 'publish'");
+    expect(adapterSource).not.toContain("save_type: 2");
+  });
+
+  it("在模拟远端中完成 inspect、saveDraft 和 verify", async () => {
+    const result = await runExtendedPlatformFixture(platform, "success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === platform);
+    const trace = lines.find((line) => line.fixture === true);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      verified: true,
+      remoteId: `${platform}-draft-42`,
+      taskSpace: "23",
+      handedOff: true,
+      evidence: { finalPublishBlocked: true },
+    });
+    expect(trace).toMatchObject({
+      fixture: true,
+      platform,
+      handedOff: ["23"],
+      openedDraft: true,
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/operation.?publish|save_type.?2|群发/);
+  });
+
+  it("登录、保存和回读失败均不会误报成功", async () => {
+    const login = await runExtendedPlatformFixture(platform, "login");
+    expect(login.code, login.stderr).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === platform))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH", handedOff: true });
+
+    const saveFailure = await runExtendedPlatformFixture(platform, "save-failure");
+    expect(saveFailure.code, saveFailure.stderr).toBe(3);
+    expect(jsonLines(saveFailure.stdout).find((line) => line.platform === platform))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+
+    const verificationFailure = await runExtendedPlatformFixture(platform, "verification-failure");
+    expect(verificationFailure.code, verificationFailure.stderr).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === platform))
       .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
   });
 });

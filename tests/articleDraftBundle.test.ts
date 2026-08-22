@@ -7,11 +7,20 @@ const sourceFiles = [
   "core.mjs",
   "platforms/wechat-mp.mjs",
   "platforms/baijiahao.mjs",
-  "platforms/zhihu.mjs",
-  "platforms/sohu.mjs",
+  "platforms/penguin.mjs",
+  "platforms/netease.mjs",
+  "platforms/yidian.mjs",
+  "platforms/dayu.mjs",
+  "platforms/dingduan.mjs",
   "platforms/xueqiu.mjs",
   "platforms/eastmoney.mjs",
+  "platforms/10jqka.mjs",
+  "platforms/sohu.mjs",
   "platforms/weibo.mjs",
+  "platforms/zhihu.mjs",
+  "platforms/ofweek.mjs",
+  "platforms/laohu.mjs",
+  "platforms/futu.mjs",
   "dispatch.mjs",
 ] as const;
 
@@ -43,7 +52,9 @@ describe("Article Publisher Ego bundle", () => {
       readFile(resolve(articleDir, "core.mjs"), "utf8"),
       readFile(resolve(articleDir, "dispatch.mjs"), "utf8"),
     ]).then((parts) => parts.join("\n"));
-    expect(source).not.toMatch(/wechat-mp|baijiahao|zhihu|sohu|xueqiu|eastmoney|weibo/);
+    expect(source).not.toMatch(
+      /wechat-mp|baijiahao|penguin|netease|yidian|dayu|dingduan|xueqiu|eastmoney|10jqka|sohu|weibo|zhihu|ofweek|laohu|futu/,
+    );
     expect(source).not.toMatch(/if\s*\(input\.platform/);
   });
 });
