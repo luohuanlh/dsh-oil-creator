@@ -25,6 +25,8 @@
 | `src/client/ContentInspector.tsx` | 视频/字幕、文章/封面、平台选择与一键草稿界面 |
 | `src/client/distributionPrompt.ts` | 把一次点击排入当前 Harness 会话，不增加插件专属模型配置 |
 
+视频封面属于固定素材选择，不属于 AI 文案。工作台把可选 `coverPath` 与视频、字幕一起写入 `.oil-distribution.json`；为 B站派生运行包时，有封面就显式设置 `bilibiliCoverStrategy=custom` 和 4:3 路径，没有封面就设置 `bilibiliCoverStrategy=platform-ai`。实际上传或调用平台 AI、结果回读和幂等恢复都由 `video-publisher` 的 B站适配器负责，Harness 提示词不包含页面点击策略。
+
 ## 状态模型
 
 平台账号记录包括平台标识、是否启用、是否存在自动化运行器、证据等级、最近检查状态和时间。证据等级分为 `remote-verified`、`implemented-simulated`、`page-ready` 和 `unsupported`；登录状态不推导草稿能力。

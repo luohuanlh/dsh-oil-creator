@@ -24,7 +24,7 @@ export interface ContentAssets {
 }
 
 export type AssetSelection =
-  | { mode: "video"; videoPath: string; subtitlePath?: string }
+  | { mode: "video"; videoPath: string; subtitlePath?: string; coverPath?: string }
   | {
       mode: "article";
       articlePath: string;
@@ -157,14 +157,23 @@ export async function readDistributionSource(
   }
 
   const videoPath = await validateLocalContentAsset(folderPath, selection.videoPath, "video");
+  const coverPath = selection.coverPath === undefined
+    ? undefined
+    : await validateLocalContentAsset(folderPath, selection.coverPath, "cover");
   if (selection.subtitlePath === undefined) {
-    return { mode: "video", videoPath, sourceText: await readVideoContext(folderPath) };
+    return {
+      mode: "video",
+      videoPath,
+      ...(coverPath === undefined ? {} : { coverPath }),
+      sourceText: await readVideoContext(folderPath),
+    };
   }
   const subtitlePath = await validateLocalContentAsset(folderPath, selection.subtitlePath, "subtitle");
   return {
     mode: "video",
     videoPath,
     subtitlePath,
+    ...(coverPath === undefined ? {} : { coverPath }),
     sourceText: (await readFile(subtitlePath, "utf8")).trim(),
   };
 }
@@ -196,7 +205,8 @@ function sameSelection(left: AssetSelection, right: AssetSelection): boolean {
   if (left.mode !== right.mode) return false;
   if (left.mode === "video" && right.mode === "video") {
     return left.videoPath === right.videoPath
-      && left.subtitlePath === right.subtitlePath;
+      && left.subtitlePath === right.subtitlePath
+      && left.coverPath === right.coverPath;
   }
   if (left.mode === "article" && right.mode === "article") {
     return left.articlePath === right.articlePath
@@ -241,6 +251,7 @@ export async function freezeDistributionPackage(input: {
         mode: "video",
         videoPath: source.videoPath!,
         ...(source.subtitlePath === undefined ? {} : { subtitlePath: source.subtitlePath }),
+        ...(source.coverPath === undefined ? {} : { coverPath: source.coverPath }),
       }
     : {
         mode: "article",
@@ -292,10 +303,14 @@ async function selectionFromUnknown(
       const subtitlePath = typeof record.subtitlePath === "string"
         ? await validateLocalContentAsset(folderPath, record.subtitlePath, "subtitle")
         : undefined;
+      const coverPath = typeof record.coverPath === "string"
+        ? await validateLocalContentAsset(folderPath, record.coverPath, "cover")
+        : undefined;
       return {
         mode: "video",
         videoPath,
         ...(subtitlePath === undefined ? {} : { subtitlePath }),
+        ...(coverPath === undefined ? {} : { coverPath }),
       };
     }
     if (record.mode === "article"

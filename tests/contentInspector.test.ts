@@ -203,6 +203,15 @@ describe("content inspector distribution workbench", () => {
     expect(locales).not.toContain('"inspector.asset.none"');
   });
 
+  it("把已选视频封面纳入提交给 Harness 的固定素材选择", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/ContentInspector.tsx"),
+      "utf8",
+    );
+
+    expect(implementation).toContain('...(coverPath === "" ? {} : { coverPath })');
+  });
+
   it("压缩工作台页头，并把草稿主操作移到章节标题右侧", () => {
     const implementation = readFileSync(
       resolve(process.cwd(), "src/client/ContentInspector.tsx"),

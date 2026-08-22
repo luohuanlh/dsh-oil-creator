@@ -38,6 +38,7 @@ describe("Harness distribution tools", () => {
       mode: "video",
       videoPath: "/content/demo.mp4",
       subtitlePath: "/content/demo.srt",
+      coverPath: "/content/cover-4x3.png",
       platforms: ["bilibili"],
     }, { signal });
 
@@ -47,6 +48,7 @@ describe("Harness distribution tools", () => {
         mode: "video",
         videoPath: "/content/demo.mp4",
         subtitlePath: "/content/demo.srt",
+        coverPath: "/content/cover-4x3.png",
       },
       platforms: ["bilibili"],
     }, signal);
@@ -75,6 +77,7 @@ describe("Harness distribution tools", () => {
       id: "demo",
       mode: "video",
       videoPath: "/content/demo.mp4",
+      coverPath: "/content/cover-4x3.png",
       platforms: ["bilibili"],
       variants,
       confirmOriginalRights: true,
@@ -82,7 +85,11 @@ describe("Harness distribution tools", () => {
 
     expect(commitDistribution).toHaveBeenCalledWith({
       id: "demo",
-      selection: { mode: "video", videoPath: "/content/demo.mp4" },
+      selection: {
+        mode: "video",
+        videoPath: "/content/demo.mp4",
+        coverPath: "/content/cover-4x3.png",
+      },
       variants,
     }, signal);
     expect(startDrafts).toHaveBeenCalledWith({

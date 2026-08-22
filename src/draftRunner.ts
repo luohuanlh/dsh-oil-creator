@@ -75,6 +75,21 @@ export async function prepareDraftRun(
     }
   }
   const first = source.variants[unique[0]!]!;
+  const bilibiliOnly = unique.length === 1 && unique[0] === "bilibili";
+  const bilibiliCover = bilibiliOnly
+    ? source.selection.coverPath === undefined
+      ? {
+          bilibiliCoverStrategy: "platform-ai" as const,
+          cover: { uploadCustomCover: false },
+        }
+      : {
+          bilibiliCoverStrategy: "custom" as const,
+          cover: {
+            uploadCustomCover: true,
+            horizontal4x3Path: source.selection.coverPath,
+          },
+        }
+    : {};
   const derived = {
     title: first.title,
     description: first.body,
@@ -83,6 +98,7 @@ export async function prepareDraftRun(
     ...(source.selection.subtitlePath === undefined
       ? {}
       : { subtitlePath: source.selection.subtitlePath }),
+    ...bilibiliCover,
     ...(source.variants.xiaohongshu === undefined ? {} : {
       xhsTitle: source.variants.xiaohongshu.title,
       description: source.variants.xiaohongshu.body,

@@ -323,6 +323,7 @@ export function ContentInspector({
         mode: "video",
         videoPath,
         ...(subtitlePath === "" ? {} : { subtitlePath }),
+        ...(coverPath === "" ? {} : { coverPath }),
       }
     : articlePath === "" || coverPath === "" ? undefined : {
         mode: "article",

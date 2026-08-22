@@ -72,6 +72,59 @@ describe("prepareDraftRun", () => {
     expect(result.runnerPlatforms).toEqual(["bilibili", "wechat_channels"]);
   });
 
+  it("B站选择封面时生成显式自定义 4:3 封面包", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-custom-cover-"));
+    const data = join(root, "data");
+    await mkdir(data);
+    const video = join(root, "demo.mp4");
+    const cover = join(root, "cover-4x3.png");
+    await writeFile(video, "video");
+    await writeFile(cover, "cover");
+    await freezeDistributionPackage({
+      id: "2026-08-21_测试",
+      folderPath: root,
+      selection: { mode: "video", videoPath: video, coverPath: cover },
+      variants: [
+        { platform: "bilibili", title: "B站标题", summary: "", body: "B站简介", tags: ["B站标签"] },
+      ],
+    });
+
+    const result = await prepareDraftRun(item(root, video), data, ["bilibili"]);
+    const derived = JSON.parse(await readFile(result.packagePath, "utf8")) as Record<string, unknown>;
+
+    expect(derived).toMatchObject({
+      bilibiliCoverStrategy: "custom",
+      cover: {
+        uploadCustomCover: true,
+        horizontal4x3Path: await realpath(cover),
+      },
+    });
+  });
+
+  it("B站未选择封面时显式请求平台 AI 封面", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-ai-cover-"));
+    const data = join(root, "data");
+    await mkdir(data);
+    const video = join(root, "demo.mp4");
+    await writeFile(video, "video");
+    await freezeDistributionPackage({
+      id: "2026-08-21_测试",
+      folderPath: root,
+      selection: { mode: "video", videoPath: video },
+      variants: [
+        { platform: "bilibili", title: "B站标题", summary: "", body: "B站简介", tags: ["B站标签"] },
+      ],
+    });
+
+    const result = await prepareDraftRun(item(root, video), data, ["bilibili"]);
+    const derived = JSON.parse(await readFile(result.packagePath, "utf8")) as Record<string, unknown>;
+
+    expect(derived).toMatchObject({
+      bilibiliCoverStrategy: "platform-ai",
+      cover: { uploadCustomCover: false },
+    });
+  });
+
   it("拒绝冻结包缺少目标平台变体", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-"));
     const video = join(root, "demo.mp4");

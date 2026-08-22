@@ -40,7 +40,18 @@
 - `video-publisher` 作业 `98a3ebde5edb6d8e`、Ego task space `7` 完成 `inspect → upload → mutate → verify`；最终 `status=ready`、`missing=[]`，标题、简介、5 个标签、自制声明、上传完成状态和最终按钮保护均由页面重新验证。
 - B站保存器只执行“存草稿”，回读标题“本地素材导入回归测试”和远端 `draftId=3782858`；编辑 URL 为 `https://member.bilibili.com/platform/upload/video/frame?type=draft&draftId=3782858`。
 - `overlay.json` 最终只把该内容的 B站写为 `status=draft`、`remoteId=3782858`，工作台平台卡片回显“远端草稿已保存”；抖音、小红书和视频号保持“未生成”。最终“立即投稿”未点击。
-- `pnpm check`：通过；46 个测试文件、239 项测试全部通过，类型检查和 Host、Client、Typert 构建均成功。
+- `pnpm check`：通过；46 个测试文件、243 项测试全部通过，类型检查和 Host、Client、Typert 构建均成功。
+
+## 2026-08-22 B站封面策略修复与真实回归
+
+- 复现证明视频封面虽然能在工作台选择，但旧 `AssetSelection`、`.oil-distribution.json` 和 `video-publisher` 临时包均未携带 `coverPath`；真实作业因此写出 `custom=false`、`receipt=null`，却把页面存在“封面”字样误判为 cover gate 通过。
+- 视频固定选择现在支持可选 `coverPath`，并在读取、realpath 校验、冻结、重试身份比较、历史包解码、Harness 工具参数和提示固定输入中完整保留。
+- B站独立草稿包在有封面时写入 `bilibiliCoverStrategy=custom`、`cover.uploadCustomCover=true` 和 4:3 路径；没有封面时写入 `bilibiliCoverStrategy=platform-ai`，由平台适配器处理，不把页面动作交给 Harness 提示词。
+- `video-publisher` 的原生 AI 封面回归使用 3 秒 H.264 测试视频，作业 `5fa65598a6ceb901`、Ego task space `8`；B站智能封面任务 `taskId=25582733` 返回 8 个 `itemState=2` 候选。
+- 适配器通过 B站 `.cover` 组件的 `handleGenerateAiCover` 启动任务，并通过 `handleSelectAiCover` 应用第一组完整 `pic43` + `pic` 结果；4:3 URL 为 `https://i0.hdslb.com/bfs/archive/53f73dd6070f3dfa4bd540e2b358f4e08471f85c.jpg`。
+- 封面凭证同时绑定 native task id、候选索引、4:3/16:9 生成 URL 和 live Vue cover store；三次完整同作业重跑均为 `inspect/verify` 只读，`UI serial: none`、`missing=[]`。
+- B站保存器只点击“存草稿”，回读远端 `draftId=3782964`。重新打开编辑 URL 后，独立 `verify` 再次得到标题一致、`savedDraftEdit=true`、封面 URL 与 receipt 精确一致、`missing=[]`。
+- 全程 `guardArmed=true`、`blockedAttempts=0`、`finalPublishClicked=false`，没有点击“立即投稿”。
 
 ## 2026-08-21 本地验证
 

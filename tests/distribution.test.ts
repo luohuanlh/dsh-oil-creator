@@ -51,6 +51,42 @@ describe("distribution package", () => {
     expect(source.sourceText).toContain("面向第一次安装的新手");
   });
 
+  it("读取并冻结可选视频封面，确保草稿运行器拿到同一份素材", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-video-cover-"));
+    const video = join(folder, "final.mp4");
+    const cover = join(folder, "cover.png");
+    await writeFile(video, "video");
+    await writeFile(cover, "cover");
+
+    const source = await readDistributionSource(folder, {
+      mode: "video",
+      videoPath: video,
+      coverPath: cover,
+    });
+    expect(source.coverPath).toBe(await realpath(cover));
+
+    const frozen = await freezeDistributionPackage({
+      id: "video-cover-demo",
+      folderPath: folder,
+      selection: { mode: "video", videoPath: video, coverPath: cover },
+      variants: [{
+        platform: "bilibili",
+        title: "带封面的视频",
+        summary: "摘要",
+        body: "简介",
+        tags: ["封面"],
+      }],
+    });
+    expect(frozen.package.selection).toMatchObject({
+      mode: "video",
+      videoPath: await realpath(video),
+      coverPath: await realpath(cover),
+    });
+    expect((await readFrozenDistributionPackage(folder))?.selection).toMatchObject({
+      coverPath: await realpath(cover),
+    });
+  });
+
   it("读取已选文章与封面作为 Harness AI 输入", async () => {
     const folder = await mkdtemp(join(tmpdir(), "oil-source-"));
     const article = join(folder, "article.md");

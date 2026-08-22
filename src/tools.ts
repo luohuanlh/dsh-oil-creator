@@ -51,6 +51,9 @@ function selectionFromArgs(args: {
       ...(typeof args.subtitlePath === "string" && args.subtitlePath.trim() !== ""
         ? { subtitlePath: args.subtitlePath }
         : {}),
+      ...(typeof args.coverPath === "string" && args.coverPath.trim() !== ""
+        ? { coverPath: args.coverPath }
+        : {}),
     };
   }
   if (args.mode === "article") {
@@ -81,7 +84,10 @@ const distributionParameters = {
   videoPath: { type: "string", description: "video 模式必填的本地视频绝对路径。" },
   subtitlePath: { type: "string", description: "video 模式可选的本地字幕绝对路径。" },
   articlePath: { type: "string", description: "article 模式必填的本地 Markdown 或 HTML 绝对路径。" },
-  coverPath: { type: "string", description: "article 模式必填的本地封面绝对路径。" },
+  coverPath: {
+    type: "string",
+    description: "video 模式可选的本地视频封面绝对路径；B站要求 4:3。article 模式为必填文章封面。",
+  },
   articleTitle: { type: "string", description: "article 模式可选的标题参考，最多 120 字。" },
   articleSummary: { type: "string", description: "article 模式可选的摘要参考，最多 120 字。" },
   platforms: {

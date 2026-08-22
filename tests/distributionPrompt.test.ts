@@ -12,6 +12,7 @@ describe("distribution Harness prompt", () => {
       mode: "video" as const,
       videoPath: "/content/demo.mp4",
       subtitlePath: "/content/demo.srt",
+      coverPath: "/content/cover-4x3.png",
     },
     platforms: ["bilibili", "douyin"] as const,
     confirmOriginalRights: true,
@@ -24,6 +25,7 @@ describe("distribution Harness prompt", () => {
     expect(prompt).toContain("oil_create_platform_drafts");
     expect(prompt).toContain("/content/demo.mp4");
     expect(prompt).toContain("/content/demo.srt");
+    expect(prompt).toContain('"coverPath": "/content/cover-4x3.png"');
     expect(prompt).toContain('"bilibili"');
     expect(prompt).toContain("不得点击最终发表");
   });
