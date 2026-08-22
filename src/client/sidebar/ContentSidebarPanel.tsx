@@ -18,26 +18,33 @@ import type { CreatorViewFace } from "../face.ts";
 import { useLibraryEpoch, useSelectedContentId } from "../contentSelection.ts";
 import type { CreatorKey } from "../locales.ts";
 import { formatRelativeTime } from "../relativeTime.ts";
-import { StatusPill, type StatusTone } from "../ui/StatusPill.tsx";
+import { WORKFLOW_TONE } from "./workflowStatus.ts";
 import "./ContentSidebarPanel.css";
-
-export const WORKFLOW_TONE: Record<WorkflowStage, StatusTone> = {
-  idle: "neutral",
-  record: "pending",
-  cut: "pending",
-  finish: "pending",
-  publish: "pending",
-  live: "success",
-};
 
 const CREATE_CONTENT_TYPES: ReadonlyArray<{
   id: ContentType;
   label: CreatorKey;
 }> = [
   { id: "video", label: "create.type.video" },
-  { id: "audio", label: "create.type.audio" },
   { id: "article", label: "create.type.article" },
 ];
+
+function WorkflowStatusDot({
+  workflow,
+  label,
+}: {
+  workflow: WorkflowStage;
+  label: string;
+}) {
+  return (
+    <span
+      className={`workflowStatusDot ${WORKFLOW_TONE[workflow]}`}
+      role="img"
+      aria-label={label}
+      title={label}
+    />
+  );
+}
 
 function ContentTypeGlyph({
   type,
@@ -379,7 +386,7 @@ export function ContentSidebarPanel({
                 <CoverThumb
                   id={item.id}
                   load={getCoverThumb}
-                  revision={coverThumbRevision(item.covers)}
+                  revision={coverThumbRevision(item.covers, item.assets.covers)}
                   fallback={<IconBrowseOutline16 className="coverFallback" size={20} />}
                 />
               </span>
@@ -392,9 +399,10 @@ export function ContentSidebarPanel({
                   <span className="rowTitle">{item.title}</span>
                 </span>
                 <span className="rowMeta">
-                  <StatusPill tone={WORKFLOW_TONE[item.workflow]}>
-                    {t(`inspector.stage.${item.workflow}` as CreatorKey)}
-                  </StatusPill>
+                  <WorkflowStatusDot
+                    workflow={item.workflow}
+                    label={t(`inspector.stage.${item.workflow}` as CreatorKey)}
+                  />
                   <span className="rowDate">{formatRelativeTime(item.recordedAt, Date.now(), t)}</span>
                 </span>
               </span>

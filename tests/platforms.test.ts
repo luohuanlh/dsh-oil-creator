@@ -27,12 +27,13 @@ describe("platform catalog", () => {
     });
   });
 
-  it("只把五个真实运行器平台标为自动草稿", () => {
+  it("只把六个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
       "xiaohongshu",
       "channels",
+      "kuaishou",
       "wechat-mp",
     ]);
     expect(AUTO_DRAFT_PLATFORMS.every(supportsAutoDraft)).toBe(true);
@@ -40,10 +41,12 @@ describe("platform catalog", () => {
     expect(supportsAutoDraft("netease-music")).toBe(false);
     expect(supportsAutoDraft("ximalaya")).toBe(false);
     expect(toVideoPublisherPlatform("channels")).toBe("wechat_channels");
+    expect(toVideoPublisherPlatform("kuaishou")).toBe("kuaishou");
     expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("implemented-simulated");
     expect(draftCapability("douyin")).toBe("remote-verified");
+    expect(draftCapability("kuaishou")).toBe("remote-verified");
     expect(draftCapability("zhihu")).toBe("unsupported");
   });
 

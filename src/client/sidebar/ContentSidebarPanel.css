@@ -261,7 +261,7 @@
 
 [data-plugin="dsh-oil-creator"][data-surface="create-dialog"] .createTypeTabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
   border: 1px solid var(--oil-line);
@@ -385,6 +385,22 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .workflowStatusDot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-error-primary);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .workflowStatusDot.pending {
+  background: var(--oil-accent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .workflowStatusDot.success {
+  background: var(--oil-success);
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="sidebar"] .rowCover .coverFallback {

@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { IconChevronDownOutline14 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 import type {} from "@deepseek-ai/dsh-client-ui-settings-plugins/client";
 
 import {
+  ACCOUNT_SETTINGS_PLATFORMS,
   AUTO_DRAFT_PLATFORMS,
   draftCapability,
   normalizeEnabledPlatforms,
   PUBLISH_PLATFORM_DEFINITIONS,
-  PUBLISH_PLATFORMS,
   type PlatformKind,
 } from "../platforms.ts";
 import type {
@@ -20,6 +20,8 @@ import type {
 import type { CreatorViewFace } from "./face.ts";
 import type { CreatorKey } from "./locales.ts";
 import { CONTENT_WORKBENCH_ICON_SRC } from "./assets/contentWorkbenchIcon.ts";
+import { ACCOUNT_PLATFORM_MARKS } from "./accountPlatformMarks.ts";
+import { PlatformMark } from "./PlatformMark.tsx";
 import { ActionBar, ActionButton } from "./ui/ActionButton.tsx";
 import { StatusPill, type StatusTone } from "./ui/StatusPill.tsx";
 import "./CreatorSettingsCard.css";
@@ -49,10 +51,19 @@ const CAPABILITY_ROWS: ReadonlyArray<{ id: keyof CreatorCapabilities; label: Cre
   { id: "egoBrowser", label: "settings.capability.ego" },
 ];
 
-const ACCOUNT_GROUPS: ReadonlyArray<{ kind: PlatformKind; label: CreatorKey }> = [
+const ACCOUNT_GROUPS: ReadonlyArray<{
+  kind: PlatformKind;
+  label: CreatorKey;
+  additionalPlatforms?: readonly PublishPlatform[];
+  leadingPlatforms?: readonly PublishPlatform[];
+}> = [
   { kind: "video", label: "settings.account.video" },
-  { kind: "article", label: "settings.account.article" },
-  { kind: "audio", label: "settings.account.audio" },
+  {
+    kind: "article",
+    label: "settings.account.article",
+    additionalPlatforms: ["xiaohongshu"],
+    leadingPlatforms: ["wechat-mp"],
+  },
 ];
 
 function capabilityTone(state: CreatorCapabilities[keyof CreatorCapabilities]["state"]): StatusTone {
@@ -105,6 +116,35 @@ function accountActionKey(
   if (account.status === "active") return "settings.account.action.recheck";
   if (account.status === "expired") return "settings.account.action.relogin";
   return "settings.account.action.login";
+}
+
+function AccountPlatformMark({ platform }: { platform: PublishPlatform }) {
+  const mark = ACCOUNT_PLATFORM_MARKS[platform];
+  const style = { "--account-platform-accent": mark.color } as CSSProperties;
+  const hasBrandImage = mark.icon !== undefined || mark.src !== undefined;
+
+  return (
+    <span
+      className={`accountPlatformIcon${hasBrandImage ? " hasBrandMark" : ""}`}
+      style={style}
+      aria-hidden="true"
+    >
+      {mark.icon !== undefined
+        ? <PlatformMark id={mark.icon} size={12} />
+        : mark.src !== undefined
+          ? (
+              <img
+                className="platformMark"
+                src={mark.src}
+                width={14}
+                height={14}
+                alt=""
+                draggable={false}
+              />
+            )
+          : mark.glyph}
+    </span>
+  );
 }
 
 export function CreatorSettingsCard({
@@ -242,7 +282,8 @@ export function CreatorSettingsCard({
             onChange={(event) => { patchProfile(platform, event.target.checked); }}
           />
           <span className="accountName">
-            {definition.name}
+            <AccountPlatformMark platform={platform} />
+            <span className="accountNameLabel">{definition.name}</span>
             <small>{account.draftCapability === "remote-verified"
               ? t("settings.account.remoteVerified")
               : account.draftCapability === "implemented-simulated"
@@ -326,10 +367,20 @@ export function CreatorSettingsCard({
             <span className="fieldLabel">{t("settings.accounts")}</span>
             <span className="fieldHint">{t("settings.accountsHint")}</span>
             <div className="accountGroups">
-              {ACCOUNT_GROUPS.map(({ kind, label }) => {
-                const platforms = PUBLISH_PLATFORMS.filter((platform) =>
+              {ACCOUNT_GROUPS.map(({
+                kind,
+                label,
+                additionalPlatforms = [],
+                leadingPlatforms = [],
+              }) => {
+                const listedPlatforms = ACCOUNT_SETTINGS_PLATFORMS.filter((platform) =>
                   PUBLISH_PLATFORM_DEFINITIONS[platform].kind === kind
+                  || additionalPlatforms.includes(platform)
                 );
+                const platforms = [
+                  ...leadingPlatforms.filter((platform) => listedPlatforms.includes(platform)),
+                  ...listedPlatforms.filter((platform) => !leadingPlatforms.includes(platform)),
+                ];
                 return (
                   <section key={kind} className={`accountGroup ${kind}Group`}>
                     <header className="accountGroupHead">

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("create content dialog", () => {
-  it("默认选中视频，并以原生单选语义提供三种内容类型", () => {
+  it("默认选中视频，并以原生单选语义提供视频与图文类型", () => {
     const implementation = readFileSync(
       resolve(process.cwd(), "src/client/sidebar/ContentSidebarPanel.tsx"),
       "utf8",
@@ -14,7 +14,7 @@ describe("create content dialog", () => {
     expect(implementation).toContain('role="radiogroup"');
     expect(implementation).toContain('type="radio"');
     expect(implementation).toContain('{ id: "video", label: "create.type.video"');
-    expect(implementation).toContain('{ id: "audio", label: "create.type.audio"');
+    expect(implementation).not.toContain('{ id: "audio", label: "create.type.audio"');
     expect(implementation).toContain('{ id: "article", label: "create.type.article"');
     expect(implementation).toContain('<ContentTypeGlyph type={id} className="createTypeIcon" />');
     expect(implementation).not.toContain("createTypeIndex");

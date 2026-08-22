@@ -15,6 +15,7 @@
 | `src/platforms.ts` | 定义 24 个平台账号入口和草稿适配能力 |
 | `src/platformAccounts.ts` | 调用 Ego Browser 打开或检查平台会话 |
 | `scripts/platform-account.mjs` | 浏览器内登录交接和登录状态检查 |
+| `src/coverVariants.ts` | 使用 `sharp` 跨平台读取、居中裁切并缓存 3:4/4:3 视频封面派生文件 |
 | `src/draftRunner.ts` | 从冻结包派生视频运行包，串联 `video-publisher` 页面准备与远端草稿保存 |
 | `scripts/video-draft-runner.mjs` | 以一个稳定父进程覆盖页面准备和远端保存两阶段，避免状态核对误判中断 |
 | `scripts/video-draft.mjs` | 在 B站精确执行“存草稿”并回读 `draftId`；在抖音执行“暂存离开”并从 draft 入口回读标题与 `video_id` |
@@ -25,7 +26,7 @@
 | `src/client/ContentInspector.tsx` | 视频/字幕、文章/封面、平台选择与一键草稿界面 |
 | `src/client/distributionPrompt.ts` | 把一次点击排入当前 Harness 会话，不增加插件专属模型配置 |
 
-视频封面属于固定素材选择，不属于 AI 文案。工作台把可选 `coverPath` 与视频、字幕一起写入 `.oil-distribution.json`；为 B站派生运行包时，有封面就显式设置 `bilibiliCoverStrategy=custom` 和 4:3 路径，没有封面就设置 `bilibiliCoverStrategy=platform-ai`。实际上传或调用平台 AI、结果回读和幂等恢复都由 `video-publisher` 的 B站适配器负责，Harness 提示词不包含页面点击策略。
+视频封面属于固定素材选择，不属于 AI 文案。工作台把可选 `coverPath` 与视频、字幕一起写入 `.oil-distribution.json`；生成运行包时先用 `sharp` 读取真实尺寸，按目标平台从原图中央派生最大内接的 3:4、4:3 或两种画幅，不拉伸、不放大，也不修改原图。派生文件以原图内容哈希、目标比例和算法版本为身份，稳定保存在插件数据目录的 `derived-covers/`，Mac 和 Windows 使用同一套 Node 实现。B站有封面时仍显式设置 `bilibiliCoverStrategy=custom`，没有封面时才设置 `bilibiliCoverStrategy=platform-ai`；实际上传或调用平台 AI、结果回读和幂等恢复都由 `video-publisher` 的平台适配器负责。
 
 ## 状态模型
 
@@ -47,9 +48,11 @@
 
 ## 草稿运行
 
-视频 `draftRunner` 读取冻结分发包，把通用平台变体映射为 `video-publisher` 的 `bilibiliTitle`、`douyinDescription`、`xhsTopics` 等兼容字段，在插件数据目录创建临时运行包，再调用稳定父运行器。用户不需要维护兼容包。
+视频 `draftRunner` 读取冻结分发包，把通用平台变体映射为 `video-publisher` 的 `bilibiliTitle`、`douyinDescription`、`xhsTopics`、`kuaishouDescription` 等兼容字段，在插件数据目录创建临时运行包，再调用稳定父运行器。用户不需要维护兼容包。
 
-`video-publisher` 返回 `READY` 只证明上传和投稿页字段已经完成，不代表平台已保存远端草稿。B站继续点击精确的“存草稿”控件，进入草稿箱并核对标题与 `draftId`；抖音继续点击唯一“暂存离开”，重新打开 draft 入口并核对标题与唯一 `video_id`。只有回读成功才写入 `draft`。稳定父进程覆盖两个阶段，避免插件在阶段切换的短暂 PID 空窗中把任务误判为中断。小红书和视频号尚未完成远端保存回归，因此当前只写入 `ready`，界面明确显示“页面已备，尚未远端保存”。
+开发环境可通过 `VIDEO_PUBLISHER_SKILL_DIR` 显式选择本地 fork；运行器先检查该路径，再回退到 `~/.claude`、`~/.codex`、`~/.agents` 和 `~/.grok` 的标准 Skill 目录，避免本地改动被旧的全局安装副本遮蔽。
+
+`video-publisher` 返回 `READY` 只证明上传和投稿页字段已经完成，不代表平台已保存远端草稿。B站继续点击精确的“存草稿”控件，进入草稿箱并核对标题与 `draftId`；抖音继续点击唯一“暂存离开”，重新打开 draft 入口并核对标题与唯一 `video_id`；快手从服务器 `snapshot/info` 精确核对文件名、组合描述、`photoStatus`、`mediaId` 与时长，并回读稳定 `fileId`。只有回读成功才写入 `draft`。稳定父进程覆盖两个阶段，避免插件在阶段切换的短暂 PID 空窗中把任务误判为中断。小红书和视频号尚未完成远端保存回归，因此当前只写入 `ready`，界面明确显示“页面已备，尚未远端保存”。
 
 目前验证通过的映射为：
 
@@ -59,6 +62,7 @@
 | 抖音 | `douyin` |
 | B站 | `bilibili` |
 | 视频号 | `wechat_channels` |
+| 快手 | `kuaishou` |
 
 每个平台单独启动一个运行句柄并单独更新状态；一个页面失败不会把其他平台已经验证成功的草稿改写为失败。
 

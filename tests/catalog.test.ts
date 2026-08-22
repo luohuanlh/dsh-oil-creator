@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   CONTENT_METADATA_NAME,
   countsOf,
+  coverPathOf,
   createContentFolder,
   folderDateAndTitle,
   folderDateMs,
@@ -108,6 +109,21 @@ describe("scanLibrary workbench assets", () => {
     expect(item?.hasDistributionPackage).toBe(true);
     expect(item?.pipeline).toBe("packaged");
   });
+
+  it("将普通封面文件作为侧栏缩略图来源", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-sidebar-cover-"));
+    const created = await createContentFolder(root, "侧栏封面", new Date(2026, 7, 15));
+    await writeFile(join(created.folderPath, "cover.jpg"), "cover");
+
+    const [item] = await scanLibrary(root, emptyOverlay());
+
+    expect(item).toBeDefined();
+    expect(item?.assets.covers).toEqual([{
+      name: "cover.jpg",
+      path: join(created.folderPath, "cover.jpg"),
+    }]);
+    expect(coverPathOf(item!)).toBe(join(created.folderPath, "cover.jpg"));
+  });
 });
 
 describe("script.md", () => {
@@ -172,6 +188,16 @@ describe("pipeline and filters", () => {
       hasArticle: true,
       articlePath: "/article.md",
       hasDistributionPackage: true,
+    })).toBe("idle");
+    expect(workflowOf({
+      ...base,
+      hasArticle: true,
+      articlePath: "/article.md",
+      assets: {
+        ...base.assets,
+        covers: [{ name: "cover.jpg", path: "/cover.jpg" }],
+      },
+      hasDistributionPackage: true,
     })).toBe("publish");
     expect(workflowOf({
       ...base,
@@ -183,10 +209,29 @@ describe("pipeline and filters", () => {
     })).toBe("live");
   });
 
+  it("文章缺少必选封面时不被历史远端状态标绿", () => {
+    expect(workflowOf({
+      ...base,
+      hasArticle: true,
+      articlePath: "/article.md",
+      publish: {
+        ...emptyPublish(),
+        "wechat-mp": { status: "draft", source: "overlay" },
+      },
+    })).toBe("idle");
+  });
+
   it("derives pipeline from files", () => {
     expect(pipelineOf(base)).toBe("raw");
     expect(pipelineOf({ ...base, subtitles: { srt: "/a.srt" } })).toBe("subtitled");
     expect(pipelineOf({ ...base, covers: { "3x4": "/a.png" } })).toBe("covered");
+    expect(pipelineOf({
+      ...base,
+      assets: {
+        ...base.assets,
+        covers: [{ name: "cover.jpg", path: "/cover.jpg" }],
+      },
+    })).toBe("covered");
     expect(pipelineOf({ ...base, hasPublishPackage: true })).toBe("packaged");
   });
 

@@ -4,11 +4,14 @@ const input = typeof OIL_VIDEO_DRAFT_INPUT === "object" && OIL_VIDEO_DRAFT_INPUT
   : undefined;
 
 const BILIBILI_DRAFT_MANAGER_URL = "https://member.bilibili.com/platform/upload-manager/article?group=draft";
+const KUAISHOU_DRAFT_URL = "https://cp.kuaishou.com/article/publish/video";
+const KUAISHOU_SNAPSHOT_URL = "https://cp.kuaishou.com/rest/cp/works/v2/video/pc/snapshot/info";
 
 if (!input
-  || (input.platform !== "bilibili" && input.platform !== "douyin")
+  || (input.platform !== "bilibili" && input.platform !== "douyin" && input.platform !== "kuaishou")
   || !input.taskSpace
-  || !input.expectedTitle) {
+  || !input.expectedTitle
+  || (input.platform === "kuaishou" && (!input.expectedCaption || !input.expectedFileName))) {
   throw new Error("video draft input is missing");
 }
 
@@ -249,9 +252,118 @@ async function runDouyinDraft() {
   });
 }
 
+function kuaishouSnapshotCaptionToText(value) {
+  return String(value || "")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<div[^>]*>/gi, "\n")
+    .replace(/<\/div>/gi, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/&amp;/gi, "&")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u200b/g, "")
+    .trim();
+}
+
+async function inspectSavedKuaishouDraft() {
+  const page = await js(String.raw`((expectedCaption) => {
+    const compact = value => String(value || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\u200b/g, '').trim();
+    const visible = element => {
+      const rect = element.getBoundingClientRect(); const style = getComputedStyle(element);
+      return rect.width > 8 && rect.height > 8 && style.display !== 'none' && style.visibility !== 'hidden';
+    };
+    const captionEditor = [...document.querySelectorAll('#work-description-edit, #vp2-kuaishou-caption, [contenteditable="true"][placeholder*="作品描述"]')]
+      .find(element => visible(element));
+    const caption = compact(captionEditor?.innerText || '');
+    const finalButtons = [...document.querySelectorAll('button, [role="button"], div')]
+      .filter(element => visible(element)
+        && String(element.innerText || element.textContent || '').replace(/\s+/g, ' ').trim() === '发布'
+        && /button-primary/.test(String(element.className || '')));
+    const guard = window.__VIDEO_PUBLISHER_FINAL_GUARD__;
+    return {
+      caption,
+      captionMatched: caption === expectedCaption,
+      finalButtons: finalButtons.length,
+      finalButtonEnabled: finalButtons.length === 1
+        && !finalButtons[0].disabled
+        && finalButtons[0].getAttribute('aria-disabled') !== 'true'
+        && !/disabled/.test(String(finalButtons[0].className || '')),
+      guardArmed: guard?.armed === true,
+      blockedAttempts: guard?.blockedAttempts?.length || 0,
+      url: location.href,
+    };
+  })(${JSON.stringify(input.expectedCaption)})`);
+  const raw = await browserFetch(KUAISHOU_SNAPSHOT_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  const response = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const draft = response?.result === 1 && response?.data && typeof response.data === "object"
+    ? response.data
+    : undefined;
+  const remoteCaption = kuaishouSnapshotCaptionToText(draft?.caption);
+  const remoteId = Number(draft?.fileId);
+  const verified = page?.captionMatched === true
+    && page?.finalButtons === 1
+    && page?.finalButtonEnabled === true
+    && page?.guardArmed === true
+    && page?.blockedAttempts === 0
+    && Number.isFinite(remoteId)
+    && remoteId > 0
+    && String(draft?.fileName || "") === input.expectedFileName
+    && remoteCaption === input.expectedCaption
+    && Number(draft?.photoStatus) === 1
+    && String(draft?.mediaId || "") !== ""
+    && Number(draft?.videoDuration || 0) > 0;
+  return {
+    verified,
+    remoteId: verified ? String(remoteId) : "",
+    draftUrl: KUAISHOU_DRAFT_URL,
+    evidence: {
+      page,
+      result: response?.result,
+      fileId: Number.isFinite(remoteId) ? remoteId : null,
+      fileNameMatched: String(draft?.fileName || "") === input.expectedFileName,
+      captionMatched: remoteCaption === input.expectedCaption,
+      photoStatus: Number(draft?.photoStatus),
+      mediaIdPresent: String(draft?.mediaId || "") !== "",
+      videoDuration: Number(draft?.videoDuration || 0),
+    },
+  };
+}
+
+async function runKuaishouDraft() {
+  let saved;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    saved = await inspectSavedKuaishouDraft();
+    if (saved.verified) break;
+    await wait(.5);
+  }
+  if (saved?.verified !== true || saved.remoteId === "") {
+    output({ ok: false, error: "快手未通过远端草稿验证", evidence: saved?.evidence, taskSpace: String(task.id) });
+    process.exitCode = 3;
+    return;
+  }
+  const handoff = await handOffTaskSpace(task.id);
+  output({
+    ok: true,
+    verified: true,
+    remoteId: saved.remoteId,
+    draftUrl: saved.draftUrl,
+    taskSpace: String(task.id),
+    handedOff: handoff?.done === true,
+  });
+}
+
 try {
   if (input.platform === "bilibili") await runBilibiliDraft();
-  else await runDouyinDraft();
+  else if (input.platform === "douyin") await runDouyinDraft();
+  else await runKuaishouDraft();
 } catch (error) {
   output({ ok: false, error: error instanceof Error ? error.message : String(error), taskSpace: String(task.id) });
   process.exitCode = 4;

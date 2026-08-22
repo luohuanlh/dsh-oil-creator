@@ -47,4 +47,19 @@ describe("video draft runner output", () => {
       taskSpace: "5",
     }), "douyin")).toThrow("抖音草稿结果不完整");
   });
+
+  it("快手必须回读服务器 snapshot 的 fileId", () => {
+    expect(parseVideoDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "kuaishou",
+      verified: true,
+      remoteId: "3931743938",
+      draftUrl: "https://cp.kuaishou.com/article/publish/video",
+      taskSpace: "17",
+    }), "kuaishou")).toMatchObject({
+      platform: "kuaishou",
+      remoteId: "3931743938",
+      taskSpace: "17",
+    });
+  });
 });

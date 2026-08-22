@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defaultFindSkillDir } from "./capabilities.ts";
+import { prepareCoverVariant } from "./coverVariants.ts";
 import { readFrozenDistributionPackage } from "./distribution.ts";
 import {
   PUBLISH_PLATFORM_DEFINITIONS,
@@ -29,7 +30,7 @@ export interface DraftRunHandle {
 
 export interface VideoDraftResult {
   ok: true;
-  platform: "bilibili" | "douyin";
+  platform: "bilibili" | "douyin" | "kuaishou";
   verified: true;
   remoteId: string;
   draftUrl: string;
@@ -76,19 +77,44 @@ export async function prepareDraftRun(
   }
   const first = source.variants[unique[0]!]!;
   const bilibiliOnly = unique.length === 1 && unique[0] === "bilibili";
-  const bilibiliCover = bilibiliOnly
-    ? source.selection.coverPath === undefined
+  const kuaishouOnly = unique.length === 1 && unique[0] === "kuaishou";
+  const selectedCoverPath = source.selection.coverPath;
+  const needsVerticalCover = selectedCoverPath !== undefined
+    && unique.some((platform) => platform === "xiaohongshu"
+      || platform === "douyin"
+      || platform === "channels");
+  const needsHorizontalCover = selectedCoverPath !== undefined
+    && unique.some((platform) => platform === "douyin"
+      || platform === "bilibili"
+      || platform === "channels"
+      || platform === "kuaishou");
+  const [verticalCover, horizontalCover] = await Promise.all([
+    needsVerticalCover
+      ? prepareCoverVariant(dataDir, selectedCoverPath, "3:4")
+      : undefined,
+    needsHorizontalCover
+      ? prepareCoverVariant(dataDir, selectedCoverPath, "4:3")
+      : undefined,
+  ]);
+  const customCover = selectedCoverPath === undefined
+    ? {}
+    : {
+        cover: {
+          uploadCustomCover: true,
+          ...(verticalCover === undefined ? {} : { vertical3x4Path: verticalCover.path }),
+          ...(horizontalCover === undefined ? {} : { horizontal4x3Path: horizontalCover.path }),
+        },
+      };
+  const bilibiliCoverStrategy = bilibiliOnly
+    ? selectedCoverPath === undefined
       ? {
           bilibiliCoverStrategy: "platform-ai" as const,
           cover: { uploadCustomCover: false },
         }
-      : {
-          bilibiliCoverStrategy: "custom" as const,
-          cover: {
-            uploadCustomCover: true,
-            horizontal4x3Path: source.selection.coverPath,
-          },
-        }
+      : { bilibiliCoverStrategy: "custom" as const }
+    : {};
+  const kuaishouCoverDefault = kuaishouOnly && selectedCoverPath === undefined
+    ? { cover: { uploadCustomCover: false } }
     : {};
   const derived = {
     title: first.title,
@@ -98,7 +124,9 @@ export async function prepareDraftRun(
     ...(source.selection.subtitlePath === undefined
       ? {}
       : { subtitlePath: source.selection.subtitlePath }),
-    ...bilibiliCover,
+    ...customCover,
+    ...bilibiliCoverStrategy,
+    ...kuaishouCoverDefault,
     ...(source.variants.xiaohongshu === undefined ? {} : {
       xhsTitle: source.variants.xiaohongshu.title,
       description: source.variants.xiaohongshu.body,
@@ -118,6 +146,11 @@ export async function prepareDraftRun(
       wechatTitle: source.variants.channels.title,
       wechatDescription: source.variants.channels.body,
       wechatTags: source.variants.channels.tags,
+    }),
+    ...(source.variants.kuaishou === undefined ? {} : {
+      kuaishouTitle: source.variants.kuaishou.title,
+      kuaishouDescription: source.variants.kuaishou.body,
+      kuaishouTopics: source.variants.kuaishou.tags,
     }),
   };
   const packageRoot = join(dataDir, "draft-packages");
@@ -160,9 +193,13 @@ async function resolveRuntimeScript(name: string, preferred?: string): Promise<s
 
 export function parseVideoDraftOutput(
   raw: string,
-  expectedPlatform: "bilibili" | "douyin" = "bilibili",
+  expectedPlatform: "bilibili" | "douyin" | "kuaishou" = "bilibili",
 ): VideoDraftResult {
-  const platformName = expectedPlatform === "bilibili" ? "B站" : "抖音";
+  const platformName = expectedPlatform === "bilibili"
+    ? "B站"
+    : expectedPlatform === "douyin"
+      ? "抖音"
+      : "快手";
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
@@ -228,19 +265,37 @@ export async function startVideoDraftRun(
   const derived = JSON.parse(await readFile(prepared.packagePath, "utf8")) as {
     bilibiliTitle?: unknown;
     douyinTitle?: unknown;
+    kuaishouTitle?: unknown;
+    kuaishouDescription?: unknown;
+    kuaishouTopics?: unknown;
+    videoPath?: unknown;
   };
-  const remoteDraftPlatform = platform === "bilibili" || platform === "douyin"
+  const remoteDraftPlatform = platform === "bilibili" || platform === "douyin" || platform === "kuaishou"
     ? platform
     : undefined;
   const expectedTitle = remoteDraftPlatform === "bilibili"
     ? derived.bilibiliTitle
     : remoteDraftPlatform === "douyin"
       ? derived.douyinTitle
+      : remoteDraftPlatform === "kuaishou"
+        ? derived.kuaishouTitle
       : undefined;
   if (remoteDraftPlatform !== undefined
     && (typeof expectedTitle !== "string" || expectedTitle.trim() === "")) {
     throw new Error(`${PUBLISH_PLATFORM_DEFINITIONS[remoteDraftPlatform].name}冻结标题缺失`);
   }
+  const expectedCaption = remoteDraftPlatform === "kuaishou"
+    ? [
+        String(derived.kuaishouTitle || "").trim(),
+        String(derived.kuaishouDescription || "").trim(),
+        Array.isArray(derived.kuaishouTopics)
+          ? derived.kuaishouTopics.map((topic) => `#${String(topic).replace(/^#+/, "").trim()}`).filter((topic) => topic !== "#").join(" ")
+          : "",
+      ].filter(Boolean).join("\n")
+    : undefined;
+  const expectedFileName = remoteDraftPlatform === "kuaishou" && typeof derived.videoPath === "string"
+    ? basename(derived.videoPath)
+    : undefined;
   const child = spawn(process.execPath, [wrapper], {
     stdio: ["ignore", "pipe", "pipe"],
     env: {
@@ -253,6 +308,8 @@ export async function startVideoDraftRun(
         runnerPlatforms: prepared.runnerPlatforms,
         platform,
         expectedTitle,
+        expectedCaption,
+        expectedFileName,
         saverScript,
         confirmOriginalRights: options.confirmOriginalRights === true,
       }),
@@ -274,7 +331,7 @@ export async function startVideoDraftRun(
     child.once("exit", (code) => {
       if (code === 0) {
         const completedPlatform = prepared.platforms.length === 1
-          && (prepared.platforms[0] === "bilibili" || prepared.platforms[0] === "douyin")
+          && (prepared.platforms[0] === "bilibili" || prepared.platforms[0] === "douyin" || prepared.platforms[0] === "kuaishou")
           ? prepared.platforms[0]
           : undefined;
         if (completedPlatform !== undefined) {

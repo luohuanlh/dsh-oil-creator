@@ -38,7 +38,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "video",
     loginUrl: "https://cp.kuaishou.com/",
     workspaceUrl: "https://cp.kuaishou.com/article/publish/video",
-    draftRunner: null,
+    draftRunner: "video-publisher",
   },
   toutiao: {
     name: "头条号",
@@ -187,6 +187,9 @@ export const PUBLISH_PLATFORMS = Object.freeze(
   Object.keys(PUBLISH_PLATFORM_DEFINITIONS) as [PublishPlatform, ...PublishPlatform[]],
 );
 
+// 账号设置展示完整平台清单；具体出现在哪个内容分组由客户端配置决定。
+export const ACCOUNT_SETTINGS_PLATFORMS = PUBLISH_PLATFORMS;
+
 export const AUTO_DRAFT_PLATFORMS = Object.freeze(
   PUBLISH_PLATFORMS.filter((platform) =>
     PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner !== null
@@ -209,7 +212,7 @@ export function supportsAutoDraft(platform: PublishPlatform): boolean {
 }
 
 export function draftCapability(platform: PublishPlatform): DraftCapability {
-  if (platform === "bilibili" || platform === "douyin") return "remote-verified";
+  if (platform === "bilibili" || platform === "douyin" || platform === "kuaishou") return "remote-verified";
   if (platform === "wechat-mp"
     || platform === "xiaohongshu"
     || platform === "channels") return "implemented-simulated";
@@ -233,6 +236,7 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
     douyin: { titleMax: 30, summaryMax: 100, tagsMax: 5 },
     bilibili: { titleMax: 80, summaryMax: 200, tagsMax: 10 },
     channels: { titleMax: 16, summaryMax: 120, tagsMax: 5 },
+    kuaishou: { titleMax: 64, summaryMax: 380, tagsMax: 4 },
   };
   const limit = limits[platform] ?? { titleMax: 64, summaryMax: 120, tagsMax: 5 };
   return {

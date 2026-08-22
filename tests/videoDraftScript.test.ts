@@ -27,6 +27,15 @@ describe("视频平台远端草稿保存脚本", () => {
     expect(source).toContain("video_id");
   });
 
+  it("快手从服务器 snapshot 回读 fileId、文件名与精确描述", () => {
+    expect(source).toContain("KUAISHOU_SNAPSHOT_URL");
+    expect(source).toContain("fileId");
+    expect(source).toContain("expectedFileName");
+    expect(source).toContain("expectedCaption");
+    expect(source).toContain("photoStatus");
+    expect(source).toContain("mediaId");
+  });
+
   it("成功后把远端草稿页交给用户", () => {
     expect(source).toContain("handOffTaskSpace");
   });
@@ -152,5 +161,26 @@ describe("视频平台远端草稿保存脚本", () => {
     expect(lines.find((line) => line.fixture === true)).toMatchObject({
       handedOff: ["5"],
     });
+  });
+
+  it("快手幂等回读同一份服务器草稿", async () => {
+    const result = await execFileAsync(process.execPath, [
+      resolve(process.cwd(), "tests/fixtures/video-draft-kuaishou-ego-runtime.mjs"),
+      resolve(process.cwd(), "scripts/video-draft.mjs"),
+    ]);
+    const lines = result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines.find((line) => line.platform === "kuaishou")).toMatchObject({
+      ok: true,
+      verified: true,
+      remoteId: "3931743938",
+      draftUrl: "https://cp.kuaishou.com/article/publish/video",
+      taskSpace: "17",
+      handedOff: true,
+    });
+    expect(lines.find((line) => line.fixture === true)).toMatchObject({ handedOff: ["17"] });
   });
 });

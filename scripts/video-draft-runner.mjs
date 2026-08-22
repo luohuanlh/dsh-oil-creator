@@ -47,7 +47,7 @@ try {
     const summary = JSON.parse(publisher.stdout.trim());
     const runnerPlatform = input.runnerPlatforms[0];
     const taskSpace = summary?.platforms?.[runnerPlatform]?.taskSpaceId;
-    const savesRemoteDraft = input.platform === "bilibili" || input.platform === "douyin";
+    const savesRemoteDraft = input.platform === "bilibili" || input.platform === "douyin" || input.platform === "kuaishou";
     if (!savesRemoteDraft) {
       if (summary?.ready !== true || !Number.isInteger(taskSpace)) {
         throw new Error("video-publisher 未返回页面 READY 任务空间");
@@ -62,6 +62,8 @@ try {
         platform: input.platform,
         taskSpace: String(taskSpace),
         expectedTitle: input.expectedTitle,
+        expectedCaption: input.expectedCaption,
+        expectedFileName: input.expectedFileName,
       })};\n`;
       const saver = await run("ego-browser", ["nodejs"], { stdin: `${prelude}${source}` });
       process.stdout.write(saver.stdout);

@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import { prepareDraftRun } from "../src/draftRunner.ts";
@@ -79,7 +80,14 @@ describe("prepareDraftRun", () => {
     const video = join(root, "demo.mp4");
     const cover = join(root, "cover-4x3.png");
     await writeFile(video, "video");
-    await writeFile(cover, "cover");
+    await sharp({
+      create: {
+        width: 1200,
+        height: 900,
+        channels: 3,
+        background: { r: 40, g: 80, b: 120 },
+      },
+    }).png().toFile(cover);
     await freezeDistributionPackage({
       id: "2026-08-21_测试",
       folderPath: root,
@@ -99,6 +107,44 @@ describe("prepareDraftRun", () => {
         horizontal4x3Path: await realpath(cover),
       },
     });
+  });
+
+  it("B站选择方形封面时自动派生 4:3 文件，不改动原图", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-square-cover-"));
+    const data = join(root, "data");
+    await mkdir(data);
+    const video = join(root, "demo.mp4");
+    const cover = join(root, "cover-square.png");
+    await writeFile(video, "video");
+    await sharp({
+      create: {
+        width: 1024,
+        height: 1024,
+        channels: 3,
+        background: { r: 120, g: 80, b: 40 },
+      },
+    }).png().toFile(cover);
+    await freezeDistributionPackage({
+      id: "2026-08-21_测试",
+      folderPath: root,
+      selection: { mode: "video", videoPath: video, coverPath: cover },
+      variants: [
+        { platform: "bilibili", title: "B站标题", summary: "", body: "B站简介", tags: ["B站标签"] },
+      ],
+    });
+
+    const result = await prepareDraftRun(item(root, video), data, ["bilibili"]);
+    const derived = JSON.parse(await readFile(result.packagePath, "utf8")) as {
+      cover: { horizontal4x3Path: string };
+    };
+    const sourceMetadata = await sharp(cover).metadata();
+    const derivedMetadata = await sharp(derived.cover.horizontal4x3Path).metadata();
+
+    expect(derived.cover.horizontal4x3Path).not.toBe(await realpath(cover));
+    expect({ width: sourceMetadata.width, height: sourceMetadata.height })
+      .toEqual({ width: 1024, height: 1024 });
+    expect({ width: derivedMetadata.width, height: derivedMetadata.height })
+      .toEqual({ width: 1024, height: 768 });
   });
 
   it("B站未选择封面时显式请求平台 AI 封面", async () => {
@@ -123,6 +169,82 @@ describe("prepareDraftRun", () => {
       bilibiliCoverStrategy: "platform-ai",
       cover: { uploadCustomCover: false },
     });
+  });
+
+  it("抖音选择方形封面时同时派生 3:4 与 4:3 文件", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-douyin-cover-"));
+    const data = join(root, "data");
+    await mkdir(data);
+    const video = join(root, "demo.mp4");
+    const cover = join(root, "cover-square.png");
+    await writeFile(video, "video");
+    await sharp({
+      create: {
+        width: 1024,
+        height: 1024,
+        channels: 3,
+        background: { r: 150, g: 100, b: 50 },
+      },
+    }).png().toFile(cover);
+    await freezeDistributionPackage({
+      id: "2026-08-21_测试",
+      folderPath: root,
+      selection: { mode: "video", videoPath: video, coverPath: cover },
+      variants: [
+        { platform: "douyin", title: "抖音标题", summary: "", body: "抖音简介", tags: ["抖音标签"] },
+      ],
+    });
+
+    const result = await prepareDraftRun(item(root, video), data, ["douyin"]);
+    const derived = JSON.parse(await readFile(result.packagePath, "utf8")) as {
+      cover: { vertical3x4Path: string; horizontal4x3Path: string };
+    };
+    const vertical = await sharp(derived.cover.vertical3x4Path).metadata();
+    const horizontal = await sharp(derived.cover.horizontal4x3Path).metadata();
+
+    expect({ width: vertical.width, height: vertical.height })
+      .toEqual({ width: 768, height: 1024 });
+    expect({ width: horizontal.width, height: horizontal.height })
+      .toEqual({ width: 1024, height: 768 });
+  });
+
+  it("快手派生单描述、最多四个话题与可选 4:3 封面", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-kuaishou-"));
+    const data = join(root, "data");
+    await mkdir(data);
+    const video = join(root, "demo.mp4");
+    const cover = join(root, "cover-4x3.png");
+    await writeFile(video, "video");
+    await sharp({
+      create: {
+        width: 1200,
+        height: 900,
+        channels: 3,
+        background: { r: 30, g: 60, b: 90 },
+      },
+    }).png().toFile(cover);
+    await freezeDistributionPackage({
+      id: "2026-08-21_测试",
+      folderPath: root,
+      selection: { mode: "video", videoPath: video, coverPath: cover },
+      variants: [
+        { platform: "kuaishou", title: "快手标题", summary: "", body: "快手正文", tags: ["AI工具", "自动化测试"] },
+      ],
+    });
+
+    const result = await prepareDraftRun(item(root, video), data, ["kuaishou"]);
+    const derived = JSON.parse(await readFile(result.packagePath, "utf8")) as Record<string, unknown>;
+
+    expect(derived).toMatchObject({
+      kuaishouTitle: "快手标题",
+      kuaishouDescription: "快手正文",
+      kuaishouTopics: ["AI工具", "自动化测试"],
+      cover: {
+        uploadCustomCover: true,
+        horizontal4x3Path: await realpath(cover),
+      },
+    });
+    expect(result.runnerPlatforms).toEqual(["kuaishou"]);
   });
 
   it("拒绝冻结包缺少目标平台变体", async () => {

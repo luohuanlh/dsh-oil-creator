@@ -22,8 +22,15 @@ interface InspectCreatorSetupOptions {
   findSkillDir?: (skillName: string) => string | undefined;
 }
 
-export function defaultFindSkillDir(skillName: string, home = homedir()): string | undefined {
-  for (const candidate of skillDirCandidates(skillName, home)) {
+export function defaultFindSkillDir(
+  skillName: string,
+  home = homedir(),
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const explicit = skillName === "video-publisher"
+    ? env.VIDEO_PUBLISHER_SKILL_DIR?.trim()
+    : undefined;
+  for (const candidate of [explicit, ...skillDirCandidates(skillName, home)].filter((value): value is string => Boolean(value))) {
     if (existsSync(join(candidate, "SKILL.md"))) return candidate;
     const nested = join(candidate, skillName);
     if (existsSync(join(nested, "SKILL.md"))) return nested;
@@ -141,7 +148,7 @@ export async function inspectCreatorSetup(
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
   const home = options.home ?? homedir();
-  const findSkillDir = options.findSkillDir ?? ((name: string) => defaultFindSkillDir(name, home));
+  const findSkillDir = options.findSkillDir ?? ((name: string) => defaultFindSkillDir(name, home, env));
   const capabilities: CreatorCapabilities = {
     library: await libraryCapability(options.libraryRoot),
     autoPublish: skillCapability(

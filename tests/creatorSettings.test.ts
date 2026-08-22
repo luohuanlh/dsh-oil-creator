@@ -4,19 +4,24 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  ACCOUNT_SETTINGS_PLATFORMS,
   AUTO_DRAFT_PLATFORMS,
   PUBLISH_PLATFORM_DEFINITIONS,
   PUBLISH_PLATFORMS,
 } from "../src/platforms.ts";
+import { ACCOUNT_PLATFORM_MARKS } from "../src/client/accountPlatformMarks.ts";
+import { OFFICIAL_PLATFORM_ICON_SOURCES } from "../src/client/assets/platforms/officialPlatformIcons.ts";
 
 describe("creator settings platform rows", () => {
-  it("展示 24 个账号入口和五个可选草稿平台", () => {
+  it("在账号设置中展示完整的 24 平台清单", () => {
     expect(PUBLISH_PLATFORMS.map((platform) => PUBLISH_PLATFORM_DEFINITIONS[platform].name))
       .toHaveLength(24);
-    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(5);
+    expect(ACCOUNT_SETTINGS_PLATFORMS).toHaveLength(24);
+    expect(ACCOUNT_SETTINGS_PLATFORMS).toContain("kuaishou");
+    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(6);
   });
 
-  it("按视频、图文与音频分组账号工作台", () => {
+  it("按视频与图文分组账号工作台，暂不展示音频平台", () => {
     const implementation = readFileSync(
       resolve(process.cwd(), "src/client/CreatorSettingsCard.tsx"),
       "utf8",
@@ -29,8 +34,13 @@ describe("creator settings platform rows", () => {
     expect(implementation).toContain('className="settingsIcon"');
     expect(implementation).toContain("CONTENT_WORKBENCH_ICON_SRC");
     expect(implementation).toContain('className="accountGroups"');
+    expect(implementation).toContain("<AccountPlatformMark platform={platform} />");
     expect(implementation).toContain('className={`accountGroup ${kind}Group`}');
-    expect(implementation).toContain('{ kind: "audio", label: "settings.account.audio" }');
+    expect(implementation).toContain('additionalPlatforms: ["xiaohongshu"]');
+    expect(implementation).toContain('leadingPlatforms: ["wechat-mp"]');
+    expect(implementation).toContain("|| additionalPlatforms.includes(platform)");
+    expect(implementation).toContain("!leadingPlatforms.includes(platform)");
+    expect(implementation).not.toContain('{ kind: "audio", label: "settings.account.audio" }');
     expect(implementation).toContain("function accountAction(");
     expect(implementation).toContain("settings.account.action.finish");
     expect(implementation).toContain("void runAccountAction(platform, action)");
@@ -46,5 +56,36 @@ describe("creator settings platform rows", () => {
     );
     expect(stylesheet).toContain("overflow: visible;");
     expect(stylesheet).not.toContain("max-height: 460px;");
+  });
+
+  it("为每个账号设置平台提供离线可用的小图标", () => {
+    for (const platform of ACCOUNT_SETTINGS_PLATFORMS) {
+      expect(ACCOUNT_PLATFORM_MARKS[platform]).toMatchObject({
+        color: expect.stringMatching(/^#[0-9A-F]{6}$/),
+        glyph: expect.any(String),
+      });
+    }
+
+    expect(ACCOUNT_PLATFORM_MARKS.bilibili.icon).toBe("bilibili");
+    expect(ACCOUNT_PLATFORM_MARKS.douyin.icon).toBe("douyin");
+    expect(ACCOUNT_PLATFORM_MARKS.xiaohongshu.icon).toBe("xhs");
+    expect(ACCOUNT_PLATFORM_MARKS.channels.icon).toBe("wechat");
+  });
+
+  it("除四个已有矢量标识外，可见平台均使用官网核对后的内嵌图标", () => {
+    const existingVectorIcons = new Set(["bilibili", "douyin", "xiaohongshu", "channels"]);
+    const visiblePlatforms = ACCOUNT_SETTINGS_PLATFORMS.filter((platform) =>
+      PUBLISH_PLATFORM_DEFINITIONS[platform].kind !== "audio"
+    );
+
+    for (const platform of visiblePlatforms) {
+      const mark = ACCOUNT_PLATFORM_MARKS[platform];
+      if (existingVectorIcons.has(platform)) {
+        expect(mark.icon).toBeDefined();
+      } else {
+        expect(mark.src).toMatch(/^data:image\/png;base64,/);
+        expect(OFFICIAL_PLATFORM_ICON_SOURCES).toHaveProperty(platform);
+      }
+    }
   });
 });

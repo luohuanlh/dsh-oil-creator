@@ -513,6 +513,13 @@
   white-space: nowrap;
 }
 
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .flowCount {
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .flowState {
   width: 6px;
   height: 6px;
@@ -590,6 +597,26 @@
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .publishCard:has(input:checked) {
   border-color: color-mix(in srgb, var(--oil-accent) 55%, var(--oil-line));
   background: var(--oil-accent-soft);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .publishCard.unsupported {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--oil-paper-deep) 30%, transparent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .publishCard.unsupported input {
+  cursor: not-allowed;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .platformMarkFallback {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 4px;
+  background: var(--oil-line);
+  font-size: 8px;
+  font-weight: 800;
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .draftStatusRow {

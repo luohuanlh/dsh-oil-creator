@@ -69,6 +69,16 @@ describe("defaultFindSkillDir", () => {
     const nested = join(home, ".agents", "skills", "video-publisher", "video-publisher");
     await mkdir(nested, { recursive: true });
     await writeFile(join(nested, "SKILL.md"), "# skill\n");
-    expect(defaultFindSkillDir("video-publisher", home)).toBe(nested);
+    expect(defaultFindSkillDir("video-publisher", home, {})).toBe(nested);
+  });
+
+  it("优先使用显式的本地 video-publisher fork", async () => {
+    const home = await mkdtemp(join(tmpdir(), "oil-skill-home-"));
+    const fork = join(home, "video-publisher-fork", "video-publisher");
+    await mkdir(fork, { recursive: true });
+    await writeFile(join(fork, "SKILL.md"), "---\nname: video-publisher\ndescription: test\n---\n");
+    expect(defaultFindSkillDir("video-publisher", home, {
+      VIDEO_PUBLISHER_SKILL_DIR: fork,
+    })).toBe(fork);
   });
 });

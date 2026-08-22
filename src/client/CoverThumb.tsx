@@ -1,9 +1,18 @@
 import { useEffect, useState, type ReactNode } from "react";
 
+import type { LocalContentAsset } from "../distribution.ts";
 import type { ContentCovers, CoverThumbResult } from "../types.ts";
 
-export function coverThumbRevision(covers: ContentCovers): string {
-  return `${covers["3x4"] ?? ""}|${covers["4x3"] ?? ""}|${covers["16x9"] ?? ""}`;
+export function coverThumbRevision(
+  covers: ContentCovers,
+  assets: readonly LocalContentAsset[] = [],
+): string {
+  return [
+    covers["3x4"] ?? "",
+    covers["4x3"] ?? "",
+    covers["16x9"] ?? "",
+    ...assets.map((asset) => asset.path),
+  ].join("|");
 }
 
 export function CoverThumb({

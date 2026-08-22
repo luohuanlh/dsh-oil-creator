@@ -32,7 +32,12 @@ import {
   useProfileEpoch,
   useSelectedContentId,
 } from "./contentSelection.ts";
-import { defaultDistributionPlatforms } from "./distributionSelection.ts";
+import {
+  defaultDistributionPlatforms,
+  visibleDistributionPlatforms,
+} from "./distributionSelection.ts";
+import { remoteDraftProgress } from "./draftProgress.ts";
+import { ACCOUNT_PLATFORM_MARKS } from "./accountPlatformMarks.ts";
 import type { CreatorKey } from "./locales.ts";
 import { PlatformMark } from "./PlatformMark.tsx";
 import { ActionBar, ActionButton } from "./ui/ActionButton.tsx";
@@ -46,13 +51,6 @@ const CONTENT_TYPE_KEY: Record<ContentType, CreatorKey> = {
   article: "inspector.tab.article",
 };
 
-const PLATFORM_ICON = {
-  xiaohongshu: "xhs",
-  douyin: "douyin",
-  bilibili: "bilibili",
-  channels: "wechat",
-} as const;
-
 type InlineAssetImportKind = Extract<AssetImportKind, "article" | "cover">;
 
 const LOCAL_IMPORT_LIMIT: Record<InlineAssetImportKind, number> = {
@@ -60,6 +58,24 @@ const LOCAL_IMPORT_LIMIT: Record<InlineAssetImportKind, number> = {
   cover: 20 * 1024 * 1024,
 };
 const ARTICLE_META_MAX = 120;
+
+function DistributionPlatformMark({ platform }: { platform: PublishPlatform }) {
+  const mark = ACCOUNT_PLATFORM_MARKS[platform];
+  if (mark.icon !== undefined) return <PlatformMark id={mark.icon} size={16} />;
+  if (mark.src !== undefined) {
+    return (
+      <img
+        className="platformMark"
+        src={mark.src}
+        width={16}
+        height={16}
+        alt=""
+        draggable={false}
+      />
+    );
+  }
+  return <span className="platformMark platformMarkFallback">{mark.glyph}</span>;
+}
 
 async function fileBase64(file: File, kind: InlineAssetImportKind): Promise<string> {
   if (file.size > LOCAL_IMPORT_LIMIT[kind]) {
@@ -336,8 +352,8 @@ export function ContentInspector({
   const accountMap = new Map(accounts.map((account) => [account.platform, account]));
   const accountsReady = selectedPlatforms.length > 0
     && selectedPlatforms.every((platform) => accountMap.get(platform)?.status === "active");
-  const draftsReady = detail !== undefined && selectedPlatforms.length > 0
-    && selectedPlatforms.every((platform) => detail.publish[platform].status === "draft");
+  const draftProgress = remoteDraftProgress(selectedPlatforms, detail?.publish ?? {});
+  const draftsReady = draftProgress.hasSaved;
   const canStart = detail !== undefined
     && contentReady
     && accountsReady
@@ -431,14 +447,15 @@ export function ContentInspector({
   const renderWorkflowRail = (workflowMode: AssetSelection["mode"]) => (
     <div className="workflowRail" aria-label={t(CONTENT_TYPE_KEY[workflowMode])}>
       {[
-        { label: t("inspector.flow.content"), done: contentReady },
-        { label: t("inspector.flow.distribute"), done: draftsReady },
+        { label: t("inspector.flow.content"), done: contentReady, count: undefined },
+        { label: t("inspector.flow.distribute"), done: draftsReady, count: draftProgress.label },
       ].map((step, index, all) => {
         const current = !step.done && all.slice(0, index).every((item) => item.done);
         return (
           <div key={step.label} className={`flowNode ${step.done ? "done" : current ? "current" : ""}`}>
             <span className="flowState" aria-hidden="true" />
             <span className="flowLabel">{step.label}</span>
+            {step.count !== undefined && <span className="flowCount">{step.count}</span>}
           </div>
         );
       })}
@@ -447,9 +464,7 @@ export function ContentInspector({
 
   const renderWorkflow = (workflowMode: AssetSelection["mode"]) => {
     if (detail === undefined) return null;
-    const workflowPlatforms = enabledPlatforms.filter((platform) =>
-      PUBLISH_PLATFORM_DEFINITIONS[platform].kind === workflowMode
-    );
+    const workflowPlatforms = visibleDistributionPlatforms(workflowMode, enabledPlatforms);
     const preview = workflowMode === "video"
       ? !videoReady
         ? <div className="empty workflowPreview">{t("empty.loading")}</div>
@@ -734,17 +749,23 @@ export function ContentInspector({
                   {workflowPlatforms.map((platform) => {
                     const account = accountMap.get(platform);
                     const selected = selectedPlatforms.includes(platform);
+                    const supportsDraft = supportsAutoDraft(platform);
                     const row = detail.publish[platform];
                     return (
-                      <label key={platform} className="publishCard">
+                      <label
+                        key={platform}
+                        className={`publishCard${supportsDraft ? "" : " unsupported"}`}
+                        aria-disabled={!supportsDraft}
+                      >
                         <div className="publishRow">
                           <span className="publishName">
                             <input
                               type="checkbox"
                               checked={selected}
+                              disabled={!supportsDraft}
                               onChange={() => { togglePlatform(platform); }}
                             />
-                            <PlatformMark id={PLATFORM_ICON[platform as keyof typeof PLATFORM_ICON] ?? "article"} size={16} />
+                            <DistributionPlatformMark platform={platform} />
                             {PUBLISH_PLATFORM_DEFINITIONS[platform].name}
                           </span>
                           <StatusPill tone={account?.status === "active" ? "success" : "neutral"}>
@@ -755,8 +776,10 @@ export function ContentInspector({
                         </div>
                         <div className="draftStatusRow">
                           <span>{t("inspector.draft.title")}</span>
-                          <StatusPill tone={draftTone(detail, platform)}>
-                            {draftLabel(detail, platform, t)}
+                          <StatusPill tone={supportsDraft ? draftTone(detail, platform) : "neutral"}>
+                            {supportsDraft
+                              ? draftLabel(detail, platform, t)
+                              : t("inspector.draft.unsupported")}
                           </StatusPill>
                         </div>
                         {row.draftError !== undefined && (

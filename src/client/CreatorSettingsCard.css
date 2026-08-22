@@ -221,7 +221,7 @@
   display: grid;
   grid-template-columns: minmax(120px, 1fr) auto minmax(76px, auto) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 8px 10px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 9px;
@@ -456,7 +456,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   box-sizing: border-box;
   min-width: 0;
   min-height: 54px;
@@ -483,14 +483,46 @@
 [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName {
   display: flex;
   flex-direction: row;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
   color: var(--oil-ink);
   font-family: var(--oil-font-body);
   font-size: 12px;
   font-weight: 650;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountPlatformIcon {
+  display: inline-grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--account-platform-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #000 8%, transparent);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountPlatformIcon.hasBrandMark {
+  background: color-mix(in srgb, var(--account-platform-accent) 10%, var(--oil-paper));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--account-platform-accent) 22%, var(--oil-line));
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountPlatformIcon .platformMark {
+  display: block;
+  object-fit: contain;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountNameLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.2;
+  white-space: normal;
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountName small {
@@ -511,7 +543,7 @@
 
 [data-plugin="dsh-oil-creator"][data-surface="settings-card"] .accountActions button {
   min-height: 25px;
-  padding-inline: 9px;
+  padding-inline: 7px;
   font-size: 9px;
 }
 

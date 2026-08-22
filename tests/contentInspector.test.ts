@@ -10,10 +10,10 @@ import {
 } from "../src/platforms.ts";
 
 describe("content inspector distribution workbench", () => {
-  it("只展示真实自动草稿平台", () => {
+  it("保留五个真实视频自动草稿平台", () => {
     expect(AUTO_DRAFT_PLATFORMS.filter((platform) =>
       supportsAutoDraft(platform) && PUBLISH_PLATFORM_DEFINITIONS[platform].kind === "video"
-    )).toHaveLength(4);
+    )).toHaveLength(5);
     expect(AUTO_DRAFT_PLATFORMS).toContain("wechat-mp");
   });
 
@@ -24,6 +24,8 @@ describe("content inspector distribution workbench", () => {
     );
 
     expect(implementation).toContain('className="workflowRail"');
+    expect(implementation).toContain('className="flowCount"');
+    expect(implementation).toContain("remoteDraftProgress(selectedPlatforms, detail?.publish ?? {})");
     expect(implementation).not.toContain('className="flowNumber"');
     expect(implementation).toContain('marker="01"');
     expect(implementation).toContain('marker="02"');
@@ -45,6 +47,9 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).toContain("detail.assets.articles");
     expect(implementation).toContain("detail.assets.covers");
     expect(implementation).toContain("queueDistribution");
+    expect(implementation).toContain("visibleDistributionPlatforms(workflowMode, enabledPlatforms)");
+    expect(implementation).toContain('disabled={!supportsDraft}');
+    expect(implementation).toContain('t("inspector.draft.unsupported")');
     expect(implementation).toContain("selectedPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");
     expect(implementation).toContain("&& !queued");
     expect(implementation).not.toContain("queueTimeout");

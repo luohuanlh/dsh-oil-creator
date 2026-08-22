@@ -14,6 +14,7 @@
 | 无远端证据不得标记草稿 | `service.test.ts`、旧 `READY` sidecar 降级回归 | 已证明 |
 | 不包含最终发表动作 | Ego 可执行契约断言没有发送/群发接口；视频继续使用 safe runner | 已证明 |
 | 单个平台失败不污染其他平台 | `service.test.ts`、按平台隔离的临时包测试 | 已证明 |
+| 视频封面比例不符时跨平台派生正确画幅 | `coverVariants.test.ts`、`draftRunner.test.ts`、真实 1024×1024 B站封面预检 | 已证明 |
 | 至少一个真实平台创建草稿 | B站草稿 `draftId=3779145`、本地导入回归草稿 `draftId=3782858`，标题均与冻结包一致 | 已证明 |
 | Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI、冻结、Ego READY、远端保存、overlay 与 UI 回显全链路 | 已证明 |
 | 微信公众号远端草稿与 id 回读 | 生产脚本模拟回归；真实账号尚未登录验证 | 已实现，待真实验证 |
@@ -26,9 +27,28 @@
 | B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`；本地导入黄金路径再次回归 `draftId=3782858`，标题与冻结包一致 |
 | 微信公众号 | `IMPLEMENTED + SIMULATED` | 生产脚本模拟上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
 | 抖音 | `REMOTE_VERIFIED` | 真实草稿标题一致，远端 `video_id=v0200fg10000da438evog65gkcsbelp0`，draft 入口回读通过 |
+| 快手 | `REMOTE_VERIFIED` | 真实 3 秒 MP4 冷启动首轮 `READY`，服务器快照回读稳定 `fileId=3931762113`、文件名、精确描述、`mediaId` 与时长 |
 | 小红书 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 视频号 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
 | 其他平台 | `UNSUPPORTED` | 只有账号入口，没有草稿运行器 |
+
+## 2026-08-23 跨平台封面比例派生
+
+- 新增基于 `sharp` 的单一 Mac/Windows 图片处理路径；锁文件包含 macOS Intel/Apple Silicon 与 Windows x64/ARM64 预编译依赖，不再调用 `sips`、PowerShell 或外部 ImageMagick。
+- 单元回归使用真实 PNG/WebP，证明方形图分别派生 `1024×768` 的 4:3 和 `768×1024` 的 3:4 文件；原图尺寸保持 `1024×1024`，合规 PNG 直接复用，WebP 转为预检可识别的 PNG。
+- 派生文件身份绑定原图内容哈希、目标比例和算法版本；重复调用保持路径与修改时间不变，损坏缓存会重新生成。Windows 同名文件不能直接覆盖的 `EEXIST`/`EPERM` 分支也有显式恢复逻辑。
+- 使用用户当前 `aur-er-002-ss.png` 真实复现：输入 `1024×1024`，输出 `/Users/luohuan/.dsh-oil-creator/derived-covers/a49a427cc3c205d454193de3-4x3.png` 为 `1024×768`；`video-publisher scripts/check-package.mjs bilibili` 返回 `ok: true`、`errors: []`。
+
+## 2026-08-22 快手真实草稿回归
+
+- 本地 fork 的 `video-publisher` 在 `dev` 分支新增 `kuaishou` 配置、包校验、媒体预检、中央 gates、Ego 安全守卫和专用适配器。
+- 使用 1.22MB、3 秒 H.264 MP4、两项话题和临时 1200×900 测试封面完成两次冷启动；第二次作业 `kuaishou-live-regression-v2` 在 task space `18` 首轮到达 `READY`。
+- 快手未发布草稿由 `snapshot/info` 提供服务器真相：`fileId`、原始文件名、HTML 描述、`mediaId`、封面状态和视频时长均可独立回读；“取消 → 继续编辑”恢复同一份草稿。
+- 封面回归证明 `coverMediaId` 可保持不变而 `coverKey` 会延迟换代；适配器改为等待三个稳定 key，并只在素材、比例和 supporting media id 匹配时修复延迟回执。
+- 修复后连续三次完整复跑均只有 `inspect → verify`，日志为 `upload none`、`UI serial: none`、`missing=[]`；未重复上传视频、描述或封面。
+- 当前项目保存器回读远端 `fileId=3931762113`，同时核对页面最终按钮与安全守卫、服务器文件名、精确组合描述、`photoStatus=1`、非空 `mediaId` 和 3000ms 时长，然后把草稿页交给用户。
+- 全程 `guardArmed=true`、`blockedAttempts=0`、`finalPublishClicked=false`，没有点击快手“发布”。
+- `pnpm check`：通过；49 个测试文件、261 项测试全部通过，类型检查与 Host、Client、Typert 构建成功。
 
 ## 2026-08-22 本地素材导入与 B站真实草稿回归
 

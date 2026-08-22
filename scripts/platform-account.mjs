@@ -47,12 +47,15 @@ if (!platform || !loginUrl) {
 const task = mode === "check" && resumeSpace
   ? await takeOverTaskSpace(requestedSpace)
   : await useOrCreateTaskSpace(requestedSpace);
+// takeOverTaskSpace 只负责恢复控制，当前版本成功时不返回任务空间对象。
+// 优先保留 useOrCreateTaskSpace 返回的数值 ID；恢复路径则沿用已保存的名称或 ID。
+const taskSpace = task?.id === undefined ? requestedSpace : String(task.id);
 if (mode === "open") {
   await openOrReuseTab(loginUrl, { wait: true, timeout: 30 });
-  const handoff = await handOffTaskSpace(task.id);
+  const handoff = await handOffTaskSpace(taskSpace);
   accountResult({
     started: true,
-    taskSpace: String(task.id),
+    taskSpace,
     handedOff: handoff?.done === true,
   });
 } else {
@@ -66,10 +69,10 @@ if (mode === "open") {
   } catch (error) {
     accountResult({
       status: "unknown",
-      taskSpace: String(task.id),
+      taskSpace,
       error: error instanceof Error ? error.message : String(error),
     });
     process.exit(0);
   }
-  accountResult({ status, taskSpace: String(task.id) });
+  accountResult({ status, taskSpace });
 }

@@ -14,6 +14,7 @@ import {
   discoverContentAssets,
   readFrozenDistributionPackage,
 } from "./distribution.ts";
+import { resolveContentType } from "./contentType.ts";
 import type {
   ContentFilter,
   ContentSummary,
@@ -107,10 +108,8 @@ export function folderDateMs(date: string | undefined): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
-function hasCover(item: ContentSummary): boolean {
-  return item.covers["3x4"] !== undefined
-    || item.covers["4x3"] !== undefined
-    || item.covers["16x9"] !== undefined;
+function hasCover(item: Pick<ContentSummary, "covers" | "assets">): boolean {
+  return coverPathOf(item) !== undefined;
 }
 
 function sameCalendarDay(a: number, b: number): boolean {
@@ -139,13 +138,17 @@ export function workflowOf(
   item: Omit<ContentSummary, "pipeline" | "workflow">,
   _overlay?: OverlayItem,
 ): WorkflowStage {
+  const contentType = resolveContentType(item);
+  const hasSource = contentType === "article"
+    ? item.hasArticle && hasCover(item)
+    : contentType === "video"
+      ? item.videoRaw !== undefined || item.videoSubtitled !== undefined
+      : false;
+  if (!hasSource) return "idle";
   if (Object.values(item.publish).some((row) => row.status === "draft" || row.status === "published")) {
     return "live";
   }
-  const hasSource = item.videoRaw !== undefined
-    || item.videoSubtitled !== undefined
-    || item.hasArticle;
-  if (hasSource && (item.hasDistributionPackage || item.hasPublishPackage)) return "publish";
+  if (item.hasDistributionPackage || item.hasPublishPackage) return "publish";
   return "idle";
 }
 
@@ -622,6 +625,11 @@ export function stripSubtitleMarkup(raw: string): string {
     .trim();
 }
 
-export function coverPathOf(item: ContentSummary): string | undefined {
-  return item.covers["3x4"] ?? item.covers["4x3"] ?? item.covers["16x9"];
+export function coverPathOf(
+  item: Pick<ContentSummary, "covers" | "assets">,
+): string | undefined {
+  return item.covers["3x4"]
+    ?? item.covers["4x3"]
+    ?? item.covers["16x9"]
+    ?? item.assets.covers[0]?.path;
 }

@@ -54,7 +54,9 @@ dsh plugin --profile web add dsh-oil-creator
 dsh plugin --profile web remove dsh-oil-creator
 ```
 
-安装后在 Harness 设置页选择内容目录，并确认 `ego-browser` 可用。视频草稿还需要 `video-publisher` Skill；微信公众号图文适配器已经内置。
+安装后在 Harness 设置页选择内容目录，并确认 `ego-browser` 可用。B站、抖音、小红书、视频号和快手的视频草稿还需要 `video-publisher` Skill；微信公众号图文适配器已经内置。
+
+开发本地 fork 时，可用 `VIDEO_PUBLISHER_SKILL_DIR=/absolute/path/to/video-publisher` 明确覆盖全局安装副本；路径既可指向 Skill 目录，也可指向外层仓库目录。
 
 ## 对话工具
 
