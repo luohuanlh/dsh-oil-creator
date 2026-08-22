@@ -159,7 +159,7 @@ export async function inspectCreatorSetup(
     article: capability(
       "ready",
       false,
-      "已内置微信公众号图文草稿适配器；实际运行仍需要 Ego Browser 登录态。",
+      "已内置微信公众号和百家号图文草稿适配器；实际运行仍需要 Ego Browser 登录态。",
     ),
     egoBrowser: egoCapability(await findEgo(platform, env, home)),
   };

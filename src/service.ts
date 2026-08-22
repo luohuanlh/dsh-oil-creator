@@ -486,6 +486,9 @@ export class OilCreatorService extends TypertRemoteService {
     if (unsupported.length > 0) {
       throw new Error(`尚未接入自动草稿：${unsupported.map((p) => PUBLISH_PLATFORM_DEFINITIONS[p].name).join("、")}`);
     }
+    const articlePlatforms = platforms.filter((platform) =>
+      PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner === "article-ego"
+    );
     const inactive = platforms.filter((platform) => overlay.accounts?.[platform]?.status !== "active");
     if (inactive.length > 0) {
       throw new Error(`平台账号尚未通过登录检查：${inactive.map((p) => PUBLISH_PLATFORM_DEFINITIONS[p].name).join("、")}`);
@@ -626,15 +629,9 @@ export class OilCreatorService extends TypertRemoteService {
           }
         }
       }
-      for (const platform of platforms.filter((candidate) =>
-        PUBLISH_PLATFORM_DEFINITIONS[candidate].draftRunner !== "video-publisher"
-      )) {
+      await Promise.all(articlePlatforms.map(async (platform) => {
         try {
-          const runner = PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner;
-          const run = runner === "wechat-article-ego"
-            ? await startArticleDraftRun(await prepareArticleDraftRun(item, platform))
-            : undefined;
-          if (run === undefined) throw new Error(`尚未接入自动草稿：${platform}`);
+          const run = await startArticleDraftRun(await prepareArticleDraftRun(item, platform));
           started = true;
           await markRunning([platform], run.pid);
           void run.completion.then((result) => applyOutcome(platform, result)).catch((cause) => {
@@ -649,7 +646,7 @@ export class OilCreatorService extends TypertRemoteService {
           startErrors.push(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}：${message}`);
           await applyOutcome(platform, { ok: false, error: message });
         }
-      }
+      }));
       if (!started) throw new Error(startErrors.join("；") || "草稿运行器未启动");
       return { id: item.id, platforms, started };
     } finally {

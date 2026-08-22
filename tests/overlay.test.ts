@@ -20,7 +20,7 @@ import {
 import { creatorProfileSchema } from "../src/schemas.ts";
 
 describe("creator profile", () => {
-  it("默认启用五个视频草稿平台和微信公众号文章草稿", () => {
+  it("默认启用五个视频草稿平台和两个图文草稿平台", () => {
     expect(emptyProfile()).toEqual({
       enabledPlatforms: [
         "bilibili",
@@ -28,6 +28,7 @@ describe("creator profile", () => {
         "xiaohongshu",
         "channels",
         "kuaishou",
+        "baijiahao",
         "wechat-mp",
       ],
     });

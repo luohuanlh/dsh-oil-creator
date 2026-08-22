@@ -6,8 +6,16 @@ import { fileURLToPath } from "node:url";
 import { readFrozenDistributionPackage } from "./distribution.ts";
 import type { ContentSummary, PublishPlatform } from "./types.ts";
 
+export type ArticleDraftPlatform = Extract<PublishPlatform, "wechat-mp" | "baijiahao">;
+
+const ARTICLE_DRAFT_PLATFORMS = new Set<ArticleDraftPlatform>(["wechat-mp", "baijiahao"]);
+const ARTICLE_PLATFORM_NAMES: Record<ArticleDraftPlatform, string> = {
+  "wechat-mp": "微信公众号",
+  baijiahao: "百家号",
+};
+
 export interface ArticleDraftInput {
-  platform: "wechat-mp";
+  platform: ArticleDraftPlatform;
   id: string;
   title: string;
   summary: string;
@@ -24,7 +32,7 @@ export interface PreparedArticleDraftRun {
 
 export interface ArticleDraftResult {
   ok: true;
-  platform: "wechat-mp";
+  platform: ArticleDraftPlatform;
   verified: true;
   remoteId: string;
   draftUrl: string;
@@ -125,20 +133,24 @@ export async function prepareArticleDraftRun(
   item: ContentSummary,
   platform: PublishPlatform,
 ): Promise<PreparedArticleDraftRun> {
-  if (platform !== "wechat-mp") throw new Error(`尚未接入图文草稿：${platform}`);
+  if (!ARTICLE_DRAFT_PLATFORMS.has(platform as ArticleDraftPlatform)) {
+    throw new Error(`尚未接入图文草稿：${platform}`);
+  }
+  const articlePlatform = platform as ArticleDraftPlatform;
+  const platformName = ARTICLE_PLATFORM_NAMES[articlePlatform];
   const frozen = await readFrozenDistributionPackage(item.folderPath);
   if (frozen === undefined) throw new Error("缺少 Harness 冻结分发包");
   if (frozen.id !== item.id) throw new Error("冻结分发包与当前内容不匹配");
   if (frozen.mode !== "article" || frozen.selection.mode !== "article") {
-    throw new Error("微信公众号草稿需要文章 + 封面冻结分发包");
+    throw new Error(`${platformName}草稿需要文章 + 封面冻结分发包`);
   }
-  const variant = frozen.variants[platform];
-  if (variant === undefined) throw new Error("冻结分发包缺少微信公众号平台变体");
+  const variant = frozen.variants[articlePlatform];
+  if (variant === undefined) throw new Error(`冻结分发包缺少${platformName}平台变体`);
   const cover = await readFile(frozen.selection.coverPath);
   if (cover.length === 0) throw new Error("所选文章封面为空");
   return {
     input: {
-      platform,
+      platform: articlePlatform,
       id: item.id,
       title: variant.title,
       summary: variant.summary,
@@ -146,7 +158,7 @@ export async function prepareArticleDraftRun(
       tags: variant.tags,
       coverMime: imageMime(frozen.selection.coverPath),
       coverBase64: cover.toString("base64"),
-      taskName: `oil-wechat-draft-${item.id}-${Date.now()}`.slice(0, 120),
+      taskName: `oil-${articlePlatform}-draft-${item.id}-${Date.now()}`.slice(0, 120),
     },
   };
 }
@@ -164,7 +176,11 @@ export async function resolveArticleDraftScript(preferred?: string): Promise<str
   throw new Error("article-draft.mjs is missing; rebuild dsh-oil-creator");
 }
 
-function articleDraftFailure(raw: string, code: number | null): string {
+function articleDraftFailure(
+  raw: string,
+  code: number | null,
+  platform: ArticleDraftPlatform,
+): string {
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
@@ -175,7 +191,9 @@ function articleDraftFailure(raw: string, code: number | null): string {
     }
   }
   const detail = raw.trim();
-  return detail === "" ? `微信公众号草稿运行器退出：${code}` : detail.slice(-2000);
+  return detail === ""
+    ? `${ARTICLE_PLATFORM_NAMES[platform]}草稿运行器退出：${code}`
+    : detail.slice(-2000);
 }
 
 export async function startArticleDraftRun(
@@ -208,11 +226,14 @@ export async function startArticleDraftRun(
     child.once("exit", (code) => {
       const raw = `${stdout}\n${stderr}`;
       if (code !== 0) {
-        resolve({ ok: false, error: articleDraftFailure(raw, code) });
+        resolve({
+          ok: false,
+          error: articleDraftFailure(raw, code, prepared.input.platform),
+        });
         return;
       }
       try {
-        const result = parseArticleDraftOutput(raw);
+        const result = parseArticleDraftOutput(raw, prepared.input.platform);
         resolve({
           ok: true,
           url: result.draftUrl,
@@ -231,7 +252,10 @@ export async function startArticleDraftRun(
   return { pid: child.pid, completion };
 }
 
-export function parseArticleDraftOutput(raw: string): ArticleDraftResult {
+export function parseArticleDraftOutput(
+  raw: string,
+  expectedPlatform: ArticleDraftPlatform = "wechat-mp",
+): ArticleDraftResult {
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
@@ -240,11 +264,16 @@ export function parseArticleDraftOutput(raw: string): ArticleDraftResult {
         if (parsed.error !== undefined) throw new Error(parsed.error);
         continue;
       }
-      if (parsed.verified !== true) throw new Error("微信公众号未通过草稿页面验证");
-      if (parsed.platform !== "wechat-mp"
+      if (parsed.verified !== true) {
+        throw new Error(`${ARTICLE_PLATFORM_NAMES[expectedPlatform]}未通过草稿页面验证`);
+      }
+      if (parsed.platform !== expectedPlatform
         || typeof parsed.remoteId !== "string"
+        || parsed.remoteId.trim() === ""
         || typeof parsed.draftUrl !== "string"
-        || typeof parsed.taskSpace !== "string") {
+        || parsed.draftUrl.trim() === ""
+        || typeof parsed.taskSpace !== "string"
+        || parsed.taskSpace.trim() === "") {
         throw new Error("Ego Browser 返回的图文草稿结果不完整");
       }
       return parsed as ArticleDraftResult;

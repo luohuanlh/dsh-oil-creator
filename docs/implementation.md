@@ -4,7 +4,7 @@
 
 本版本只有一条黄金路径：工作台选择本地素材 → 当前 Harness 会话生成平台变体 → 冻结分发包 → Ego Browser 平台草稿。原始素材以磁盘为准，AI 产物以冻结包为准，overlay 只保存设置、账号检查结果和逐平台任务状态。
 
-设置页环境探测仅包含：内容目录、自动发布、公众号图文、Ego Browser。
+设置页环境探测仅包含：内容目录、自动发布、图文草稿、Ego Browser。
 
 ## 模块
 
@@ -19,8 +19,8 @@
 | `src/draftRunner.ts` | 从冻结包派生视频运行包，串联 `video-publisher` 页面准备与远端草稿保存 |
 | `scripts/video-draft-runner.mjs` | 以一个稳定父进程覆盖页面准备和远端保存两阶段，避免状态核对误判中断 |
 | `scripts/video-draft.mjs` | 在 B站精确执行“存草稿”并回读 `draftId`；在抖音执行“暂存离开”并从 draft 入口回读标题与 `video_id` |
-| `src/articleDraftRunner.ts` | 准备微信公众号文章、封面和 Ego 运行输入 |
-| `scripts/article-draft.mjs` | 上传公众号封面、保存草稿、回读验证并交接页面 |
+| `src/articleDraftRunner.ts` | 准备微信公众号或百家号文章、封面和 Ego 运行输入 |
+| `scripts/article-draft.mjs` | 按平台上传封面、保存草稿、回读验证并交接页面 |
 | `src/service.ts` | 提供内容、设置、账号和草稿 RPC |
 | `src/client/CreatorSettingsCard.tsx` | 四项环境状态、目录和平台绑定界面 |
 | `src/client/ContentInspector.tsx` | 视频/字幕、文章/封面、平台选择与一键草稿界面 |
@@ -80,6 +80,12 @@
 ## 微信公众号图文
 
 微信公众号适配器只接受文章 + 封面冻结包。Host 把 Markdown 安全转为基础 HTML，并把所选封面编码为机械执行输入。Ego 在已登录的同源页面中上传封面、调用草稿创建接口，随后打开返回的草稿编辑 URL，核对 `appmsgid` 和标题；只有回读验证成功才写入 `draft`。返回 Host 的 URL 会移除会话 token，避免凭据进入 overlay。该实现已通过模拟生产脚本回归，尚待真实账号验证；脚本中不存在群发或最终发表调用。
+
+## 百家号图文
+
+百家号 P0 复用同一份文章 + 封面冻结输入。Ego 在百家号编辑页同源检查账号、读取页面提供的请求 token、上传所选封面并将其作为正文首图，然后只调用草稿保存接口。保存响应必须返回非空 `article_id`；运行器随后重新打开对应编辑页，精确核对 URL 中的 `article_id` 和页面标题，全部通过后才写入 `draft`。该实现先标记为模拟验证，完成真实账号回归前不得称为远端已验证。
+
+当同一次请求同时包含微信公众号与百家号时，Host 直接用 `Promise.all` 准备并启动两个现有图文运行器。每个平台拥有独立的 Ego 进程、任务空间、PID、远端 ID 和完成回调；启动阶段只等待两个运行器进入运行态，不等待远端草稿完成。完成结果继续通过逐平台 overlay 锁写回，因此一个平台启动或执行失败不会取消、覆盖或误报另一个平台。当前没有引入通用图文编排器、队列或自动重试。
 
 ## Ego Browser 会话
 

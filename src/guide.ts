@@ -25,7 +25,7 @@ export function creatorGuideText(status: CreatorSetupStatus): string {
     "## 当前四项环境状态",
     capabilityLine("内容目录", capabilities.library),
     capabilityLine("自动发布", capabilities.autoPublish),
-    capabilityLine("公众号图文", capabilities.article),
+    capabilityLine("图文草稿", capabilities.article),
     capabilityLine("Ego Browser", capabilities.egoBrowser),
     "",
     "## 1. 选择内容文件",
@@ -40,7 +40,7 @@ export function creatorGuideText(status: CreatorSetupStatus): string {
     enabled.length === 0
       ? "- 当前没有启用自动草稿平台。先在设置中选择平台。"
       : `- 当前启用：${names}。`,
-    "- B站和抖音视频已通过真实远端保存与 id 回读；微信公众号文章已实现并通过模拟回归，待真实账号验证；小红书和视频号当前只准备投稿页，并显示“页面已备”。所有任务都停在最终发表前。",
+    "- B站和抖音视频已通过真实远端保存与 id 回读；微信公众号和百家号文章已实现并通过模拟回归，待各自真实账号验证，两个图文平台可使用独立任务空间并发运行并分别记录结果；小红书和视频号当前只准备投稿页，并显示“页面已备”。所有任务都停在最终发表前。",
     "- Harness AI 负责内容适配；Ego Browser 只消费冻结字段、上传素材、保存并回读验证。每个平台独立记录成功或失败。",
     "",
     "## 安全边界",

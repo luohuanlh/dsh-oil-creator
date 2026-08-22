@@ -91,4 +91,55 @@ describe("WeChat article draft runner", () => {
     expect(() => parseArticleDraftOutput(JSON.stringify({ ok: true, verified: false })))
       .toThrow("未通过草稿页面验证");
   });
+
+  it("为百家号准备独立的平台变体并校验对应输出平台", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-baijiahao-runner-"));
+    const article = join(folder, "article.md");
+    const cover = join(folder, "cover.jpg");
+    await writeFile(article, "# 原始文章\n\n原始正文");
+    await writeFile(cover, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    await freezeDistributionPackage({
+      id: "2026-08-21_图文",
+      folderPath: folder,
+      selection: { mode: "article", articlePath: article, coverPath: cover },
+      variants: [{
+        platform: "baijiahao",
+        title: "百家号标题",
+        summary: "百家号摘要",
+        body: "# 百家号正文\n\n这里是平台变体。",
+        tags: ["AI"],
+      }],
+    });
+
+    const prepared = await prepareArticleDraftRun(
+      articleItem(folder, article, cover),
+      "baijiahao",
+    );
+
+    expect(prepared.input).toMatchObject({
+      platform: "baijiahao",
+      title: "百家号标题",
+      summary: "百家号摘要",
+      coverMime: "image/jpeg",
+    });
+    expect(prepared.input.html).toContain("<h1>百家号正文</h1>");
+    expect(prepared.input.taskName).toContain("oil-baijiahao-draft-");
+
+    expect(parseArticleDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "baijiahao",
+      verified: true,
+      remoteId: "article-42",
+      draftUrl: "https://baijiahao.baidu.com/builder/rc/edit?article_id=article-42",
+      taskSpace: "9",
+    }), "baijiahao")).toMatchObject({ platform: "baijiahao", remoteId: "article-42" });
+    expect(() => parseArticleDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "wechat-mp",
+      verified: true,
+      remoteId: "42",
+      draftUrl: "https://mp.weixin.qq.com/draft/42",
+      taskSpace: "7",
+    }), "baijiahao")).toThrow("图文草稿结果不完整");
+  });
 });

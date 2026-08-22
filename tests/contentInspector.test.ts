@@ -15,6 +15,7 @@ describe("content inspector distribution workbench", () => {
       supportsAutoDraft(platform) && PUBLISH_PLATFORM_DEFINITIONS[platform].kind === "video"
     )).toHaveLength(5);
     expect(AUTO_DRAFT_PLATFORMS).toContain("wechat-mp");
+    expect(AUTO_DRAFT_PLATFORMS).toContain("baijiahao");
   });
 
   it("移除概览和单项标签栏，按内容类型直接展示工作流", () => {

@@ -102,7 +102,7 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
   ctx.tools.register(defineTool({
     name: "oil_creator_guide",
     description:
-      "返回内容目录、Ego Browser 平台绑定、公众号图文和自动草稿的实时使用指引。",
+      "返回内容目录、Ego Browser 平台绑定、图文草稿和自动草稿的实时使用指引。",
     parameters: {},
     output: {
       schema: JSON_VALUE,

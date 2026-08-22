@@ -18,7 +18,7 @@ describe("creator settings platform rows", () => {
       .toHaveLength(24);
     expect(ACCOUNT_SETTINGS_PLATFORMS).toHaveLength(24);
     expect(ACCOUNT_SETTINGS_PLATFORMS).toContain("kuaishou");
-    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(6);
+    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(7);
   });
 
   it("按视频与图文分组账号工作台，暂不展示音频平台", () => {

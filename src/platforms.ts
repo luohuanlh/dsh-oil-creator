@@ -52,7 +52,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "article",
     loginUrl: "https://baijiahao.baidu.com/",
     workspaceUrl: "https://baijiahao.baidu.com/builder/rc/edit",
-    draftRunner: null,
+    draftRunner: "article-ego",
   },
   penguin: {
     name: "企鹅号",
@@ -157,7 +157,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "article",
     loginUrl: "https://mp.weixin.qq.com/",
     workspaceUrl: "https://mp.weixin.qq.com/",
-    draftRunner: "wechat-article-ego",
+    draftRunner: "article-ego",
   },
   "netease-music": {
     name: "网易云音乐",
@@ -217,7 +217,8 @@ export function draftCapability(platform: PublishPlatform): DraftCapability {
     || platform === "xiaohongshu"
     || platform === "channels"
     || platform === "kuaishou") return "remote-verified";
-  if (platform === "wechat-mp") return "implemented-simulated";
+  if (platform === "wechat-mp"
+    || platform === "baijiahao") return "implemented-simulated";
   return "unsupported";
 }
 
@@ -239,6 +240,7 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
     bilibili: { titleMax: 80, summaryMax: 200, tagsMax: 10 },
     channels: { titleMax: 16, summaryMax: 120, tagsMax: 5 },
     kuaishou: { titleMax: 64, summaryMax: 380, tagsMax: 4 },
+    baijiahao: { titleMax: 30, summaryMax: 120, tagsMax: 5 },
   };
   const limit = limits[platform] ?? { titleMax: 64, summaryMax: 120, tagsMax: 5 };
   return {

@@ -124,6 +124,47 @@ describe("scanLibrary workbench assets", () => {
     }]);
     expect(coverPathOf(item!)).toBe(join(created.folderPath, "cover.jpg"));
   });
+
+  it("图文使用脚本素材且远端草稿已保存时标记为已完成", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-article-draft-status-"));
+    const created = await createContentFolder(
+      root,
+      "脚本转图文",
+      new Date(2026, 7, 20),
+      "article",
+    );
+    const scriptPath = join(created.folderPath, "script.md");
+    const coverPath = join(created.folderPath, "cover.png");
+    await writeFile(scriptPath, "# 正文\n");
+    await writeFile(coverPath, "cover");
+    await writeFile(join(created.folderPath, DISTRIBUTION_PACKAGE_NAME), JSON.stringify({
+      schemaVersion: 1,
+      id: created.id,
+      mode: "article",
+      createdAt: "2026-08-20T12:00:00.000Z",
+      selection: { mode: "article", articlePath: scriptPath, coverPath },
+      variants: {
+        baijiahao: { title: "标题", summary: "摘要", body: "正文", tags: ["AI"] },
+      },
+    }));
+    const overlay = emptyOverlay();
+    overlay.items[created.id] = {
+      publish: {
+        baijiahao: {
+          status: "draft",
+          url: "https://baijiahao.baidu.com/builder/rc/edit?article_id=1",
+          remoteId: "1",
+        },
+      },
+    };
+
+    const [item] = await scanLibrary(root, overlay);
+
+    expect(item?.hasArticle).toBe(false);
+    expect(item?.assets.articles.map((asset) => asset.name)).toContain("script.md");
+    expect(item?.publish.baijiahao.status).toBe("draft");
+    expect(item?.workflow).toBe("live");
+  });
 });
 
 describe("script.md", () => {

@@ -140,7 +140,7 @@ export function workflowOf(
 ): WorkflowStage {
   const contentType = resolveContentType(item);
   const hasSource = contentType === "article"
-    ? item.hasArticle && hasCover(item)
+    ? (item.hasArticle || item.assets.articles.length > 0) && hasCover(item)
     : contentType === "video"
       ? item.videoRaw !== undefined || item.videoSubtitled !== undefined
       : false;

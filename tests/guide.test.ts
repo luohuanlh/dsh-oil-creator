@@ -30,7 +30,7 @@ describe("creatorGuideText", () => {
     expect(guide).toContain("## 2. 选择平台并创建草稿");
     expect(guide).not.toContain("## 3.");
     expect(guide).toContain("最终发表");
-    expect(guide).toContain("公众号图文");
+    expect(guide).toContain("图文草稿");
     expect(guide).toContain("不需要手写 publish-package.json");
     expect(guide).toContain("微信公众号");
   });

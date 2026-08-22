@@ -16,9 +16,10 @@ const draft = vi.hoisted(() => ({
 }));
 
 const articleDraft = vi.hoisted(() => ({
-  prepare: vi.fn(async () => ({ input: { platform: "wechat-mp" } })),
+  prepare: vi.fn(async (_item, platform) => ({ input: { platform } })),
   start: vi.fn(),
   finish: undefined as undefined | ((result: { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }) => void),
+  finishes: new Map<string, (result: { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }) => void>(),
 }));
 
 vi.mock("../src/draftRunner.ts", () => ({
@@ -109,11 +110,18 @@ beforeEach(() => {
   articleDraft.prepare.mockClear();
   articleDraft.start.mockReset();
   articleDraft.finish = undefined;
-  articleDraft.start.mockImplementation(async () => {
+  articleDraft.finishes.clear();
+  articleDraft.start.mockImplementation(async (prepared) => {
     const completion = new Promise<
       { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }
-    >((resolve) => { articleDraft.finish = resolve; });
-    return { pid: 54321, completion };
+    >((resolve) => {
+      articleDraft.finish = resolve;
+      articleDraft.finishes.set(prepared.input.platform, resolve);
+    });
+    return {
+      pid: prepared.input.platform === "wechat-mp" ? 54321 : 54322,
+      completion,
+    };
   });
 });
 
@@ -410,6 +418,99 @@ describe("OilCreatorService.startDrafts", () => {
         .toMatchObject({ status: "draft", url: "https://mp.weixin.qq.com/draft/42", remoteId: "42" });
     });
   });
+
+  it("文章冻结包交给百家号 Ego 适配器", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-baijiahao-"));
+    const article = join(root, "article.md");
+    const cover = join(root, "cover.png");
+    await writeFile(article, "# 文章");
+    await writeFile(cover, "cover");
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["baijiahao"] };
+    overlay.accounts = { baijiahao: { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const { videoRaw: _videoRaw, ...articleBase } = summary(root, join(root, "missing.mp4"));
+    const content: ContentSummary = {
+      ...articleBase,
+      assets: {
+        videos: [],
+        subtitles: [],
+        articles: [{ name: "article.md", path: article }],
+        covers: [{ name: "cover.png", path: cover }],
+      },
+      hasArticle: true,
+      articlePath: article,
+    };
+    const service = probe(root, content);
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["baijiahao"] },
+      new AbortController().signal,
+    );
+
+    expect(articleDraft.prepare).toHaveBeenCalledWith(content, "baijiahao");
+    expect(articleDraft.start).toHaveBeenCalledTimes(1);
+    articleDraft.finish?.({
+      ok: true,
+      url: "https://baijiahao.baidu.com/builder/rc/edit?article_id=42",
+      remoteId: "42",
+      taskSpace: "9",
+    });
+    await vi.waitFor(async () => {
+      expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.baijiahao)
+        .toMatchObject({
+          status: "draft",
+          url: "https://baijiahao.baidu.com/builder/rc/edit?article_id=42",
+          remoteId: "42",
+        });
+    });
+  });
+
+  it("同一次图文任务并发启动公众号与百家号并独立记录结果", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-article-multi-"));
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["wechat-mp", "baijiahao"] };
+    overlay.accounts = {
+      "wechat-mp": { status: "active", checkedAt: 1 },
+      baijiahao: { status: "active", checkedAt: 1 },
+    };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, join(root, "missing.mp4")));
+
+    const result = await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["wechat-mp", "baijiahao"] },
+      new AbortController().signal,
+    );
+
+    expect(result).toMatchObject({
+      platforms: ["wechat-mp", "baijiahao"],
+      started: true,
+    });
+    expect(articleDraft.prepare.mock.calls.map((call) => call[1]))
+      .toEqual(["wechat-mp", "baijiahao"]);
+    expect(articleDraft.start).toHaveBeenCalledTimes(2);
+    expect(articleDraft.finishes.size).toBe(2);
+    expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish)
+      .toMatchObject({
+        "wechat-mp": { draftState: "running", draftPid: 54321 },
+        baijiahao: { draftState: "running", draftPid: 54322 },
+      });
+
+    articleDraft.finishes.get("wechat-mp")?.({
+      ok: true,
+      url: "https://mp.weixin.qq.com/draft/42",
+      remoteId: "42",
+      taskSpace: "7",
+    });
+    articleDraft.finishes.get("baijiahao")?.({ ok: false, error: "百家号页面失败" });
+    await vi.waitFor(async () => {
+      const publish = (await loadOverlay(root)).items["2026-08-21_demo"]?.publish;
+      expect(publish?.["wechat-mp"])
+        .toMatchObject({ status: "draft", remoteId: "42" });
+      expect(publish?.baijiahao)
+        .toMatchObject({ draftState: "error", draftError: "百家号页面失败" });
+    });
+  });
 });
 
 describe("OilCreatorService.getPlatformAccounts", () => {
@@ -426,6 +527,8 @@ describe("OilCreatorService.getPlatformAccounts", () => {
       .toMatchObject({ status: "active", supportsAutoDraft: false });
     expect(result.accounts.find((row) => row.platform === "bilibili")?.supportsAutoDraft)
       .toBe(true);
+    expect(result.accounts.find((row) => row.platform === "baijiahao"))
+      .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "implemented-simulated" });
     expect(result.accounts.find((row) => row.platform === "netease-music"))
       .toMatchObject({ status: "unknown", supportsAutoDraft: false });
     expect(result.accounts.find((row) => row.platform === "ximalaya"))
