@@ -27,6 +27,12 @@ describe("platform catalog", () => {
       kind: "audio",
       draftRunner: null,
     });
+    expect(PUBLISH_PLATFORM_DEFINITIONS.xueqiu.workspaceUrl)
+      .toBe("https://mp.xueqiu.com/writeV2");
+    expect(PUBLISH_PLATFORM_DEFINITIONS.eastmoney.workspaceUrl)
+      .toContain("/collect/pc_article/index.html#/");
+    expect(PUBLISH_PLATFORM_DEFINITIONS.weibo.workspaceUrl)
+      .toBe("https://card.weibo.com/article/v5/editor");
   });
 
   it("只把七个真实运行器平台标为自动草稿", () => {

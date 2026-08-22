@@ -59,12 +59,22 @@
 
 ## Tomorrow Verification Queue
 
-1. **知乎**：在 Ego Browser 登录知乎后打开文章编辑器；Agent 下一步用一条明确指定的测试内容执行单平台草稿，确认 create/PATCH 可用、标题与 `/p/{id}/edit` 回读一致。通过后再配置 `draftRunner: article-ego` 并补三平台并发测试。
-2. **搜狐号**：登录并确认要使用的子账号；Agent 下一步验证 `account/list`、`sp-cm` 与 draft v2 响应 ID，确认标题回读和 `declareOriginal=false`，再开放 checkbox。
-3. **雪球号**：登录雪球创作平台；Agent 下一步只保存一份测试长文草稿，确认返回 ID 和 `/write/draft/{id}` 标题，不点击“预览发布”。
-4. **东方财富号**：登录创作平台；Agent 下一步先做只读 token/CORS 探针，确认页面可读取 `ct/ut` 且 `Tran/GetData` 可调用，再决定是否执行测试草稿；若 token 为 HttpOnly，则调整 Ego 能力而不是绕过安全机制。
-5. **微博**：登录微博文章编辑器；Agent 下一步验证账号配置、draft create/save 与 hash 回读，明确页面只有草稿动作后再开放。
-6. **微信公众号、百家号**：指定一条允许创建测试草稿的内容并确认账号已登录；Agent 下一步分别保存一次并回读 `appmsgid` / `article_id` 和标题，把 `LOCAL_TESTED` 升级为 `REMOTE_VERIFIED`。
+1. **微信公众号、百家号**：指定一条允许创建测试草稿的内容并确认账号已登录；Agent 下一步分别保存一次并回读 `appmsgid` / `article_id` 和标题，把已经开放的能力从 `LOCAL_TESTED` 升级为 `REMOTE_VERIFIED`。
+2. **知乎**：在 Ego Browser 登录知乎后打开文章编辑器；Agent 下一步用一条明确指定的测试内容执行单平台草稿，确认 create/PATCH 可用、标题与 `/p/{id}/edit` 回读一致。通过后再配置 `draftRunner: article-ego` 并补三平台并发测试。
+3. **搜狐号**：登录并确认要使用的子账号；Agent 下一步验证 `account/list`、`sp-cm` 与 draft v2 响应 ID，确认标题回读和 `declareOriginal=false`，再开放 checkbox。
+4. **雪球号**：登录雪球创作平台；Agent 下一步只保存一份测试长文草稿，确认返回 ID 和 `/write/draft/{id}` 标题，不点击“预览发布”。
+5. **东方财富号**：登录创作平台；Agent 下一步先做只读 token/CORS 探针，确认页面可读取 `ct/ut` 且 `Tran/GetData` 可调用，再决定是否执行测试草稿；若 token 为 HttpOnly，则调整 Ego 能力而不是绕过安全机制。
+6. **微博**：登录微博文章编辑器；Agent 下一步验证账号配置、draft create/save 与 hash 回读，明确页面只有草稿动作后再开放。
+
+## Remaining Platform Audit
+
+| 平台 | 状态 | 阻塞证据与下一步 |
+|---|---|---|
+| 企鹅号、网易号、一点号、大鱼号 | `BLOCKED_PLATFORM` | 当前产品只有账号入口，Wechatsync 现有 core 没有对应 Adapter；需先取得可靠草稿端点、ID 与编辑页规则，不能从旧扩展运行时猜测。 |
+| 顶端新闻、同顺号、维科网 | `BLOCKED_PLATFORM` | 没有已审计的草稿参考实现；需先做登录后的只读网络/页面探针，确认存在明确“保存草稿”动作。 |
+| 老虎财经、富途牛牛 | `BLOCKED_PLATFORM` | 涉及财经社区账号与平台风控，当前无可靠 Article Adapter 证据；不尝试绕过登录或私有安全机制。 |
+| 小红书图文笔记 | `UNSUPPORTED` | 当前 `xiaohongshu` 定义是视频运行器，不能据此升级为图文笔记能力；需要独立的 note 输入、草稿证据和安全回归。 |
+| 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 属于音频平台，不在 Article Publisher 范围。 |
 
 ## 2026-08-23 百家号图文草稿 P0
 
