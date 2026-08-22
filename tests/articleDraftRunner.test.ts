@@ -85,10 +85,13 @@ describe("WeChat article draft runner", () => {
   it("只接受经过页面回读验证的草稿结果", () => {
     expect(parseArticleDraftOutput([
       "noise",
-      JSON.stringify({ ok: true, platform: "wechat-mp", verified: true, remoteId: "42", draftUrl: "https://mp.weixin.qq.com/draft/42", taskSpace: "7" }),
-    ].join("\n"))).toMatchObject({ ok: true, remoteId: "42", taskSpace: "7" });
+      JSON.stringify({ ok: true, platform: "wechat-mp", status: "REMOTE_VERIFIED", verified: true, remoteId: "42", draftUrl: "https://mp.weixin.qq.com/draft/42", taskSpace: "7" }),
+    ].join("\n"), "wechat-mp")).toMatchObject({ ok: true, remoteId: "42", taskSpace: "7" });
 
-    expect(() => parseArticleDraftOutput(JSON.stringify({ ok: true, verified: false })))
+    expect(() => parseArticleDraftOutput(
+      JSON.stringify({ ok: true, verified: false }),
+      "wechat-mp",
+    ))
       .toThrow("未通过草稿页面验证");
   });
 
@@ -128,6 +131,7 @@ describe("WeChat article draft runner", () => {
     expect(parseArticleDraftOutput(JSON.stringify({
       ok: true,
       platform: "baijiahao",
+      status: "REMOTE_VERIFIED",
       verified: true,
       remoteId: "article-42",
       draftUrl: "https://baijiahao.baidu.com/builder/rc/edit?article_id=article-42",
@@ -136,6 +140,7 @@ describe("WeChat article draft runner", () => {
     expect(() => parseArticleDraftOutput(JSON.stringify({
       ok: true,
       platform: "wechat-mp",
+      status: "REMOTE_VERIFIED",
       verified: true,
       remoteId: "42",
       draftUrl: "https://mp.weixin.qq.com/draft/42",

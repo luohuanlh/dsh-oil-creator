@@ -303,8 +303,9 @@ const platformAccountSchema = z.object({
   supportsAutoDraft: z.boolean(),
   draftCapability: z.union([
     z.literal("remote-verified"),
-    z.literal("implemented-simulated"),
+    z.literal("local-tested"),
     z.literal("page-ready"),
+    z.literal("manual-handoff"),
     z.literal("unsupported"),
   ]),
 });

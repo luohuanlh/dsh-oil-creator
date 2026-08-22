@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARTICLE_DRAFT_PLATFORMS,
   AUTO_DRAFT_PLATFORMS,
   draftCapability,
+  isArticleDraftPlatform,
   normalizeEnabledPlatforms,
   PUBLISH_PLATFORM_DEFINITIONS,
   PUBLISH_PLATFORMS,
@@ -44,14 +46,24 @@ describe("platform catalog", () => {
     expect(toVideoPublisherPlatform("channels")).toBe("wechat_channels");
     expect(toVideoPublisherPlatform("kuaishou")).toBe("kuaishou");
     expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
+    expect(ARTICLE_DRAFT_PLATFORMS).toEqual(["baijiahao", "wechat-mp"]);
+    expect(isArticleDraftPlatform("wechat-mp")).toBe(true);
+    expect(isArticleDraftPlatform("zhihu")).toBe(false);
     expect(draftCapability("bilibili")).toBe("remote-verified");
-    expect(draftCapability("wechat-mp")).toBe("implemented-simulated");
-    expect(draftCapability("baijiahao")).toBe("implemented-simulated");
+    expect(draftCapability("wechat-mp")).toBe("local-tested");
+    expect(draftCapability("baijiahao")).toBe("local-tested");
     expect(draftCapability("douyin")).toBe("remote-verified");
-    expect(draftCapability("xiaohongshu")).toBe("remote-verified");
-    expect(draftCapability("channels")).toBe("remote-verified");
+    expect(draftCapability("xiaohongshu")).toBe("page-ready");
+    expect(draftCapability("channels")).toBe("page-ready");
     expect(draftCapability("kuaishou")).toBe("remote-verified");
-    expect(draftCapability("zhihu")).toBe("unsupported");
+    expect(draftCapability("toutiao")).toBe("manual-handoff");
+    expect(draftCapability("zhihu")).toBe("local-tested");
+    expect(draftCapability("sohu")).toBe("local-tested");
+    expect(draftCapability("xueqiu")).toBe("local-tested");
+    expect(draftCapability("eastmoney")).toBe("local-tested");
+    expect(draftCapability("weibo")).toBe("local-tested");
+    const hiddenLocalAdapters = ["zhihu", "sohu", "xueqiu", "eastmoney", "weibo"] as const;
+    expect(hiddenLocalAdapters.every((platform) => !supportsAutoDraft(platform))).toBe(true);
   });
 
   it("迁移旧版 wechat id 并过滤无效值", () => {

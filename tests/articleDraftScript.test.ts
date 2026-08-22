@@ -11,6 +11,26 @@ const baijiahaoRuntimeFixture = resolve(
   process.cwd(),
   "tests/fixtures/baijiahao-article-draft-ego-runtime.mjs",
 );
+const zhihuRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/zhihu-article-draft-ego-runtime.mjs",
+);
+const sohuRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/sohu-article-draft-ego-runtime.mjs",
+);
+const xueqiuRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/xueqiu-article-draft-ego-runtime.mjs",
+);
+const eastmoneyRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/eastmoney-article-draft-ego-runtime.mjs",
+);
+const weiboRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/weibo-article-draft-ego-runtime.mjs",
+);
 const articleDraftScript = resolve(process.cwd(), "scripts/article-draft.mjs");
 
 interface FixtureRun {
@@ -53,6 +73,106 @@ async function runBaijiahaoFixture(
   }
 }
 
+async function runZhihuFixture(
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      zhihuRuntimeFixture,
+      articleDraftScript,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
+async function runSohuFixture(
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      sohuRuntimeFixture,
+      articleDraftScript,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
+async function runXueqiuFixture(
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      xueqiuRuntimeFixture,
+      articleDraftScript,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
+async function runEastmoneyFixture(
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      eastmoneyRuntimeFixture,
+      articleDraftScript,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
+async function runWeiboFixture(
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      weiboRuntimeFixture,
+      articleDraftScript,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
 function jsonLines(output: string): Array<Record<string, unknown>> {
   return output
     .split(/\r?\n/)
@@ -60,6 +180,24 @@ function jsonLines(output: string): Array<Record<string, unknown>> {
     .filter((line) => line.startsWith("{"))
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
+
+describe("Article Publisher 统一契约", () => {
+  const source = readFileSync(articleDraftScript, "utf8");
+
+  it("通过平台注册表分派 inspect、saveDraft 和 verify", () => {
+    expect(source).toContain("registerArticleAdapter");
+    expect(source).toContain("adapter.inspect");
+    expect(source).toContain("adapter.saveDraft");
+    expect(source).toContain("adapter.verify");
+    expect(source).not.toContain('if (input.platform === "baijiahao")');
+  });
+
+  it("统一输出明确的远端验证或阻塞状态", () => {
+    expect(source).toContain('status: "REMOTE_VERIFIED"');
+    expect(source).toContain('status: "BLOCKED_AUTH"');
+    expect(source).toContain('status: "REMOTE_UNVERIFIED"');
+  });
+});
 
 describe("微信公众号 Ego 草稿脚本", () => {
   const source = readFileSync(resolve(process.cwd(), "scripts/article-draft.mjs"), "utf8");
@@ -148,6 +286,7 @@ describe("微信公众号 Ego 草稿脚本", () => {
     expect(draft).toMatchObject({ ok: false });
     expect(String(draft?.error)).toContain("[REDACTED]");
     expect(JSON.stringify(draft)).not.toContain("token-123");
+    expect(JSON.stringify(draft)).not.toContain("auth-secret-456");
   });
 });
 
@@ -232,5 +371,291 @@ describe("百家号 Ego 草稿脚本", () => {
       .find((line) => line.platform === "baijiahao");
     expect(verificationFailure.code).toBe(4);
     expect(verificationDraft).toMatchObject({ ok: false, error: "百家号未通过草稿页面验证" });
+  });
+});
+
+describe("知乎 Article Adapter", () => {
+  const source = readFileSync(articleDraftScript, "utf8");
+
+  it("只创建和更新草稿，不包含最终发布请求", () => {
+    expect(source).toContain('platform: "zhihu"');
+    expect(source).toContain("zhuanlan.zhihu.com/api/articles/drafts");
+    expect(source).toContain("/draft");
+    expect(source).not.toContain("/publish");
+  });
+
+  it("在模拟已登录页面中创建、更新并回读知乎草稿", async () => {
+    const result = await runZhihuFixture("success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === "zhihu");
+    const trace = lines.find((line) => line.fixture === true);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      verified: true,
+      remoteId: "draft-42",
+      draftUrl: "https://zhuanlan.zhihu.com/p/draft-42/edit",
+      taskSpace: "11",
+      handedOff: true,
+    });
+    expect(trace).toMatchObject({
+      fixture: true,
+      handedOff: ["11"],
+      openedDraft: true,
+      requests: [
+        { kind: "create", method: "POST", title: "Harness 生成的知乎标题", content: "" },
+        { kind: "update", method: "PATCH", title: "Harness 生成的知乎标题" },
+      ],
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/publish|发布|发表/i);
+  });
+
+  it("登录失效、保存拒绝或回读不一致时返回准确状态", async () => {
+    const login = await runZhihuFixture("login");
+    expect(login.code).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === "zhihu"))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH", handedOff: true });
+
+    const saveFailure = await runZhihuFixture("save-failure");
+    expect(saveFailure.code).toBe(3);
+    expect(jsonLines(saveFailure.stdout).find((line) => line.platform === "zhihu"))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+
+    const verificationFailure = await runZhihuFixture("verification-failure");
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "zhihu"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+describe("搜狐号 Article Adapter", () => {
+  const source = readFileSync(articleDraftScript, "utf8");
+
+  it("只调用搜狐号草稿接口且不声明原创", () => {
+    expect(source).toContain('platform: "sohu"');
+    expect(source).toContain("/mpbp/bp/account/list");
+    expect(source).toContain("/news/draft/v2");
+    expect(source).toContain("declareOriginal: false");
+  });
+
+  it("在模拟已登录页面中保存并回读搜狐号草稿", async () => {
+    const result = await runSohuFixture("success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === "sohu");
+    const trace = lines.find((line) => line.fixture === true);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      remoteId: "sohu-draft-42",
+      taskSpace: "13",
+      handedOff: true,
+    });
+    expect(trace).toMatchObject({
+      fixture: true,
+      openedDraft: true,
+      requests: [
+        { kind: "account", method: "GET" },
+        {
+          kind: "save",
+          method: "POST",
+          accountId: 7,
+          title: "Harness 生成的搜狐号标题",
+          declareOriginal: false,
+        },
+      ],
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/publish|发表|发布/i);
+  });
+
+  it("登录、保存和回读失败均不误报草稿成功", async () => {
+    const login = await runSohuFixture("login");
+    expect(login.code).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === "sohu"))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH", handedOff: true });
+
+    const saveFailure = await runSohuFixture("save-failure");
+    expect(saveFailure.code).toBe(3);
+    expect(jsonLines(saveFailure.stdout).find((line) => line.platform === "sohu"))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+
+    const verificationFailure = await runSohuFixture("verification-failure");
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "sohu"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+describe("雪球号 Article Adapter", () => {
+  const source = readFileSync(articleDraftScript, "utf8");
+
+  it("只调用雪球草稿保存接口", () => {
+    expect(source).toContain('platform: "xueqiu"');
+    expect(source).toContain("/xq/statuses/draft/save.json");
+    expect(source).toContain("/write/draft/");
+  });
+
+  it("在模拟已登录页面中保存并回读雪球草稿", async () => {
+    const result = await runXueqiuFixture("success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === "xueqiu");
+    const trace = lines.find((line) => line.fixture === true);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      remoteId: "xueqiu-draft-42",
+      draftUrl: "https://mp.xueqiu.com/write/draft/xueqiu-draft-42",
+      taskSpace: "15",
+    });
+    expect(trace).toMatchObject({
+      fixture: true,
+      openedDraft: true,
+      requests: [{
+        kind: "save",
+        method: "POST",
+        title: "Harness 生成的雪球号标题",
+        isPrivate: "false",
+      }],
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/publish|发表|发布/i);
+  });
+
+  it("登录、保存和回读失败均返回独立阻塞状态", async () => {
+    const login = await runXueqiuFixture("login");
+    expect(login.code).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === "xueqiu"))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH", handedOff: true });
+
+    const saveFailure = await runXueqiuFixture("save-failure");
+    expect(saveFailure.code).toBe(3);
+    expect(jsonLines(saveFailure.stdout).find((line) => line.platform === "xueqiu"))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+
+    const verificationFailure = await runXueqiuFixture("verification-failure");
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "xueqiu"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+describe("东方财富号 Article Adapter", () => {
+  const source = readFileSync(articleDraftScript, "utf8");
+
+  it("通过东方财富草稿代理创建和更新草稿", () => {
+    expect(source).toContain('platform: "eastmoney"');
+    expect(source).toContain("apifront/Tran/GetData");
+    expect(source).toContain("draft/api/Article/SaveDraft");
+  });
+
+  it("在模拟已登录页面中完成创建、更新和回读", async () => {
+    const result = await runEastmoneyFixture("success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === "eastmoney");
+    const trace = lines.find((line) => line.fixture === true);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      remoteId: "eastmoney-draft-42",
+      taskSpace: "17",
+    });
+    expect(trace).toMatchObject({
+      fixture: true,
+      openedDraft: true,
+      requests: [
+        { kind: "create", method: "POST", title: "Harness 生成的东方财富标题" },
+        {
+          kind: "update",
+          method: "POST",
+          title: "Harness 生成的东方财富标题",
+          draftId: "eastmoney-draft-42",
+        },
+      ],
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/publish|发表|发布/i);
+  });
+
+  it("登录、草稿 API 和回读失败均不会升级远端状态", async () => {
+    const login = await runEastmoneyFixture("login");
+    expect(login.code).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === "eastmoney"))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH", handedOff: true });
+
+    const saveFailure = await runEastmoneyFixture("save-failure");
+    expect(saveFailure.code).toBe(3);
+    expect(jsonLines(saveFailure.stdout).find((line) => line.platform === "eastmoney"))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+
+    const verificationFailure = await runEastmoneyFixture("verification-failure");
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "eastmoney"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+describe("微博 Article Adapter", () => {
+  const source = readFileSync(articleDraftScript, "utf8");
+
+  it("只调用微博文章草稿创建和保存接口", () => {
+    expect(source).toContain('platform: "weibo"');
+    expect(source).toContain("/editor/draft/create");
+    expect(source).toContain("/editor/draft/save");
+    expect(source).not.toContain("/editor/publish");
+  });
+
+  it("在模拟已登录页面中创建、保存并回读微博文章草稿", async () => {
+    const result = await runWeiboFixture("success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === "weibo");
+    const trace = lines.find((line) => line.fixture === true);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      remoteId: "weibo-draft-42",
+      draftUrl: "https://card.weibo.com/article/v5/editor#/draft/weibo-draft-42",
+      taskSpace: "19",
+    });
+    expect(trace).toMatchObject({
+      fixture: true,
+      openedDraft: true,
+      requests: [
+        { kind: "account", method: "GET" },
+        { kind: "create", method: "POST" },
+        {
+          kind: "save",
+          method: "POST",
+          title: "Harness 生成的微博文章标题",
+          save: "1",
+          action: "1",
+          status: "0",
+        },
+      ],
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/publish|发表|发布/i);
+  });
+
+  it("登录、保存和回读失败均保留准确状态", async () => {
+    const login = await runWeiboFixture("login");
+    expect(login.code).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === "weibo"))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH", handedOff: true });
+
+    const saveFailure = await runWeiboFixture("save-failure");
+    expect(saveFailure.code).toBe(3);
+    expect(jsonLines(saveFailure.stdout).find((line) => line.platform === "weibo"))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+
+    const verificationFailure = await runWeiboFixture("verification-failure");
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "weibo"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
   });
 });

@@ -528,7 +528,7 @@ describe("OilCreatorService.getPlatformAccounts", () => {
     expect(result.accounts.find((row) => row.platform === "bilibili")?.supportsAutoDraft)
       .toBe(true);
     expect(result.accounts.find((row) => row.platform === "baijiahao"))
-      .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "implemented-simulated" });
+      .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "local-tested" });
     expect(result.accounts.find((row) => row.platform === "netease-music"))
       .toMatchObject({ status: "unknown", supportsAutoDraft: false });
     expect(result.accounts.find((row) => row.platform === "ximalaya"))

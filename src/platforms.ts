@@ -11,6 +11,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://passport.bilibili.com/login",
     workspaceUrl: "https://member.bilibili.com/platform/home",
     draftRunner: "video-publisher",
+    draftCapability: "remote-verified",
   },
   douyin: {
     name: "抖音",
@@ -18,6 +19,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://creator.douyin.com/",
     workspaceUrl: "https://creator.douyin.com/creator-micro/home",
     draftRunner: "video-publisher",
+    draftCapability: "remote-verified",
   },
   xiaohongshu: {
     name: "小红书",
@@ -25,6 +27,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://creator.xiaohongshu.com/",
     workspaceUrl: "https://creator.xiaohongshu.com/new/home",
     draftRunner: "video-publisher",
+    draftCapability: "page-ready",
   },
   channels: {
     name: "视频号",
@@ -32,6 +35,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://channels.weixin.qq.com/login.html",
     workspaceUrl: "https://channels.weixin.qq.com/platform",
     draftRunner: "video-publisher",
+    draftCapability: "page-ready",
   },
   kuaishou: {
     name: "快手",
@@ -39,6 +43,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://cp.kuaishou.com/",
     workspaceUrl: "https://cp.kuaishou.com/article/publish/video",
     draftRunner: "video-publisher",
+    draftCapability: "remote-verified",
   },
   toutiao: {
     name: "头条号",
@@ -46,6 +51,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.toutiao.com/",
     workspaceUrl: "https://mp.toutiao.com/profile_v4/graphic/publish",
     draftRunner: null,
+    draftCapability: "manual-handoff",
   },
   baijiahao: {
     name: "百家号",
@@ -53,6 +59,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://baijiahao.baidu.com/",
     workspaceUrl: "https://baijiahao.baidu.com/builder/rc/edit",
     draftRunner: "article-ego",
+    draftCapability: "local-tested",
   },
   penguin: {
     name: "企鹅号",
@@ -60,6 +67,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://om.qq.com/",
     workspaceUrl: "https://om.qq.com/userAuth/index",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   netease: {
     name: "网易号",
@@ -67,6 +75,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.163.com/",
     workspaceUrl: "https://mp.163.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   yidian: {
     name: "一点号",
@@ -74,6 +83,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.yidianzixun.com/",
     workspaceUrl: "https://mp.yidianzixun.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   dayu: {
     name: "大鱼号",
@@ -81,6 +91,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.dayu.com/",
     workspaceUrl: "https://mp.dayu.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   dingduan: {
     name: "顶端新闻",
@@ -88,6 +99,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://www.topnews.cn/",
     workspaceUrl: "https://www.topnews.cn/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   xueqiu: {
     name: "雪球号",
@@ -95,6 +107,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://xueqiu.com/",
     workspaceUrl: "https://xueqiu.com/",
     draftRunner: null,
+    draftCapability: "local-tested",
   },
   eastmoney: {
     name: "东方财富号",
@@ -102,6 +115,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.eastmoney.com/",
     workspaceUrl: "https://mp.eastmoney.com/",
     draftRunner: null,
+    draftCapability: "local-tested",
   },
   "10jqka": {
     name: "同顺号",
@@ -109,6 +123,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://t.10jqka.com.cn/",
     workspaceUrl: "https://t.10jqka.com.cn/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   sohu: {
     name: "搜狐号",
@@ -116,6 +131,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.sohu.com/",
     workspaceUrl: "https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle",
     draftRunner: null,
+    draftCapability: "local-tested",
   },
   weibo: {
     name: "微博",
@@ -123,6 +139,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://weibo.com/",
     workspaceUrl: "https://weibo.com/",
     draftRunner: null,
+    draftCapability: "local-tested",
   },
   zhihu: {
     name: "知乎",
@@ -130,6 +147,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://www.zhihu.com/signin",
     workspaceUrl: "https://zhuanlan.zhihu.com/write",
     draftRunner: null,
+    draftCapability: "local-tested",
   },
   ofweek: {
     name: "维科网",
@@ -137,6 +155,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.ofweek.com/",
     workspaceUrl: "https://mp.ofweek.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   laohu: {
     name: "老虎财经",
@@ -144,6 +163,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://www.laohu8.com/",
     workspaceUrl: "https://www.laohu8.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   futu: {
     name: "富途牛牛",
@@ -151,6 +171,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://www.futunn.com/",
     workspaceUrl: "https://www.futunn.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   "wechat-mp": {
     name: "微信公众号",
@@ -158,6 +179,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://mp.weixin.qq.com/",
     workspaceUrl: "https://mp.weixin.qq.com/",
     draftRunner: "article-ego",
+    draftCapability: "local-tested",
   },
   "netease-music": {
     name: "网易云音乐",
@@ -165,6 +187,7 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://music.163.com/#/login",
     workspaceUrl: "https://music.163.com/musician/artist/home",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
   ximalaya: {
     name: "喜马拉雅听",
@@ -172,15 +195,24 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     loginUrl: "https://studio.ximalaya.com/",
     workspaceUrl: "https://studio.ximalaya.com/",
     draftRunner: null,
+    draftCapability: "unsupported",
   },
 } as const;
 
 export type PublishPlatform = keyof typeof PUBLISH_PLATFORM_DEFINITIONS;
 export type PlatformKind = (typeof PUBLISH_PLATFORM_DEFINITIONS)[PublishPlatform]["kind"];
+type PlatformWithDraftRunner<Runner extends string> = {
+  [Platform in PublishPlatform]:
+    (typeof PUBLISH_PLATFORM_DEFINITIONS)[Platform]["draftRunner"] extends Runner
+      ? Platform
+      : never;
+}[PublishPlatform];
+export type ArticleDraftPlatform = PlatformWithDraftRunner<"article-ego">;
 export type DraftCapability =
   | "remote-verified"
-  | "implemented-simulated"
+  | "local-tested"
   | "page-ready"
+  | "manual-handoff"
   | "unsupported";
 
 export const PUBLISH_PLATFORMS = Object.freeze(
@@ -194,6 +226,12 @@ export const AUTO_DRAFT_PLATFORMS = Object.freeze(
   PUBLISH_PLATFORMS.filter((platform) =>
     PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner !== null
   ) as PublishPlatform[],
+);
+
+export const ARTICLE_DRAFT_PLATFORMS = Object.freeze(
+  PUBLISH_PLATFORMS.filter((platform): platform is ArticleDraftPlatform =>
+    PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner === "article-ego"
+  ),
 );
 
 export function isPublishPlatform(value: unknown): value is PublishPlatform {
@@ -211,15 +249,14 @@ export function supportsAutoDraft(platform: PublishPlatform): boolean {
   return PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner !== null;
 }
 
+export function isArticleDraftPlatform(
+  platform: PublishPlatform,
+): platform is ArticleDraftPlatform {
+  return PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner === "article-ego";
+}
+
 export function draftCapability(platform: PublishPlatform): DraftCapability {
-  if (platform === "bilibili"
-    || platform === "douyin"
-    || platform === "xiaohongshu"
-    || platform === "channels"
-    || platform === "kuaishou") return "remote-verified";
-  if (platform === "wechat-mp"
-    || platform === "baijiahao") return "implemented-simulated";
-  return "unsupported";
+  return PUBLISH_PLATFORM_DEFINITIONS[platform].draftCapability;
 }
 
 export interface PlatformGenerationRule {

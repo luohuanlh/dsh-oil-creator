@@ -33,13 +33,38 @@
 | 平台 | 当前等级 | 证据 |
 |---|---|---|
 | B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`；本地导入黄金路径再次回归 `draftId=3782858`，标题与冻结包一致 |
-| 微信公众号 | `IMPLEMENTED + SIMULATED` | 生产脚本模拟上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
-| 百家号 | `IMPLEMENTED + SIMULATED` | 生产脚本模拟账号检查、封面上传、草稿保存、`article_id` 与标题回读；无真实账号写入证据 |
+| 微信公众号 | `LOCAL_TESTED` | 生产脚本 fixture 覆盖上传、保存、`appmsgid` 与标题回读；无真实账号写入证据 |
+| 百家号 | `LOCAL_TESTED` | 生产脚本 fixture 覆盖账号检查、封面上传、草稿保存、`article_id` 与标题回读；无真实账号写入证据 |
+| 知乎 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖 draft create/PATCH/标题与 ID 回读；2026-08-23 只读探针进入短信/扫码登录页，未执行保存 |
+| 搜狐号 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖子账号、设备头、draft v2、标题与 ID 回读；只读探针进入账号登录页，未执行保存 |
+| 雪球号 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖草稿保存、HTML 转换与 `/write/draft/{id}` 回读；只读探针显示“未登录” |
+| 东方财富号 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖两阶段 SaveDraft 与 hash 回读；只读探针重定向到创作平台入驻页，`ct/ut` 与 CORS 待实测 |
+| 微博 | `LOCAL_TESTED + BLOCKED_AUTH` | fixture 覆盖 draft create/save 与 hash 回读；只读探针重定向到公开登录页，未执行保存 |
 | 抖音 | `REMOTE_VERIFIED` | 真实草稿标题一致，远端 `video_id=v0200fg10000da438evog65gkcsbelp0`，draft 入口回读通过 |
 | 快手 | `REMOTE_VERIFIED` | 真实 3 秒 MP4 冷启动首轮 `READY`，服务器快照回读稳定 `fileId=3931762113`、文件名、精确描述、`mediaId` 与时长 |
-| 小红书 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
-| 视频号 | `IMPLEMENTED + SIMULATED` | 已接入 `video-publisher`，本仓库没有逐平台真实 `READY` 日志，也没有远端保存或 id 回读 |
-| 其他平台 | `UNSUPPORTED` | 只有账号入口，没有草稿运行器 |
+| 小红书 | `PAGE_READY` | 已接入 `video-publisher`，本仓库没有逐平台远端保存或 id 回读证据 |
+| 视频号 | `PAGE_READY` | 已接入 `video-publisher`，本仓库没有逐平台远端保存或 id 回读证据 |
+| 头条号 | `MANUAL_HANDOFF` | 只生成平台版本并打开编辑页；无可靠自动文章草稿证据 |
+| 其他平台 | `UNSUPPORTED` | 只有账号入口，没有 Article Adapter 或草稿运行器 |
+
+## 2026-08-23 统一 Article Publisher 与五平台本地适配
+
+- 微信公众号与百家号的生产逻辑已迁移为统一 `inspect → saveDraft → verify` 契约；Dispatcher 通过注册表选平台，不再包含 `if wechat / else baijiahao`。
+- 源码拆分为 `scripts/article/core.mjs`、`platforms/*.mjs` 和 `dispatch.mjs`，构建生成单文件 `article-draft.mjs`。`articleDraftBundle.test.ts` 保证 bundle 同步、每个 Adapter 只注册一次完整三阶段契约、core/dispatch 不含平台名或平台分支。
+- 知乎 fixture 验证创建空草稿、PATCH 标题/正文、重新打开 `/p/{id}/edit` 并精确匹配标题和 ID；登录、保存拒绝、回读不一致分别得到 `BLOCKED_AUTH`、`BLOCKED_PLATFORM`、`REMOTE_UNVERIFIED`。
+- 搜狐号 fixture 验证子账号解析、`dv-id`/`sp-cm`、`draft/v2`、`declareOriginal=false` 和编辑页回读；雪球验证唯一草稿保存端点与 `/write/draft/{id}`；东方财富验证两次 `SaveDraft` 嵌套响应；微博验证 `draft/create → draft/save → #/draft/{id}`。
+- 五个平台都只保存草稿，fixture 请求跟踪不含最终发布端点。它们仍缺真实账号回归，`supportsAutoDraft=false`；不会出现在可勾选的图文平台集合，也不会参与现有微信/百家号并发请求。
+- Chrome 只读探针分别确认：知乎、搜狐、雪球、东方财富、微博当前均未登录。探针只打开创作入口并读取 URL/页面文本，没有创建草稿、上传封面或执行发表。
+- `pnpm check` 通过：51 个测试文件、307 项测试，TypeScript 与 Host/Client/Typert 构建成功；`git diff --check` 和 npm package dry-run 通过，发布包继续包含生成后的自包含 `article-draft.mjs`。
+
+## Tomorrow Verification Queue
+
+1. **知乎**：在 Ego Browser 登录知乎后打开文章编辑器；Agent 下一步用一条明确指定的测试内容执行单平台草稿，确认 create/PATCH 可用、标题与 `/p/{id}/edit` 回读一致。通过后再配置 `draftRunner: article-ego` 并补三平台并发测试。
+2. **搜狐号**：登录并确认要使用的子账号；Agent 下一步验证 `account/list`、`sp-cm` 与 draft v2 响应 ID，确认标题回读和 `declareOriginal=false`，再开放 checkbox。
+3. **雪球号**：登录雪球创作平台；Agent 下一步只保存一份测试长文草稿，确认返回 ID 和 `/write/draft/{id}` 标题，不点击“预览发布”。
+4. **东方财富号**：登录创作平台；Agent 下一步先做只读 token/CORS 探针，确认页面可读取 `ct/ut` 且 `Tran/GetData` 可调用，再决定是否执行测试草稿；若 token 为 HttpOnly，则调整 Ego 能力而不是绕过安全机制。
+5. **微博**：登录微博文章编辑器；Agent 下一步验证账号配置、draft create/save 与 hash 回读，明确页面只有草稿动作后再开放。
+6. **微信公众号、百家号**：指定一条允许创建测试草稿的内容并确认账号已登录；Agent 下一步分别保存一次并回读 `appmsgid` / `article_id` 和标题，把 `LOCAL_TESTED` 升级为 `REMOTE_VERIFIED`。
 
 ## 2026-08-23 百家号图文草稿 P0
 

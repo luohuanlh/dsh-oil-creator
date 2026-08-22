@@ -13,7 +13,7 @@ describe("defaultDistributionPlatforms", () => {
       [
         { platform: "bilibili", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
         { platform: "douyin", status: "unknown", supportsAutoDraft: true, draftCapability: "remote-verified" },
-        { platform: "xiaohongshu", status: "expired", supportsAutoDraft: true, draftCapability: "implemented-simulated" },
+        { platform: "xiaohongshu", status: "expired", supportsAutoDraft: true, draftCapability: "page-ready" },
       ],
     )).toEqual(["bilibili"]);
   });
@@ -23,7 +23,7 @@ describe("defaultDistributionPlatforms", () => {
       ["douyin", "bilibili"],
       [
         { platform: "bilibili", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
-        { platform: "wechat-mp", status: "active", supportsAutoDraft: true, draftCapability: "implemented-simulated" },
+        { platform: "wechat-mp", status: "active", supportsAutoDraft: true, draftCapability: "local-tested" },
         { platform: "douyin", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
       ],
     )).toEqual(["douyin", "bilibili"]);

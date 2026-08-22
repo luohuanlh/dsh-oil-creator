@@ -286,10 +286,12 @@ export function CreatorSettingsCard({
             <span className="accountNameLabel">{definition.name}</span>
             <small>{account.draftCapability === "remote-verified"
               ? t("settings.account.remoteVerified")
-              : account.draftCapability === "implemented-simulated"
+              : account.draftCapability === "local-tested"
                 ? t("settings.account.simulated")
                 : account.draftCapability === "page-ready"
                   ? t("settings.account.pageReady")
+                  : account.draftCapability === "manual-handoff"
+                    ? t("settings.account.manualHandoff")
                   : t("settings.account.bindingOnly")}</small>
           </span>
         </label>

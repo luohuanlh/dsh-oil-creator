@@ -69,13 +69,13 @@ describe("platform accounts", () => {
         checkedAt: 10,
         taskSpace: "42",
         supportsAutoDraft: true,
-        draftCapability: "remote-verified",
+        draftCapability: "page-ready",
       },
       {
         platform: "zhihu",
         status: "expired",
         supportsAutoDraft: false,
-        draftCapability: "unsupported",
+        draftCapability: "local-tested",
       },
     ]);
   });

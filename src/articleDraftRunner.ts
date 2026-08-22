@@ -4,15 +4,19 @@ import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { readFrozenDistributionPackage } from "./distribution.ts";
-import type { ContentSummary, PublishPlatform } from "./types.ts";
+import {
+  isArticleDraftPlatform,
+  PUBLISH_PLATFORM_DEFINITIONS,
+  type ArticleDraftPlatform,
+  type PublishPlatform,
+} from "./platforms.ts";
+import type { ContentSummary } from "./types.ts";
 
-export type ArticleDraftPlatform = Extract<PublishPlatform, "wechat-mp" | "baijiahao">;
+export type { ArticleDraftPlatform } from "./platforms.ts";
 
-const ARTICLE_DRAFT_PLATFORMS = new Set<ArticleDraftPlatform>(["wechat-mp", "baijiahao"]);
-const ARTICLE_PLATFORM_NAMES: Record<ArticleDraftPlatform, string> = {
-  "wechat-mp": "微信公众号",
-  baijiahao: "百家号",
-};
+function articlePlatformName(platform: ArticleDraftPlatform): string {
+  return PUBLISH_PLATFORM_DEFINITIONS[platform].name;
+}
 
 export interface ArticleDraftInput {
   platform: ArticleDraftPlatform;
@@ -33,6 +37,7 @@ export interface PreparedArticleDraftRun {
 export interface ArticleDraftResult {
   ok: true;
   platform: ArticleDraftPlatform;
+  status: "REMOTE_VERIFIED";
   verified: true;
   remoteId: string;
   draftUrl: string;
@@ -133,11 +138,11 @@ export async function prepareArticleDraftRun(
   item: ContentSummary,
   platform: PublishPlatform,
 ): Promise<PreparedArticleDraftRun> {
-  if (!ARTICLE_DRAFT_PLATFORMS.has(platform as ArticleDraftPlatform)) {
+  if (!isArticleDraftPlatform(platform)) {
     throw new Error(`尚未接入图文草稿：${platform}`);
   }
-  const articlePlatform = platform as ArticleDraftPlatform;
-  const platformName = ARTICLE_PLATFORM_NAMES[articlePlatform];
+  const articlePlatform = platform;
+  const platformName = articlePlatformName(articlePlatform);
   const frozen = await readFrozenDistributionPackage(item.folderPath);
   if (frozen === undefined) throw new Error("缺少 Harness 冻结分发包");
   if (frozen.id !== item.id) throw new Error("冻结分发包与当前内容不匹配");
@@ -192,7 +197,7 @@ function articleDraftFailure(
   }
   const detail = raw.trim();
   return detail === ""
-    ? `${ARTICLE_PLATFORM_NAMES[platform]}草稿运行器退出：${code}`
+    ? `${articlePlatformName(platform)}草稿运行器退出：${code}`
     : detail.slice(-2000);
 }
 
@@ -254,7 +259,7 @@ export async function startArticleDraftRun(
 
 export function parseArticleDraftOutput(
   raw: string,
-  expectedPlatform: ArticleDraftPlatform = "wechat-mp",
+  expectedPlatform: ArticleDraftPlatform,
 ): ArticleDraftResult {
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -265,9 +270,10 @@ export function parseArticleDraftOutput(
         continue;
       }
       if (parsed.verified !== true) {
-        throw new Error(`${ARTICLE_PLATFORM_NAMES[expectedPlatform]}未通过草稿页面验证`);
+        throw new Error(`${articlePlatformName(expectedPlatform)}未通过草稿页面验证`);
       }
-      if (parsed.platform !== expectedPlatform
+      if (parsed.status !== "REMOTE_VERIFIED"
+        || parsed.platform !== expectedPlatform
         || typeof parsed.remoteId !== "string"
         || parsed.remoteId.trim() === ""
         || typeof parsed.draftUrl !== "string"

@@ -4,40 +4,38 @@ const [scriptPath, scenario = "success"] = process.argv.slice(2);
 if (!scriptPath) throw new Error("article draft script path is required");
 
 const input = {
-  platform: "wechat-mp",
-  id: "2026-08-21_集成测试",
-  title: "Harness 生成的公众号标题",
-  summary: "Harness 生成的摘要",
+  platform: "eastmoney",
+  id: "2026-08-23_东方财富集成测试",
+  title: "Harness 生成的东方财富标题",
+  summary: "Harness 生成的东方财富摘要",
   html: "<section><h1>平台正文</h1><p>仅用于本地契约测试。</p></section>",
   tags: ["AI"],
   coverMime: "image/png",
   coverBase64: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
-  taskName: "oil-wechat-contract-test",
+  taskName: "oil-eastmoney-contract-test",
 };
 
 const state = {
-  href: "https://mp.weixin.qq.com/?token=token-123",
+  href: "https://mp.eastmoney.com/collect/pc_article/index.html#/",
   draftOpened: false,
   handedOff: [],
   requests: [],
 };
 
 const document = {
-  documentElement: {
-    get innerHTML() {
-      return "<script>window.wx={data:{t:'token-123'},ticket:'ticket-7',user_name:'user-9',time:'1787250000'}</script>";
-    },
-  },
+  cookie: "ct=ctoken-7; ut=utoken-9",
   body: {
     get innerText() {
-      if (scenario === "login") return "请使用微信扫描二维码";
-      if (scenario === "verification-failure" && state.draftOpened) return "草稿编辑 不匹配的标题";
-      return state.draftOpened ? `草稿编辑 ${input.title}` : "微信公众号工作台";
+      if (scenario === "login") return "加入我们 解锁创作者专属权益";
+      return state.draftOpened ? `草稿编辑 ${input.title}` : "东方财富图文编辑器";
     },
   },
   querySelectorAll() {
     if (!state.draftOpened) return [];
-    return [{ value: scenario === "verification-failure" ? "不匹配的标题" : input.title }];
+    return [{
+      value: scenario === "verification-failure" ? "不匹配的标题" : input.title,
+      textContent: "",
+    }];
   },
 };
 
@@ -48,48 +46,50 @@ const location = {
   set href(value) {
     state.href = String(value);
   },
+  get pathname() {
+    return new URL(state.href).pathname;
+  },
+  get hash() {
+    return new URL(state.href).hash;
+  },
 };
 
 function response(body, status = 200) {
   return {
     ok: status >= 200 && status < 300,
     status,
-    async json() {
-      return body;
+    async text() {
+      return typeof body === "string" ? body : JSON.stringify(body);
     },
   };
 }
 
 async function fetch(url, options = {}) {
   const requestUrl = String(url);
-  if (requestUrl.includes("filetransfer?action=upload_material")) {
-    const entries = [...options.body.entries()];
+  if (requestUrl.includes("/apifront/Tran/GetData")) {
+    const requestBody = JSON.parse(options.body);
+    const parm = JSON.parse(requestBody.parm);
+    const values = Object.fromEntries(parm.flatMap((entry) => Object.entries(entry)));
+    const kind = values.draftid ? "update" : "create";
     state.requests.push({
-      kind: "cover",
+      kind,
       method: options.method,
-      hasFile: entries.some(([name, value]) => name === "file" && value instanceof Blob),
+      title: decodeURIComponent(values.title),
+      text: decodeURIComponent(values.text),
+      ctoken: values.ctoken,
+      utoken: values.utoken,
+      draftId: values.draftid,
       url: requestUrl,
     });
+    if (scenario === "save-failure") {
+      return response({ RRquestSuccess: false, RCode: 500, RMsg: "save rejected", RData: "{}" });
+    }
     return response({
-      base_resp: { err_msg: "ok", ret: 0 },
-      cdn_url: "https://mmbiz.qpic.cn/cover-9",
-      content: JSON.stringify({ file_id: "cover-file-9" }),
+      RRquestSuccess: true,
+      RCode: 200,
+      RMsg: "ok",
+      RData: JSON.stringify({ error_code: 0, draft_id: "eastmoney-draft-42" }),
     });
-  }
-  if (requestUrl.includes("operate_appmsg?t=ajax-response&sub=create")) {
-    const form = options.body;
-    state.requests.push({
-      kind: "save",
-      method: options.method,
-      title: form.get("title0"),
-      summary: form.get("digest0"),
-      body: form.get("content0"),
-      fileId: form.get("fileid0"),
-      coverUrl: form.get("cdn_url0"),
-      showCover: form.get("show_cover_pic0"),
-      url: requestUrl,
-    });
-    return response({ appMsgId: "appmsg-42", base_resp: { ret: 0, err_msg: "ok" } });
   }
   throw new Error(`unexpected request: ${requestUrl}`);
 }
@@ -100,25 +100,12 @@ async function runBrowserExpression(source) {
     "document",
     "location",
     "fetch",
-    "FormData",
-    "Blob",
-    "atob",
     "URL",
-    "URLSearchParams",
+    "crypto",
     "Uint8Array",
     `return await (${source});`,
   );
-  return execute(
-    document,
-    location,
-    fetch,
-    FormData,
-    Blob,
-    atob,
-    URL,
-    URLSearchParams,
-    Uint8Array,
-  );
+  return execute(document, location, fetch, URL, crypto, Uint8Array);
 }
 
 const source = await readFile(scriptPath, "utf8");
@@ -140,13 +127,12 @@ const execute = new AsyncFunction(
 await execute(
   input,
   (value) => { console.log(value); },
-  async () => ({ id: 7 }),
+  async () => ({ id: 17 }),
   async (url) => {
-    if (scenario === "open-error" && String(url).includes("appmsgid=")) {
-      throw new Error(`failed to open ${String(url)} credentials={"authToken":"auth-secret-456"}`);
-    }
-    state.href = String(url);
-    state.draftOpened = state.href.includes("appmsgid=");
+    state.href = scenario === "login"
+      ? "https://mp.eastmoney.com/collect/pc_writer/usercenter.html#/"
+      : String(url);
+    state.draftOpened = state.href.includes("id=eastmoney-draft-42");
     return { url: state.href };
   },
   async () => undefined,

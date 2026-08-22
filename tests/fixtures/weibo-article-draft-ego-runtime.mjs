@@ -4,40 +4,37 @@ const [scriptPath, scenario = "success"] = process.argv.slice(2);
 if (!scriptPath) throw new Error("article draft script path is required");
 
 const input = {
-  platform: "wechat-mp",
-  id: "2026-08-21_集成测试",
-  title: "Harness 生成的公众号标题",
-  summary: "Harness 生成的摘要",
+  platform: "weibo",
+  id: "2026-08-23_微博集成测试",
+  title: "Harness 生成的微博文章标题",
+  summary: "Harness 生成的微博摘要",
   html: "<section><h1>平台正文</h1><p>仅用于本地契约测试。</p></section>",
   tags: ["AI"],
   coverMime: "image/png",
   coverBase64: Buffer.from([0x89, 0x50, 0x4e, 0x47]).toString("base64"),
-  taskName: "oil-wechat-contract-test",
+  taskName: "oil-weibo-contract-test",
 };
 
 const state = {
-  href: "https://mp.weixin.qq.com/?token=token-123",
+  href: "https://card.weibo.com/article/v5/editor",
   draftOpened: false,
   handedOff: [],
   requests: [],
 };
 
 const document = {
-  documentElement: {
-    get innerHTML() {
-      return "<script>window.wx={data:{t:'token-123'},ticket:'ticket-7',user_name:'user-9',time:'1787250000'}</script>";
-    },
-  },
   body: {
     get innerText() {
-      if (scenario === "login") return "请使用微信扫描二维码";
-      if (scenario === "verification-failure" && state.draftOpened) return "草稿编辑 不匹配的标题";
-      return state.draftOpened ? `草稿编辑 ${input.title}` : "微信公众号工作台";
+      if (scenario === "login") return "随时随地发现新鲜事 登录/注册";
+      return state.draftOpened ? `草稿编辑 ${input.title}` : "微博文章编辑器";
     },
   },
   querySelectorAll() {
     if (!state.draftOpened) return [];
-    return [{ value: scenario === "verification-failure" ? "不匹配的标题" : input.title }];
+    return [{
+      value: scenario === "verification-failure" ? "不匹配的标题" : input.title,
+      textContent: "",
+    }];
   },
 };
 
@@ -48,6 +45,12 @@ const location = {
   set href(value) {
     state.href = String(value);
   },
+  get pathname() {
+    return new URL(state.href).pathname;
+  },
+  get hash() {
+    return new URL(state.href).hash;
+  },
 };
 
 function response(body, status = 200) {
@@ -57,39 +60,36 @@ function response(body, status = 200) {
     async json() {
       return body;
     },
+    async text() {
+      return typeof body === "string" ? body : JSON.stringify(body);
+    },
   };
 }
 
 async function fetch(url, options = {}) {
   const requestUrl = String(url);
-  if (requestUrl.includes("filetransfer?action=upload_material")) {
-    const entries = [...options.body.entries()];
-    state.requests.push({
-      kind: "cover",
-      method: options.method,
-      hasFile: entries.some(([name, value]) => name === "file" && value instanceof Blob),
-      url: requestUrl,
-    });
-    return response({
-      base_resp: { err_msg: "ok", ret: 0 },
-      cdn_url: "https://mmbiz.qpic.cn/cover-9",
-      content: JSON.stringify({ file_id: "cover-file-9" }),
-    });
+  if (requestUrl === "https://card.weibo.com/article/v5/editor") {
+    state.requests.push({ kind: "account", method: options.method || "GET", url: requestUrl });
+    return response("<script>window.page={config: JSON.parse('{\"uid\":\"uid-7\",\"nick\":\"测试微博\"}')}</script>");
   }
-  if (requestUrl.includes("operate_appmsg?t=ajax-response&sub=create")) {
+  if (requestUrl.includes("/draft/create")) {
+    state.requests.push({ kind: "create", method: options.method, url: requestUrl });
+    return response({ code: 100000, data: { id: "weibo-draft-42" } });
+  }
+  if (requestUrl.includes("/draft/save")) {
     const form = options.body;
     state.requests.push({
       kind: "save",
       method: options.method,
-      title: form.get("title0"),
-      summary: form.get("digest0"),
-      body: form.get("content0"),
-      fileId: form.get("fileid0"),
-      coverUrl: form.get("cdn_url0"),
-      showCover: form.get("show_cover_pic0"),
+      title: form.get("title"),
+      content: form.get("content"),
+      save: form.get("save"),
+      action: form.get("action"),
+      status: form.get("status"),
       url: requestUrl,
     });
-    return response({ appMsgId: "appmsg-42", base_resp: { ret: 0, err_msg: "ok" } });
+    if (scenario === "save-failure") return response({ code: 500001, msg: "save rejected" });
+    return response({ code: 100000, msg: "ok" });
   }
   throw new Error(`unexpected request: ${requestUrl}`);
 }
@@ -100,25 +100,13 @@ async function runBrowserExpression(source) {
     "document",
     "location",
     "fetch",
-    "FormData",
-    "Blob",
-    "atob",
     "URL",
     "URLSearchParams",
-    "Uint8Array",
+    "btoa",
+    "Math",
     `return await (${source});`,
   );
-  return execute(
-    document,
-    location,
-    fetch,
-    FormData,
-    Blob,
-    atob,
-    URL,
-    URLSearchParams,
-    Uint8Array,
-  );
+  return execute(document, location, fetch, URL, URLSearchParams, btoa, Math);
 }
 
 const source = await readFile(scriptPath, "utf8");
@@ -140,13 +128,12 @@ const execute = new AsyncFunction(
 await execute(
   input,
   (value) => { console.log(value); },
-  async () => ({ id: 7 }),
+  async () => ({ id: 19 }),
   async (url) => {
-    if (scenario === "open-error" && String(url).includes("appmsgid=")) {
-      throw new Error(`failed to open ${String(url)} credentials={"authToken":"auth-secret-456"}`);
-    }
-    state.href = String(url);
-    state.draftOpened = state.href.includes("appmsgid=");
+    state.href = scenario === "login"
+      ? "https://weibo.com/newlogin?tabtype=weibo"
+      : String(url);
+    state.draftOpened = state.href.includes("#/draft/weibo-draft-42");
     return { url: state.href };
   },
   async () => undefined,
