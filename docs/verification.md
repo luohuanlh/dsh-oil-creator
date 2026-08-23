@@ -35,7 +35,7 @@
 | B站 | `REMOTE_VERIFIED` | 真实草稿 `draftId=3779145`；本地导入黄金路径再次回归 `draftId=3782858`，标题与冻结包一致 |
 | 微信公众号 | `REMOTE_VERIFIED` | 真实草稿 `appmsgid=503330667`；封面上传、草稿创建、编辑页 ID 与标题回读一致 |
 | 百家号 | `REMOTE_VERIFIED` | 真实草稿 `article_id=1874282284679284233`；封面作为正文首图，编辑页 ID 与标题回读一致 |
-| 企鹅号 | `LOCAL_TESTED + REMOTE_UNVERIFIED` | 已登录编辑器明确点击“存草稿”并显示“已保存”，但只写入 `OM_ARTICLE_CACHE`；内容管理草稿列表无文章且页面无远端 ID，保持禁用 |
+| 企鹅号 | `LOCAL_TESTED + REMOTE_UNVERIFIED` | “正式运营”账号明确点击“存草稿”并显示“已保存”；`POST /editorCache/update` 返回成功但 `data=[]`、无 ID，内容管理 `category=draft_new` 对“测试文章 001”返回 `totalNumber=0`，保持禁用 |
 | 网易号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 已登录但页面明确提示未完成实名认证；未调用草稿保存，认证后复测 `operation=saveDraft` |
 | 一点号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 新注册账号审核中；Adapter 使用 `POST /model/Article`、`status=0` 和 `#/Writing/{id}`，审核通过后复测 |
 | 大鱼号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 新注册账号审核中；Adapter 使用 `globalConfig.utoken`、`/dashboard/save-draft` 和 `draft_id`，审核通过后复测 |
@@ -91,14 +91,14 @@
 2. **网易号**：完成实名认证后执行一次 `operation=saveDraft`，从内容管理列表回读 `articleId`，再打开编辑页核对标题。
 3. **一点号、大鱼号**：账号审核通过后分别验证 `/model/Article` 的 `status=0` 与 `/dashboard/save-draft` 的 `_id`，再核对编辑页标题。
 4. **同顺号、维科网**：实名/账号审核通过后核对真实编辑器与明确草稿控件；若页面只有发布动作，继续保持阻塞。
-5. **企鹅号**：等待能提供远端 ID 或草稿库记录的官方保存路径；当前“已保存”只落本地缓存，不重复制造无 ID 草稿。
+5. **企鹅号**：正式运营账号已复测；等待能提供远端 ID 或草稿库记录的官方保存路径。当前“已保存”只是编辑器缓存，不重复制造无 ID 草稿。
 6. **老虎财经、富途牛牛**：只有平台在允许的账号/地域环境提供 Web 草稿能力时才复测；不绕过境内服务限制。
 
 ## Remaining Platform Audit
 
 | 平台 | 状态 | 阻塞证据与下一步 |
 |---|---|---|
-| 企鹅号 | `LOCAL_TESTED / REMOTE_UNVERIFIED` | 明确执行“存草稿”后只有本地缓存，草稿库无记录且页面无远端 ID，保持禁用。 |
+| 企鹅号 | `LOCAL_TESTED / REMOTE_UNVERIFIED` | 正式运营账号明确执行“存草稿”后只有编辑器缓存，`draft_new` 草稿库无记录且页面无远端 ID，保持禁用。 |
 | 网易号、一点号、大鱼号、搜狐号、同顺号、维科网 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
 | 老虎财经、富途牛牛 | `LOCAL_TESTED / WEB_LIMITED` | 安全表单 Adapter 已编码，但境内 Web 环境受限；不绕过地域、登录、风控或 App 限制。 |
 | 小红书图文笔记 | `UNSUPPORTED` | 当前 `xiaohongshu` 定义是视频运行器，不能据此升级为图文笔记能力；需要独立的 note 输入、草稿证据和安全回归。 |
