@@ -14,7 +14,8 @@ registerArticleAdapter({
       });
     }
 
-    const inspection = await js(String.raw`/* OIL_YIDIAN_INSPECT */ (() => {
+    const inspection = await js(String.raw`(() => {
+      void 'OIL_YIDIAN_INSPECT';
       const code = String(document.querySelector('#__val_')?.textContent || '');
       const user = typeof window.mpuser === 'object' && window.mpuser ? window.mpuser : {};
       const idMatch = code.match(/(?:^|[,;{]\s*)id\s*:\s*['"]([^'"]+)['"]/);
@@ -37,7 +38,8 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput }) {
-    const saved = await js(String.raw`/* OIL_YIDIAN_SAVE */ (async (input) => {
+    const saved = await js(String.raw`(async (input) => {
+      void 'OIL_YIDIAN_SAVE';
       const params = new URLSearchParams({
         title: input.title,
         cate: '',
@@ -111,7 +113,8 @@ registerArticleAdapter({
     let verification;
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await wait(attempt === 0 ? 3 : 1);
-      verification = await js(String.raw`/* OIL_YIDIAN_VERIFY */ ((expectedTitle, expectedId) => {
+      verification = await js(String.raw`((expectedTitle, expectedId) => {
+        void 'OIL_YIDIAN_VERIFY';
         const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
           .flatMap(element => [element.value, element.textContent])
           .map(value => String(value || '').trim())

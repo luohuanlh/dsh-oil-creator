@@ -41,7 +41,7 @@ describe("platform catalog", () => {
       .toBe("https://mp.ofweek.com/article/publish.html");
   });
 
-  it("只把七个真实运行器平台标为自动草稿", () => {
+  it("只把十二个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
@@ -49,36 +49,49 @@ describe("platform catalog", () => {
       "channels",
       "kuaishou",
       "baijiahao",
+      "dingduan",
+      "xueqiu",
+      "eastmoney",
+      "weibo",
+      "zhihu",
       "wechat-mp",
     ]);
     expect(AUTO_DRAFT_PLATFORMS.every(supportsAutoDraft)).toBe(true);
-    expect(supportsAutoDraft("zhihu")).toBe(false);
+    expect(supportsAutoDraft("zhihu")).toBe(true);
     expect(supportsAutoDraft("netease-music")).toBe(false);
     expect(supportsAutoDraft("ximalaya")).toBe(false);
     expect(toVideoPublisherPlatform("channels")).toBe("wechat_channels");
     expect(toVideoPublisherPlatform("kuaishou")).toBe("kuaishou");
     expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
-    expect(ARTICLE_DRAFT_PLATFORMS).toEqual(["baijiahao", "wechat-mp"]);
+    expect(ARTICLE_DRAFT_PLATFORMS).toEqual([
+      "baijiahao",
+      "dingduan",
+      "xueqiu",
+      "eastmoney",
+      "weibo",
+      "zhihu",
+      "wechat-mp",
+    ]);
     expect(isArticleDraftPlatform("wechat-mp")).toBe(true);
-    expect(isArticleDraftPlatform("zhihu")).toBe(false);
+    expect(isArticleDraftPlatform("zhihu")).toBe(true);
     expect(draftCapability("bilibili")).toBe("remote-verified");
-    expect(draftCapability("wechat-mp")).toBe("local-tested");
-    expect(draftCapability("baijiahao")).toBe("local-tested");
+    expect(draftCapability("wechat-mp")).toBe("remote-verified");
+    expect(draftCapability("baijiahao")).toBe("remote-verified");
     expect(draftCapability("douyin")).toBe("remote-verified");
     expect(draftCapability("xiaohongshu")).toBe("page-ready");
     expect(draftCapability("channels")).toBe("page-ready");
     expect(draftCapability("kuaishou")).toBe("remote-verified");
     expect(draftCapability("toutiao")).toBe("manual-handoff");
-    expect(draftCapability("zhihu")).toBe("local-tested");
+    expect(draftCapability("zhihu")).toBe("remote-verified");
     expect(draftCapability("sohu")).toBe("local-tested");
-    expect(draftCapability("xueqiu")).toBe("local-tested");
-    expect(draftCapability("eastmoney")).toBe("local-tested");
-    expect(draftCapability("weibo")).toBe("local-tested");
+    expect(draftCapability("xueqiu")).toBe("remote-verified");
+    expect(draftCapability("eastmoney")).toBe("remote-verified");
+    expect(draftCapability("weibo")).toBe("remote-verified");
     expect(draftCapability("penguin")).toBe("local-tested");
     expect(draftCapability("netease")).toBe("local-tested");
     expect(draftCapability("yidian")).toBe("local-tested");
     expect(draftCapability("dayu")).toBe("local-tested");
-    expect(draftCapability("dingduan")).toBe("local-tested");
+    expect(draftCapability("dingduan")).toBe("remote-verified");
     expect(draftCapability("10jqka")).toBe("local-tested");
     expect(draftCapability("ofweek")).toBe("local-tested");
     expect(draftCapability("laohu")).toBe("local-tested");
@@ -88,13 +101,8 @@ describe("platform catalog", () => {
       "netease",
       "yidian",
       "dayu",
-      "dingduan",
-      "xueqiu",
-      "eastmoney",
       "10jqka",
       "sohu",
-      "weibo",
-      "zhihu",
       "ofweek",
       "laohu",
       "futu",

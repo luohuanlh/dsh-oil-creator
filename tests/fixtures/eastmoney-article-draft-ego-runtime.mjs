@@ -74,6 +74,7 @@ async function fetch(url, options = {}) {
     state.requests.push({
       kind,
       method: options.method,
+      credentials: options.credentials,
       title: decodeURIComponent(values.title),
       text: decodeURIComponent(values.text),
       ctoken: values.ctoken,

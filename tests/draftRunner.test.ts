@@ -290,7 +290,7 @@ describe("prepareDraftRun", () => {
 
   it("拒绝没有真实草稿适配器的平台", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-draft-runner-"));
-    await expect(prepareDraftRun(item(root, join(root, "demo.mp4")), root, ["zhihu"]))
+    await expect(prepareDraftRun(item(root, join(root, "demo.mp4")), root, ["penguin"]))
       .rejects.toThrow("尚未接入自动草稿");
   });
 });

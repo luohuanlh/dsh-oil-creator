@@ -51,7 +51,7 @@ registerArticleAdapter({
       return {
         ok: true,
         remoteId,
-        draftUrl: 'https://mp.xueqiu.com/write/draft/' + encodeURIComponent(remoteId),
+        draftUrl: 'https://mp.xueqiu.com/writeV2/draft/' + encodeURIComponent(remoteId),
         evidence: {
           contentConverted: true,
           privateDraft: false,
@@ -75,7 +75,7 @@ registerArticleAdapter({
         ]).filter(Boolean);
         const text = String(document.body?.innerText || '');
         const titleMatched = values.includes(expectedTitle);
-        const idMatched = location.pathname.endsWith('/write/draft/' + expectedId);
+        const idMatched = location.pathname.endsWith('/writeV2/draft/' + expectedId);
         const loggedOut = /未登录/.test(text);
         return {
           verified: titleMatched && idMatched && !loggedOut,

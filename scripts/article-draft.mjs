@@ -76,41 +76,49 @@ function firstMatchingPattern(value, patterns = []) {
 }
 
 async function inspectBrowserDraftForm(config) {
-  await openOrReuseTab(config.workspaceUrl, { wait: true, timeout: 30 });
-  await wait(2);
-  const current = await pageInfo();
-  const text = await snapshotText();
-  const inspection = await js(String.raw`/* OIL_BROWSER_FORM_INSPECT */ ((config) => {
-    const first = selectors => selectors.find(selector => {
-      try {
-        return Boolean(document.querySelector(selector));
-      } catch {
-        return false;
-      }
-    }) || '';
-    return {
-      titleSelector: first(config.titleSelectors),
-      contentSelector: first(config.contentSelectors),
-      url: location.href,
-    };
-  })(${JSON.stringify(config)})`);
-
-  if (inspection?.titleSelector && inspection?.contentSelector) return inspection;
-
-  const loggedOut = Boolean(
-    firstMatchingPattern(current?.url, config.loggedOutUrlPatterns)
-    || firstMatchingPattern(text, config.loggedOutTextPatterns)
-  );
-  if (loggedOut) {
-    throw articleFailure(`${config.platformName}登录态已失效，请在 Ego Browser 完成登录后重试`, {
-      status: "BLOCKED_AUTH",
-      exitCode: 2,
-      evidence: {
-        editorFound: false,
-        url: publicDraftUrl(current?.url),
-      },
-    });
+  const existing = await pageInfo().catch(() => undefined);
+  if (String(existing?.url || "") !== config.workspaceUrl) {
+    await openOrReuseTab(config.workspaceUrl, { wait: true, timeout: 30 });
   }
+  let current;
+  let text = "";
+  let inspection;
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    await wait(attempt === 0 ? 2 : 1);
+    current = await pageInfo();
+    text = await snapshotText();
+    inspection = await js(String.raw`((config) => {
+      void 'OIL_BROWSER_FORM_INSPECT';
+      const first = selectors => selectors.find(selector => {
+        try {
+          return Boolean(document.querySelector(selector));
+        } catch {
+          return false;
+        }
+      }) || '';
+      return {
+        titleSelector: first(config.titleSelectors),
+        contentSelector: first(config.contentSelectors),
+        url: location.href,
+      };
+    })(${JSON.stringify(config)})`);
+    if (inspection?.titleSelector && inspection?.contentSelector) return inspection;
+    const loggedOut = Boolean(
+      firstMatchingPattern(current?.url, config.loggedOutUrlPatterns)
+      || firstMatchingPattern(text, config.loggedOutTextPatterns)
+    );
+    if (loggedOut) {
+      throw articleFailure(`${config.platformName}登录态已失效，请在 Ego Browser 完成登录后重试`, {
+        status: "BLOCKED_AUTH",
+        exitCode: 2,
+        evidence: {
+          editorFound: false,
+          url: publicDraftUrl(current?.url),
+        },
+      });
+    }
+  }
+
   throw articleFailure(`${config.platformName}当前页面未找到可审计的图文草稿编辑器`, {
     evidence: {
       editorFound: false,
@@ -120,7 +128,8 @@ async function inspectBrowserDraftForm(config) {
 }
 
 async function saveBrowserDraftForm({ config, articleInput, inspection }) {
-  const saved = await js(String.raw`/* OIL_BROWSER_FORM_SAVE */ (async (config, input, inspected) => {
+  const saved = await js(String.raw`(async (config, input, inspected) => {
+    void 'OIL_BROWSER_FORM_SAVE';
     const titleElement = document.querySelector(inspected.titleSelector);
     const contentElement = document.querySelector(inspected.contentSelector);
     if (!titleElement || !contentElement) {
@@ -248,7 +257,8 @@ async function saveBrowserDraftForm({ config, articleInput, inspection }) {
 async function verifyBrowserDraftForm({ config, articleInput, saved }) {
   await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
   await wait(2);
-  const verification = await js(String.raw`/* OIL_BROWSER_FORM_VERIFY */ ((config, expectedTitle, expectedId) => {
+  const verification = await js(String.raw`((config, expectedTitle, expectedId) => {
+    void 'OIL_BROWSER_FORM_VERIFY';
     const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
       .flatMap(element => [element.value, element.textContent])
       .map(value => String(value || '').trim())
@@ -719,8 +729,16 @@ registerArticleAdapter({
         exitCode: 2,
       });
     }
+    if (/未完成实名认证/.test(text)) {
+      throw articleFailure("网易号账号尚未完成实名认证，请认证通过后重试", {
+        status: "BLOCKED_PLATFORM",
+        exitCode: 3,
+        evidence: { accountOnboardingRequired: true },
+      });
+    }
 
-    const inspection = await js(String.raw`/* OIL_NETEASE_INSPECT */ (async () => {
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_NETEASE_INSPECT';
       const current = new URL(location.href);
       const links = [...document.querySelectorAll('a[href*="wemediaId="]')]
         .map(element => element.href);
@@ -794,7 +812,8 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput, inspection }) {
-    const saved = await js(String.raw`/* OIL_NETEASE_SAVE */ (async (input, account) => {
+    const saved = await js(String.raw`(async (input, account) => {
+      void 'OIL_NETEASE_SAVE';
       const params = new URLSearchParams({
         wemediaId: account.wemediaId,
         articleId: '-1',
@@ -881,7 +900,8 @@ registerArticleAdapter({
   async verify({ input: articleInput, inspection, saved }) {
     await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
     await wait(2);
-    const verification = await js(String.raw`/* OIL_NETEASE_VERIFY */ (async (expectedTitle, account, expectedId) => {
+    const verification = await js(String.raw`(async (expectedTitle, account, expectedId) => {
+      void 'OIL_NETEASE_VERIFY';
       const query = new URLSearchParams({
         postId: expectedId,
         wemediaId: account.wemediaId,
@@ -932,7 +952,8 @@ registerArticleAdapter({
       });
     }
 
-    const inspection = await js(String.raw`/* OIL_YIDIAN_INSPECT */ (() => {
+    const inspection = await js(String.raw`(() => {
+      void 'OIL_YIDIAN_INSPECT';
       const code = String(document.querySelector('#__val_')?.textContent || '');
       const user = typeof window.mpuser === 'object' && window.mpuser ? window.mpuser : {};
       const idMatch = code.match(/(?:^|[,;{]\s*)id\s*:\s*['"]([^'"]+)['"]/);
@@ -955,7 +976,8 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput }) {
-    const saved = await js(String.raw`/* OIL_YIDIAN_SAVE */ (async (input) => {
+    const saved = await js(String.raw`(async (input) => {
+      void 'OIL_YIDIAN_SAVE';
       const params = new URLSearchParams({
         title: input.title,
         cate: '',
@@ -1029,7 +1051,8 @@ registerArticleAdapter({
     let verification;
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await wait(attempt === 0 ? 3 : 1);
-      verification = await js(String.raw`/* OIL_YIDIAN_VERIFY */ ((expectedTitle, expectedId) => {
+      verification = await js(String.raw`((expectedTitle, expectedId) => {
+        void 'OIL_YIDIAN_VERIFY';
         const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
           .flatMap(element => [element.value, element.textContent])
           .map(value => String(value || '').trim())
@@ -1069,7 +1092,8 @@ registerArticleAdapter({
       });
     }
 
-    const inspection = await js(String.raw`/* OIL_DAYU_INSPECT */ (async () => {
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_DAYU_INSPECT';
       const response = await fetch('https://mp.dayu.com/dashboard/index', {
         credentials: 'include',
         headers: { Accept: 'text/html' },
@@ -1105,7 +1129,8 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput, inspection }) {
-    const saved = await js(String.raw`/* OIL_DAYU_SAVE */ (async (input, account) => {
+    const saved = await js(String.raw`(async (input, account) => {
+      void 'OIL_DAYU_SAVE';
       const params = new URLSearchParams({
         title: input.title,
         content: input.html,
@@ -1155,7 +1180,8 @@ registerArticleAdapter({
     let verification;
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await wait(attempt === 0 ? 3 : 1);
-      verification = await js(String.raw`/* OIL_DAYU_VERIFY */ ((expectedTitle, expectedId) => {
+      verification = await js(String.raw`((expectedTitle, expectedId) => {
+        void 'OIL_DAYU_VERIFY';
         const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
           .flatMap(element => [element.value, element.textContent])
           .map(value => String(value || '').trim())
@@ -1195,9 +1221,11 @@ registerArticleAdapter({
       });
     }
 
-    const inspection = await js(String.raw`/* OIL_DINGDUAN_INSPECT */ (async () => {
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_DINGDUAN_INSPECT';
       const findAxios = () => {
-        const root = document.querySelector('#app')?.__vue__;
+        const root = document.querySelector('#app')?.__vue__
+          || [...document.querySelectorAll('*')].find(element => element.__vue__)?.__vue__;
         return root?.$root?.$axios || root?.$axios || window.axios || null;
       };
       const client = findAxios();
@@ -1230,8 +1258,10 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput }) {
-    const saved = await js(String.raw`/* OIL_DINGDUAN_SAVE */ (async (input) => {
-      const root = document.querySelector('#app')?.__vue__;
+    const saved = await js(String.raw`(async (input) => {
+      void 'OIL_DINGDUAN_SAVE';
+      const root = document.querySelector('#app')?.__vue__
+        || [...document.querySelectorAll('*')].find(element => element.__vue__)?.__vue__;
       const client = root?.$root?.$axios || root?.$axios || window.axios || null;
       if (!client) return { ok: false, error: '顶端创作平台请求客户端尚未就绪' };
 
@@ -1284,8 +1314,7 @@ registerArticleAdapter({
       for (let attempt = 0; attempt < 4; attempt += 1) {
         if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 800));
         const listResponse = await client.get(
-          'https://resource.topnews.cn/api/draft/search?type=1&page=1&size=20&title='
-            + encodeURIComponent(input.title)
+          'https://resource.topnews.cn/api/draft/search?type=1&page=1&size=20'
         );
         const items = Array.isArray(listResponse?.data?.data?.returnData)
           ? listResponse.data.data.returnData
@@ -1325,8 +1354,10 @@ registerArticleAdapter({
   async verify({ input: articleInput, saved }) {
     await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
     await wait(2);
-    const verification = await js(String.raw`/* OIL_DINGDUAN_VERIFY */ (async (expectedTitle, expectedId) => {
-      const root = document.querySelector('#app')?.__vue__;
+    const verification = await js(String.raw`(async (expectedTitle, expectedId) => {
+      void 'OIL_DINGDUAN_VERIFY';
+      const root = document.querySelector('#app')?.__vue__
+        || [...document.querySelectorAll('*')].find(element => element.__vue__)?.__vue__;
       const client = root?.$root?.$axios || root?.$axios || window.axios || null;
       if (!client) return { verified: false, requestClientReady: false, url: location.href };
       try {
@@ -1417,7 +1448,7 @@ registerArticleAdapter({
       return {
         ok: true,
         remoteId,
-        draftUrl: 'https://mp.xueqiu.com/write/draft/' + encodeURIComponent(remoteId),
+        draftUrl: 'https://mp.xueqiu.com/writeV2/draft/' + encodeURIComponent(remoteId),
         evidence: {
           contentConverted: true,
           privateDraft: false,
@@ -1441,7 +1472,7 @@ registerArticleAdapter({
         ]).filter(Boolean);
         const text = String(document.body?.innerText || '');
         const titleMatched = values.includes(expectedTitle);
-        const idMatched = location.pathname.endsWith('/write/draft/' + expectedId);
+        const idMatched = location.pathname.endsWith('/writeV2/draft/' + expectedId);
         const loggedOut = /未登录/.test(text);
         return {
           verified: titleMatched && idMatched && !loggedOut,
@@ -1540,19 +1571,25 @@ registerArticleAdapter({
         const pageUrl = draftId
           ? 'https://mp.eastmoney.com/collect/pc_article/index.html#/?id=' + encodeURIComponent(draftId)
           : 'https://mp.eastmoney.com/collect/pc_article/index.html#/';
-        const response = await fetch(
-          'https://emfront.eastmoney.com/apifront/Tran/GetData?platform=',
-          {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pageUrl,
-              path: 'draft/api/Article/SaveDraft',
-              parm: JSON.stringify(parm),
-            }),
-          },
-        );
+        let response;
+        try {
+          response = await fetch(
+            'https://emfront.eastmoney.com/apifront/Tran/GetData?platform=',
+            {
+              method: 'POST',
+              // 官方前端通过请求体内的 ct/ut 鉴权；携带跨域 Cookie 会触发 CORS 拒绝。
+              credentials: 'omit',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pageUrl,
+                path: 'draft/api/Article/SaveDraft',
+                parm: JSON.stringify(parm),
+              }),
+            },
+          );
+        } catch {
+          return { ok: false, error: '东方财富草稿请求被浏览器网络策略阻断' };
+        }
         const responseText = await response.text();
         let outer = {};
         try {
@@ -1601,7 +1638,7 @@ registerArticleAdapter({
           contentUpdated: true,
           originalDeclared: false,
           coverDeferred: true,
-          tokenTransportRemoteUnverified: true,
+          crossOriginCookiesOmitted: true,
         },
       };
     })(${JSON.stringify(articleInput)}, ${JSON.stringify(inspection)})`);

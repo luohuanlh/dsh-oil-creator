@@ -14,9 +14,11 @@ registerArticleAdapter({
       });
     }
 
-    const inspection = await js(String.raw`/* OIL_DINGDUAN_INSPECT */ (async () => {
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_DINGDUAN_INSPECT';
       const findAxios = () => {
-        const root = document.querySelector('#app')?.__vue__;
+        const root = document.querySelector('#app')?.__vue__
+          || [...document.querySelectorAll('*')].find(element => element.__vue__)?.__vue__;
         return root?.$root?.$axios || root?.$axios || window.axios || null;
       };
       const client = findAxios();
@@ -49,8 +51,10 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput }) {
-    const saved = await js(String.raw`/* OIL_DINGDUAN_SAVE */ (async (input) => {
-      const root = document.querySelector('#app')?.__vue__;
+    const saved = await js(String.raw`(async (input) => {
+      void 'OIL_DINGDUAN_SAVE';
+      const root = document.querySelector('#app')?.__vue__
+        || [...document.querySelectorAll('*')].find(element => element.__vue__)?.__vue__;
       const client = root?.$root?.$axios || root?.$axios || window.axios || null;
       if (!client) return { ok: false, error: '顶端创作平台请求客户端尚未就绪' };
 
@@ -103,8 +107,7 @@ registerArticleAdapter({
       for (let attempt = 0; attempt < 4; attempt += 1) {
         if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 800));
         const listResponse = await client.get(
-          'https://resource.topnews.cn/api/draft/search?type=1&page=1&size=20&title='
-            + encodeURIComponent(input.title)
+          'https://resource.topnews.cn/api/draft/search?type=1&page=1&size=20'
         );
         const items = Array.isArray(listResponse?.data?.data?.returnData)
           ? listResponse.data.data.returnData
@@ -144,8 +147,10 @@ registerArticleAdapter({
   async verify({ input: articleInput, saved }) {
     await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
     await wait(2);
-    const verification = await js(String.raw`/* OIL_DINGDUAN_VERIFY */ (async (expectedTitle, expectedId) => {
-      const root = document.querySelector('#app')?.__vue__;
+    const verification = await js(String.raw`(async (expectedTitle, expectedId) => {
+      void 'OIL_DINGDUAN_VERIFY';
+      const root = document.querySelector('#app')?.__vue__
+        || [...document.querySelectorAll('*')].find(element => element.__vue__)?.__vue__;
       const client = root?.$root?.$axios || root?.$axios || window.axios || null;
       if (!client) return { verified: false, requestClientReady: false, url: location.href };
       try {

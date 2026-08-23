@@ -14,7 +14,8 @@ registerArticleAdapter({
       });
     }
 
-    const inspection = await js(String.raw`/* OIL_DAYU_INSPECT */ (async () => {
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_DAYU_INSPECT';
       const response = await fetch('https://mp.dayu.com/dashboard/index', {
         credentials: 'include',
         headers: { Accept: 'text/html' },
@@ -50,7 +51,8 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput, inspection }) {
-    const saved = await js(String.raw`/* OIL_DAYU_SAVE */ (async (input, account) => {
+    const saved = await js(String.raw`(async (input, account) => {
+      void 'OIL_DAYU_SAVE';
       const params = new URLSearchParams({
         title: input.title,
         content: input.html,
@@ -100,7 +102,8 @@ registerArticleAdapter({
     let verification;
     for (let attempt = 0; attempt < 4; attempt += 1) {
       await wait(attempt === 0 ? 3 : 1);
-      verification = await js(String.raw`/* OIL_DAYU_VERIFY */ ((expectedTitle, expectedId) => {
+      verification = await js(String.raw`((expectedTitle, expectedId) => {
+        void 'OIL_DAYU_VERIFY';
         const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
           .flatMap(element => [element.value, element.textContent])
           .map(value => String(value || '').trim())

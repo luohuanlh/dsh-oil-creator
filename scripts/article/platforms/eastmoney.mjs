@@ -74,19 +74,25 @@ registerArticleAdapter({
         const pageUrl = draftId
           ? 'https://mp.eastmoney.com/collect/pc_article/index.html#/?id=' + encodeURIComponent(draftId)
           : 'https://mp.eastmoney.com/collect/pc_article/index.html#/';
-        const response = await fetch(
-          'https://emfront.eastmoney.com/apifront/Tran/GetData?platform=',
-          {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pageUrl,
-              path: 'draft/api/Article/SaveDraft',
-              parm: JSON.stringify(parm),
-            }),
-          },
-        );
+        let response;
+        try {
+          response = await fetch(
+            'https://emfront.eastmoney.com/apifront/Tran/GetData?platform=',
+            {
+              method: 'POST',
+              // 官方前端通过请求体内的 ct/ut 鉴权；携带跨域 Cookie 会触发 CORS 拒绝。
+              credentials: 'omit',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pageUrl,
+                path: 'draft/api/Article/SaveDraft',
+                parm: JSON.stringify(parm),
+              }),
+            },
+          );
+        } catch {
+          return { ok: false, error: '东方财富草稿请求被浏览器网络策略阻断' };
+        }
         const responseText = await response.text();
         let outer = {};
         try {
@@ -135,7 +141,7 @@ registerArticleAdapter({
           contentUpdated: true,
           originalDeclared: false,
           coverDeferred: true,
-          tokenTransportRemoteUnverified: true,
+          crossOriginCookiesOmitted: true,
         },
       };
     })(${JSON.stringify(articleInput)}, ${JSON.stringify(inspection)})`);

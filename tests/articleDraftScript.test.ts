@@ -234,6 +234,10 @@ describe("Article Publisher 统一契约", () => {
     expect(source).toContain('status: "BLOCKED_AUTH"');
     expect(source).toContain('status: "REMOTE_UNVERIFIED"');
   });
+
+  it("浏览器表达式不以会被 Ego 误判的块注释开头", () => {
+    expect(source).not.toContain("String.raw`/* OIL_");
+  });
 });
 
 describe("微信公众号 Ego 草稿脚本", () => {
@@ -535,7 +539,7 @@ describe("雪球号 Article Adapter", () => {
   it("只调用雪球草稿保存接口", () => {
     expect(source).toContain('platform: "xueqiu"');
     expect(source).toContain("/xq/statuses/draft/save.json");
-    expect(source).toContain("/write/draft/");
+    expect(source).toContain("/writeV2/draft/");
   });
 
   it("在模拟已登录页面中保存并回读雪球草稿", async () => {
@@ -549,7 +553,7 @@ describe("雪球号 Article Adapter", () => {
       ok: true,
       status: "REMOTE_VERIFIED",
       remoteId: "xueqiu-draft-42",
-      draftUrl: "https://mp.xueqiu.com/write/draft/xueqiu-draft-42",
+      draftUrl: "https://mp.xueqiu.com/writeV2/draft/xueqiu-draft-42",
       taskSpace: "15",
     });
     expect(trace).toMatchObject({
@@ -609,10 +613,16 @@ describe("东方财富号 Article Adapter", () => {
       fixture: true,
       openedDraft: true,
       requests: [
-        { kind: "create", method: "POST", title: "Harness 生成的东方财富标题" },
+        {
+          kind: "create",
+          method: "POST",
+          credentials: "omit",
+          title: "Harness 生成的东方财富标题",
+        },
         {
           kind: "update",
           method: "POST",
+          credentials: "omit",
           title: "Harness 生成的东方财富标题",
           draftId: "eastmoney-draft-42",
         },

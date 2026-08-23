@@ -76,41 +76,49 @@ function firstMatchingPattern(value, patterns = []) {
 }
 
 async function inspectBrowserDraftForm(config) {
-  await openOrReuseTab(config.workspaceUrl, { wait: true, timeout: 30 });
-  await wait(2);
-  const current = await pageInfo();
-  const text = await snapshotText();
-  const inspection = await js(String.raw`/* OIL_BROWSER_FORM_INSPECT */ ((config) => {
-    const first = selectors => selectors.find(selector => {
-      try {
-        return Boolean(document.querySelector(selector));
-      } catch {
-        return false;
-      }
-    }) || '';
-    return {
-      titleSelector: first(config.titleSelectors),
-      contentSelector: first(config.contentSelectors),
-      url: location.href,
-    };
-  })(${JSON.stringify(config)})`);
-
-  if (inspection?.titleSelector && inspection?.contentSelector) return inspection;
-
-  const loggedOut = Boolean(
-    firstMatchingPattern(current?.url, config.loggedOutUrlPatterns)
-    || firstMatchingPattern(text, config.loggedOutTextPatterns)
-  );
-  if (loggedOut) {
-    throw articleFailure(`${config.platformName}登录态已失效，请在 Ego Browser 完成登录后重试`, {
-      status: "BLOCKED_AUTH",
-      exitCode: 2,
-      evidence: {
-        editorFound: false,
-        url: publicDraftUrl(current?.url),
-      },
-    });
+  const existing = await pageInfo().catch(() => undefined);
+  if (String(existing?.url || "") !== config.workspaceUrl) {
+    await openOrReuseTab(config.workspaceUrl, { wait: true, timeout: 30 });
   }
+  let current;
+  let text = "";
+  let inspection;
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    await wait(attempt === 0 ? 2 : 1);
+    current = await pageInfo();
+    text = await snapshotText();
+    inspection = await js(String.raw`((config) => {
+      void 'OIL_BROWSER_FORM_INSPECT';
+      const first = selectors => selectors.find(selector => {
+        try {
+          return Boolean(document.querySelector(selector));
+        } catch {
+          return false;
+        }
+      }) || '';
+      return {
+        titleSelector: first(config.titleSelectors),
+        contentSelector: first(config.contentSelectors),
+        url: location.href,
+      };
+    })(${JSON.stringify(config)})`);
+    if (inspection?.titleSelector && inspection?.contentSelector) return inspection;
+    const loggedOut = Boolean(
+      firstMatchingPattern(current?.url, config.loggedOutUrlPatterns)
+      || firstMatchingPattern(text, config.loggedOutTextPatterns)
+    );
+    if (loggedOut) {
+      throw articleFailure(`${config.platformName}登录态已失效，请在 Ego Browser 完成登录后重试`, {
+        status: "BLOCKED_AUTH",
+        exitCode: 2,
+        evidence: {
+          editorFound: false,
+          url: publicDraftUrl(current?.url),
+        },
+      });
+    }
+  }
+
   throw articleFailure(`${config.platformName}当前页面未找到可审计的图文草稿编辑器`, {
     evidence: {
       editorFound: false,
@@ -120,7 +128,8 @@ async function inspectBrowserDraftForm(config) {
 }
 
 async function saveBrowserDraftForm({ config, articleInput, inspection }) {
-  const saved = await js(String.raw`/* OIL_BROWSER_FORM_SAVE */ (async (config, input, inspected) => {
+  const saved = await js(String.raw`(async (config, input, inspected) => {
+    void 'OIL_BROWSER_FORM_SAVE';
     const titleElement = document.querySelector(inspected.titleSelector);
     const contentElement = document.querySelector(inspected.contentSelector);
     if (!titleElement || !contentElement) {
@@ -248,7 +257,8 @@ async function saveBrowserDraftForm({ config, articleInput, inspection }) {
 async function verifyBrowserDraftForm({ config, articleInput, saved }) {
   await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
   await wait(2);
-  const verification = await js(String.raw`/* OIL_BROWSER_FORM_VERIFY */ ((config, expectedTitle, expectedId) => {
+  const verification = await js(String.raw`((config, expectedTitle, expectedId) => {
+    void 'OIL_BROWSER_FORM_VERIFY';
     const values = [...document.querySelectorAll('input,textarea,[contenteditable="true"]')]
       .flatMap(element => [element.value, element.textContent])
       .map(value => String(value || '').trim())

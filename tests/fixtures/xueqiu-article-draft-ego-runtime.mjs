@@ -113,7 +113,7 @@ await execute(
   async () => ({ id: 15 }),
   async (url) => {
     state.href = String(url);
-    state.draftOpened = state.href.includes("/write/draft/xueqiu-draft-42");
+    state.draftOpened = state.href.includes("/writeV2/draft/xueqiu-draft-42");
     return { url: state.href };
   },
   async () => undefined,

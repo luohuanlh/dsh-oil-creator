@@ -67,8 +67,10 @@ const loginStates = {
 };
 
 const state = {
-  href: workspaceUrls[platform],
-  text: `${platformNames[platform]}图文编辑器`,
+  href: scenario === "login" ? loginStates[platform].url : workspaceUrls[platform],
+  text: scenario === "login"
+    ? loginStates[platform].text
+    : `${platformNames[platform]}图文编辑器`,
   openedDraft: false,
   handedOff: [],
   stages: [],

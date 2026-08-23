@@ -14,8 +14,16 @@ registerArticleAdapter({
         exitCode: 2,
       });
     }
+    if (/未完成实名认证/.test(text)) {
+      throw articleFailure("网易号账号尚未完成实名认证，请认证通过后重试", {
+        status: "BLOCKED_PLATFORM",
+        exitCode: 3,
+        evidence: { accountOnboardingRequired: true },
+      });
+    }
 
-    const inspection = await js(String.raw`/* OIL_NETEASE_INSPECT */ (async () => {
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_NETEASE_INSPECT';
       const current = new URL(location.href);
       const links = [...document.querySelectorAll('a[href*="wemediaId="]')]
         .map(element => element.href);
@@ -89,7 +97,8 @@ registerArticleAdapter({
   },
 
   async saveDraft({ input: articleInput, inspection }) {
-    const saved = await js(String.raw`/* OIL_NETEASE_SAVE */ (async (input, account) => {
+    const saved = await js(String.raw`(async (input, account) => {
+      void 'OIL_NETEASE_SAVE';
       const params = new URLSearchParams({
         wemediaId: account.wemediaId,
         articleId: '-1',
@@ -176,7 +185,8 @@ registerArticleAdapter({
   async verify({ input: articleInput, inspection, saved }) {
     await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
     await wait(2);
-    const verification = await js(String.raw`/* OIL_NETEASE_VERIFY */ (async (expectedTitle, account, expectedId) => {
+    const verification = await js(String.raw`(async (expectedTitle, account, expectedId) => {
+      void 'OIL_NETEASE_VERIFY';
       const query = new URLSearchParams({
         postId: expectedId,
         wemediaId: account.wemediaId,

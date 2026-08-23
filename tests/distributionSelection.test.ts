@@ -23,7 +23,7 @@ describe("defaultDistributionPlatforms", () => {
       ["douyin", "bilibili"],
       [
         { platform: "bilibili", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
-        { platform: "wechat-mp", status: "active", supportsAutoDraft: true, draftCapability: "local-tested" },
+        { platform: "wechat-mp", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
         { platform: "douyin", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
       ],
     )).toEqual(["douyin", "bilibili"]);

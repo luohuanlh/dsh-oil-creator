@@ -524,11 +524,11 @@ describe("OilCreatorService.getPlatformAccounts", () => {
     const result = await service.getPlatformAccounts({}, new AbortController().signal);
     expect(result.accounts).toHaveLength(24);
     expect(result.accounts.find((row) => row.platform === "zhihu"))
-      .toMatchObject({ status: "active", supportsAutoDraft: false });
+      .toMatchObject({ status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" });
     expect(result.accounts.find((row) => row.platform === "bilibili")?.supportsAutoDraft)
       .toBe(true);
     expect(result.accounts.find((row) => row.platform === "baijiahao"))
-      .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "local-tested" });
+      .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "remote-verified" });
     expect(result.accounts.find((row) => row.platform === "netease-music"))
       .toMatchObject({ status: "unknown", supportsAutoDraft: false });
     expect(result.accounts.find((row) => row.platform === "ximalaya"))
