@@ -35,7 +35,7 @@ export function creatorGuideText(status: CreatorSetupStatus): string {
     "- 不需要手写 publish-package.json。Harness AI 生成平台标题、摘要、正文和标签后，工作台把它们冻结为 .oil-distribution.json。",
     "",
     "## 2. 选择平台并创建草稿",
-    "- 平台选择、Ego 登录状态、草稿状态和启动按钮位于同一个步骤。设置页仍提供 24 个账号入口供预先登录和检查。",
+    "- 平台选择、Ego 登录状态、草稿状态和启动按钮位于同一个步骤。设置页提供 20 个可见账号入口；老虎财经、富途牛牛及两个音频平台暂时隐藏。",
     "- “已绑定”只来自一次真实 Ego Browser 检查；仅有平台入口不等于已经实现自动草稿适配器。",
     enabled.length === 0
       ? "- 当前没有启用自动草稿平台。先在设置中选择平台。"

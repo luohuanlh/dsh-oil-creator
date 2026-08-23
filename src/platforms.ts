@@ -219,8 +219,12 @@ export const PUBLISH_PLATFORMS = Object.freeze(
   Object.keys(PUBLISH_PLATFORM_DEFINITIONS) as [PublishPlatform, ...PublishPlatform[]],
 );
 
-// 账号设置展示完整平台清单；具体出现在哪个内容分组由客户端配置决定。
-export const ACCOUNT_SETTINGS_PLATFORMS = PUBLISH_PLATFORMS;
+// 底层目录保留全部平台；设置页隐藏音频入口和当前境内 Web 不可用的平台。
+export const ACCOUNT_SETTINGS_PLATFORMS = Object.freeze(
+  PUBLISH_PLATFORMS.filter((platform) =>
+    !["netease-music", "ximalaya", "laohu", "futu"].includes(platform)
+  ),
+);
 
 export const AUTO_DRAFT_PLATFORMS = Object.freeze(
   PUBLISH_PLATFORMS.filter((platform) =>

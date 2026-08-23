@@ -13,11 +13,15 @@ import { ACCOUNT_PLATFORM_MARKS } from "../src/client/accountPlatformMarks.ts";
 import { OFFICIAL_PLATFORM_ICON_SOURCES } from "../src/client/assets/platforms/officialPlatformIcons.ts";
 
 describe("creator settings platform rows", () => {
-  it("在账号设置中展示完整的 24 平台清单", () => {
+  it("账号设置隐藏音频入口和境内 Web 不可用平台", () => {
     expect(PUBLISH_PLATFORMS.map((platform) => PUBLISH_PLATFORM_DEFINITIONS[platform].name))
       .toHaveLength(24);
-    expect(ACCOUNT_SETTINGS_PLATFORMS).toHaveLength(24);
+    expect(ACCOUNT_SETTINGS_PLATFORMS).toHaveLength(20);
     expect(ACCOUNT_SETTINGS_PLATFORMS).toContain("kuaishou");
+    expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("netease-music");
+    expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("ximalaya");
+    expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("laohu");
+    expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("futu");
     expect(AUTO_DRAFT_PLATFORMS).toHaveLength(12);
   });
 
@@ -74,9 +78,7 @@ describe("creator settings platform rows", () => {
 
   it("除四个已有矢量标识外，可见平台均使用官网核对后的内嵌图标", () => {
     const existingVectorIcons = new Set(["bilibili", "douyin", "xiaohongshu", "channels"]);
-    const visiblePlatforms = ACCOUNT_SETTINGS_PLATFORMS.filter((platform) =>
-      PUBLISH_PLATFORM_DEFINITIONS[platform].kind !== "audio"
-    );
+    const visiblePlatforms = ACCOUNT_SETTINGS_PLATFORMS;
 
     for (const platform of visiblePlatforms) {
       const mark = ACCOUNT_PLATFORM_MARKS[platform];
