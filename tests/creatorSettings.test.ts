@@ -10,6 +10,10 @@ import {
   PUBLISH_PLATFORMS,
 } from "../src/platforms.ts";
 import { ACCOUNT_PLATFORM_MARKS } from "../src/client/accountPlatformMarks.ts";
+import {
+  CREBEE_PLATFORM_ICONS,
+  CREBEE_PLATFORM_ICON_SOURCES,
+} from "../src/client/assets/platforms/crebeePlatformIcons.ts";
 import { OFFICIAL_PLATFORM_ICON_SOURCES } from "../src/client/assets/platforms/officialPlatformIcons.ts";
 
 describe("creator settings platform rows", () => {
@@ -68,27 +72,43 @@ describe("creator settings platform rows", () => {
       });
     }
 
-    expect(ACCOUNT_PLATFORM_MARKS.bilibili.icon).toBe("bilibili");
-    expect(ACCOUNT_PLATFORM_MARKS.douyin.icon).toBe("douyin");
-    expect(ACCOUNT_PLATFORM_MARKS.xiaohongshu.icon).toBe("xhs");
-    expect(ACCOUNT_PLATFORM_MARKS["xiaohongshu-note"].icon).toBe("xhs");
-    expect(ACCOUNT_PLATFORM_MARKS.channels.icon).toBe("wechat");
+    expect(ACCOUNT_PLATFORM_MARKS.bilibili.src).toBe(CREBEE_PLATFORM_ICONS.bilibili);
+    expect(ACCOUNT_PLATFORM_MARKS.douyin.src).toBe(CREBEE_PLATFORM_ICONS.douyin);
+    expect(ACCOUNT_PLATFORM_MARKS.xiaohongshu.src).toBe(CREBEE_PLATFORM_ICONS.xiaohongshu);
+    expect(ACCOUNT_PLATFORM_MARKS["xiaohongshu-note"].src)
+      .toBe(CREBEE_PLATFORM_ICONS.xiaohongshu);
+    expect(ACCOUNT_PLATFORM_MARKS.channels.src).toBe(CREBEE_PLATFORM_ICONS.channels);
   });
 
-  it("除四个已有矢量标识外，可见平台均使用官网核对后的内嵌图标", () => {
-    const existingVectorIcons = new Set([
+  it("优先使用 CreBee 同名 SVG，其余平台保留官网核对后的内嵌图标", () => {
+    const crebeePlatforms = new Set([
       "bilibili",
       "douyin",
       "xiaohongshu",
       "xiaohongshu-note",
       "channels",
+      "kuaishou",
+      "toutiao",
+      "baijiahao",
+      "penguin",
+      "netease",
+      "dayu",
+      "sohu",
+      "weibo",
+      "zhihu",
+      "wechat-mp",
     ]);
     const visiblePlatforms = ACCOUNT_SETTINGS_PLATFORMS;
 
     for (const platform of visiblePlatforms) {
       const mark = ACCOUNT_PLATFORM_MARKS[platform];
-      if (existingVectorIcons.has(platform)) {
-        expect(mark.icon).toBeDefined();
+      if (crebeePlatforms.has(platform)) {
+        const crebeeId = (
+          platform === "xiaohongshu-note" ? "xiaohongshu" : platform
+        ) as keyof typeof CREBEE_PLATFORM_ICONS;
+        expect(mark.src).toBe(CREBEE_PLATFORM_ICONS[crebeeId]);
+        expect(mark.src).toMatch(/^data:image\/svg\+xml,/);
+        expect(CREBEE_PLATFORM_ICON_SOURCES).toHaveProperty(crebeeId);
       } else {
         expect(mark.src).toMatch(/^data:image\/png;base64,/);
         expect(OFFICIAL_PLATFORM_ICON_SOURCES).toHaveProperty(platform);
