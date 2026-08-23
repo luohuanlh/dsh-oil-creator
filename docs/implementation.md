@@ -96,9 +96,9 @@ Ego 图文运行器由轻量平台注册表驱动。每个平台注册一个且�
 
 源文件在构建时拼成单个自包含 Ego bundle，避免 stdin 执行环境依赖相对模块解析。bundle 一致性、每个 Adapter 的三阶段契约、core/dispatch 不含平台分支均有自动回归。
 
-知乎、雪球号、东方财富号、微博和顶端新闻已在 2026-08-23 用“测试文章 001”完成真实保存、远端 ID 和标题回读，因此与微信公众号、百家号一起配置 `draftRunner: article-ego` 并进入 `ARTICLE_DRAFT_PLATFORMS`。其余九个隐藏 Adapter 继续为 `local-tested` 且 `draftRunner=null`：搜狐号、一点号、大鱼号、同顺号和维科网等待账号审核，网易号等待实名认证；企鹅号已用“正式运营”账号复测，但 `/editorCache/update` 只返回无 ID 的编辑器缓存成功，`draft_new` 草稿库仍为空；老虎财经和富途牛牛在境内 Web 端没有创作入口。
+企鹅号、知乎、雪球号、东方财富号、微博和顶端新闻已在 2026-08-23 用“测试文章 001”完成真实保存、远端 ID 和标题回读，因此与微信公众号、百家号一起配置 `draftRunner: article-ego` 并进入 `ARTICLE_DRAFT_PLATFORMS`。企鹅号必须先上传封面并完成“无需标注”自主声明，随后 `/marticlepublish/omSave` 才返回正式 `articleId`；验证阶段从 `/main/creation/article?articleId=` 核对 ID/标题，并从内容管理列表回读封面、自主声明和草稿状态。其余八个 Adapter 继续为 `local-tested` 且 `draftRunner=null`：搜狐号、一点号、大鱼号、同顺号和维科网等待账号审核，网易号等待实名认证，老虎财经和富途牛牛在境内 Web 端没有创作入口。
 
-平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手和七个已验证图文平台为 `remote-verified`；小红书、视频号为 `page-ready`；九个隐藏 Adapter 为 `local-tested`；头条号为 `manual-handoff`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
+平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手和八个已验证图文平台为 `remote-verified`；小红书、视频号为 `page-ready`；八个未开放 Adapter 为 `local-tested`；头条号为 `manual-handoff`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
 
 ## Ego Browser 会话
 

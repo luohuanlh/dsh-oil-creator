@@ -41,7 +41,7 @@ describe("platform catalog", () => {
       .toBe("https://mp.ofweek.com/article/publish.html");
   });
 
-  it("只把十二个真实运行器平台标为自动草稿", () => {
+  it("只把十三个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
@@ -49,6 +49,7 @@ describe("platform catalog", () => {
       "channels",
       "kuaishou",
       "baijiahao",
+      "penguin",
       "dingduan",
       "xueqiu",
       "eastmoney",
@@ -65,6 +66,7 @@ describe("platform catalog", () => {
     expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
     expect(ARTICLE_DRAFT_PLATFORMS).toEqual([
       "baijiahao",
+      "penguin",
       "dingduan",
       "xueqiu",
       "eastmoney",
@@ -87,7 +89,7 @@ describe("platform catalog", () => {
     expect(draftCapability("xueqiu")).toBe("remote-verified");
     expect(draftCapability("eastmoney")).toBe("remote-verified");
     expect(draftCapability("weibo")).toBe("remote-verified");
-    expect(draftCapability("penguin")).toBe("local-tested");
+    expect(draftCapability("penguin")).toBe("remote-verified");
     expect(draftCapability("netease")).toBe("local-tested");
     expect(draftCapability("yidian")).toBe("local-tested");
     expect(draftCapability("dayu")).toBe("local-tested");
@@ -97,7 +99,6 @@ describe("platform catalog", () => {
     expect(draftCapability("laohu")).toBe("local-tested");
     expect(draftCapability("futu")).toBe("local-tested");
     const hiddenLocalAdapters = [
-      "penguin",
       "netease",
       "yidian",
       "dayu",
@@ -108,6 +109,7 @@ describe("platform catalog", () => {
       "futu",
     ] as const;
     expect(hiddenLocalAdapters.every((platform) => !supportsAutoDraft(platform))).toBe(true);
+    expect(supportsAutoDraft("penguin")).toBe(true);
   });
 
   it("迁移旧版 wechat id 并过滤无效值", () => {

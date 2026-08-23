@@ -43,7 +43,7 @@ const workspaceUrls = {
 };
 
 const draftUrls = {
-  penguin: "https://om.qq.com/main/creation/article?draftId=penguin-draft-42",
+  penguin: "https://om.qq.com/main/creation/article?articleId=penguin-draft-42",
   netease: "https://mp.163.com/index.html#/edit/article/netease-draft-42?wemediaId=media-7",
   yidian: "https://mp.yidianzixun.com/#/Writing/yidian-draft-42",
   dayu: "https://mp.dayu.com/dashboard/article/write?draft_id=dayu-draft-42",
@@ -81,6 +81,8 @@ async function js(source) {
     "OIL_BROWSER_FORM_INSPECT",
     "OIL_BROWSER_FORM_SAVE",
     "OIL_BROWSER_FORM_VERIFY",
+    "OIL_PENGUIN_SAVE",
+    "OIL_PENGUIN_VERIFY",
     "OIL_NETEASE_INSPECT",
     "OIL_NETEASE_SAVE",
     "OIL_NETEASE_VERIFY",

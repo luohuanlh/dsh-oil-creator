@@ -66,8 +66,8 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "article",
     loginUrl: "https://om.qq.com/",
     workspaceUrl: "https://om.qq.com/main/creation/article",
-    draftRunner: null,
-    draftCapability: "local-tested",
+    draftRunner: "article-ego",
+    draftCapability: "remote-verified",
   },
   netease: {
     name: "网易号",

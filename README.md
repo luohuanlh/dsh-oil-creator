@@ -22,7 +22,7 @@
 
 账号目录参考 `dsh-context-flow` 并补充音频平台，包含 B站、抖音、小红书、视频号、快手、头条号、百家号、企鹅号、网易号、一点号、大鱼号、顶端新闻、雪球号、东方财富号、同顺号、搜狐号、微博、知乎、维科网、老虎财经、富途牛牛、微信公众号、网易云音乐、喜马拉雅听，共 24 个入口。
 
-当前可选择的页面适配器为：B站、抖音、小红书、视频号、快手（视频），以及微信公众号、百家号、知乎、雪球号、东方财富号、微博、顶端新闻（文章 + 封面）。B站、抖音、快手和上述七个图文平台都已完成真实“远端保存 + ID/标题回读”；小红书和视频号仍只写入 `READY` 中间态，不会伪造远端草稿。其余九个图文平台保留隐藏的 `local-tested` Adapter：搜狐号、一点号、大鱼号、同顺号和维科网等待账号审核，网易号等待实名认证；企鹅号已在“正式运营”账号复测，但“存草稿”仍只有编辑器缓存而无远端 ID 或草稿库记录；老虎财经和富途牛牛受境内 Web 服务限制。
+当前可选择的页面适配器为：B站、抖音、小红书、视频号、快手（视频），以及微信公众号、百家号、企鹅号、知乎、雪球号、东方财富号、微博、顶端新闻（文章 + 封面）。B站、抖音、快手和上述八个图文平台都已完成真实“远端保存 + ID/标题回读”；小红书和视频号仍只写入 `READY` 中间态，不会伪造远端草稿。其余八个图文平台保留 `local-tested` Adapter：搜狐号、一点号、大鱼号、同顺号和维科网等待账号审核，网易号等待实名认证，老虎财经和富途牛牛受境内 Web 服务限制。
 
 ## 内容目录约定
 
@@ -54,7 +54,7 @@ dsh plugin --profile web add dsh-oil-creator
 dsh plugin --profile web remove dsh-oil-creator
 ```
 
-安装后在 Harness 设置页选择内容目录，并确认 `ego-browser` 可用。B站、抖音、小红书、视频号和快手的视频草稿还需要 `video-publisher` Skill；七个已验证图文适配器均已内置。
+安装后在 Harness 设置页选择内容目录，并确认 `ego-browser` 可用。B站、抖音、小红书、视频号和快手的视频草稿还需要 `video-publisher` Skill；八个已验证图文适配器均已内置。
 
 开发本地 fork 时，可用 `VIDEO_PUBLISHER_SKILL_DIR=/absolute/path/to/video-publisher` 明确覆盖全局安装副本；路径既可指向 Skill 目录，也可指向外层仓库目录。
 
@@ -65,7 +65,7 @@ dsh plugin --profile web remove dsh-oil-creator
 - `oil_create_content`：创建一个新的内容子文件夹。
 - `oil_creator_profile`：读取或更新创作者档案。
 - `oil_platform_accounts`：列出、打开或检查 24 个平台账号。
-- `oil_distribution_source`：读取工作台固定的素材选择和平台生成约束。
+- `oil_distribution_source`：读取工作台固定的素材选择、共享事实规则，以及本次目标平台各自的内容 profile 和生成约束。
 - `oil_create_platform_drafts`：冻结 AI 平台变体并启动 Ego 草稿流程。
 - `oil_prepare_drafts`：只重试已经冻结的分发包，不重新生成文案。
 

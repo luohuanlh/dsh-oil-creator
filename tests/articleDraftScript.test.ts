@@ -714,7 +714,12 @@ const extendedPlatformCases = [
   {
     platform: "penguin",
     name: "企鹅号",
-    markers: ["om.qq.com/main/creation/article", ".omui-articletitle__title1", ".ProseMirror"],
+    markers: [
+      "om.qq.com/main/creation/article",
+      "/marticlepublish/omSave",
+      "无需标注",
+      "/main/creation/article?articleId=",
+    ],
   },
   {
     platform: "netease",

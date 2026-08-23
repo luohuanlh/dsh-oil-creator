@@ -20,7 +20,7 @@ import {
 import { creatorProfileSchema } from "../src/schemas.ts";
 
 describe("creator profile", () => {
-  it("默认启用五个视频草稿平台和七个图文草稿平台", () => {
+  it("默认启用五个视频草稿平台和八个图文草稿平台", () => {
     expect(emptyProfile()).toEqual({
       enabledPlatforms: [
         "bilibili",
@@ -29,6 +29,7 @@ describe("creator profile", () => {
         "channels",
         "kuaishou",
         "baijiahao",
+        "penguin",
         "dingduan",
         "xueqiu",
         "eastmoney",

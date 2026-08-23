@@ -57,7 +57,7 @@ describe("inspectCreatorSetup", () => {
     expect(result.capabilities.autoPublish.state).toBe("missing");
     expect(result.capabilities.article).toMatchObject({
       state: "ready",
-      detail: expect.stringContaining("微信公众号、百家号、知乎"),
+      detail: expect.stringContaining("微信公众号、百家号、企鹅号、知乎"),
     });
     expect(result.capabilities.egoBrowser.state).toBe("missing");
   });
