@@ -61,7 +61,6 @@ const ACCOUNT_GROUPS: ReadonlyArray<{
   {
     kind: "article",
     label: "settings.account.article",
-    additionalPlatforms: ["xiaohongshu"],
     leadingPlatforms: ["wechat-mp"],
   },
 ];
@@ -286,6 +285,8 @@ export function CreatorSettingsCard({
             <span className="accountNameLabel">{definition.name}</span>
             <small>{account.draftCapability === "remote-verified"
               ? t("settings.account.remoteVerified")
+              : account.draftCapability === "local-verified"
+                ? t("settings.account.localVerified")
               : account.draftCapability === "local-tested"
                 ? t("settings.account.simulated")
                 : account.draftCapability === "page-ready"

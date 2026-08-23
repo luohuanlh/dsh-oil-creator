@@ -25,7 +25,7 @@ export interface DraftRunHandle {
 }
 
 export type VideoDraftOutcome =
-  | { ok: true; url: string; remoteId?: string; draftReceipt?: string; taskSpace: string }
+  | { ok: true; url: string; remoteId?: string; draftReceipt?: string; draftStorage?: "remote" | "browser-local"; taskSpace: string }
   | { ok: true; staged: true; taskSpace: string }
   | { ok: false; error: string };
 

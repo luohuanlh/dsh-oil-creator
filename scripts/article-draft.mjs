@@ -52,8 +52,10 @@ function articleFailure(message, options = {}) {
 
 function assertSaved(result, fallbackMessage) {
   if (result?.ok !== true
-    || typeof result.remoteId !== "string"
-    || result.remoteId.trim() === ""
+    || !(
+      (typeof result.remoteId === "string" && result.remoteId.trim() !== "")
+      || (typeof result.draftReceipt === "string" && result.draftReceipt.trim() !== "")
+    )
     || typeof result.draftUrl !== "string"
     || result.draftUrl.trim() === "") {
     throw articleFailure(result?.error || fallbackMessage, {
@@ -285,6 +287,545 @@ async function verifyBrowserDraftForm({ config, articleInput, saved }) {
   }
   return verification;
 }
+
+const toutiaoWorkspaceUrl = "https://mp.toutiao.com/profile_v4/graphic/publish";
+
+registerArticleAdapter({
+  platform: "toutiao",
+
+  async inspect() {
+    await openOrReuseTab(toutiaoWorkspaceUrl, { wait: true, timeout: 30 });
+    await wait(2);
+    const current = await pageInfo();
+    const text = await snapshotText();
+    if (/\/auth\/page\/login|\/login(?:\?|\/|$)/i.test(String(current?.url || ""))
+      || /扫码登录|手机号登录|密码登录/.test(text)) {
+      throw articleFailure("头条号登录态已失效，请在 Ego Browser 完成登录后重试", {
+        status: "BLOCKED_AUTH",
+        exitCode: 2,
+      });
+    }
+    const inspection = await js(String.raw`(() => {
+      void 'OIL_TOUTIAO_INSPECT';
+      const title = document.querySelector('textarea[placeholder*="请输入文章标题"]');
+      const editor = document.querySelector('.ProseMirror[contenteditable="true"]');
+      const autosaveReady = String(document.body?.innerText || '').includes('草稿将自动保存')
+        || String(document.body?.innerText || '').includes('草稿已保存');
+      return {
+        ok: Boolean(title && editor),
+        titleReady: Boolean(title),
+        editorReady: Boolean(editor),
+        autosaveReady,
+        url: location.href,
+      };
+    })()`);
+    if (inspection?.ok !== true) {
+      throw articleFailure("头条号自动保存编辑器尚未就绪", {
+        evidence: { ...inspection, url: publicDraftUrl(inspection?.url) },
+      });
+    }
+    return inspection;
+  },
+
+  async saveDraft({ input: articleInput }) {
+    const saved = await js(String.raw`(async (input) => {
+      void 'OIL_TOUTIAO_SAVE';
+      const title = document.querySelector('textarea[placeholder*="请输入文章标题"]');
+      const editor = document.querySelector('.ProseMirror[contenteditable="true"]');
+      if (!title || !editor) return { ok: false, error: '头条号草稿编辑器已离开当前页面' };
+
+      const normalizedText = element => String(
+        element?.innerText || element?.textContent || element?.value || ''
+      ).replace(/\s+/g, ' ').trim();
+      const dispatchChange = element => {
+        element.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: null,
+        }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        element.dispatchEvent(new Event('blur', { bubbles: true }));
+      };
+
+      let saveResponse;
+      let draftRequestVerified = false;
+      const originalOpen = XMLHttpRequest.prototype.open;
+      const originalSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        this.__oilToutiaoUrl = url;
+        return originalOpen.apply(this, arguments);
+      };
+      XMLHttpRequest.prototype.send = function(body) {
+        const request = this;
+        request.addEventListener('load', () => {
+          if (!/\/mp\/agw\/article\/publish(?:\?|$)/i.test(String(request.__oilToutiaoUrl || ''))
+            || !/(?:^|&)save=0(?:&|$)/.test(String(body || ''))) return;
+          try {
+            const parsed = JSON.parse(request.responseText);
+            if (Number(parsed?.code) === 0 && parsed?.data?.pgc_id) {
+              saveResponse = parsed;
+              draftRequestVerified = true;
+            }
+          } catch {
+            saveResponse = undefined;
+          }
+        });
+        return originalSend.apply(this, arguments);
+      };
+
+      try {
+        const exclusive = [...document.querySelectorAll('input[type="checkbox"]')]
+          .find(element => normalizedText(element.parentElement?.parentElement) === '头条首发');
+        if (exclusive?.checked) exclusive.click();
+
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        if (setter) setter.call(title, input.title);
+        else title.value = input.title;
+        dispatchChange(title);
+        editor.innerHTML = input.html;
+        dispatchChange(editor);
+
+        let coverButton;
+        for (let attempt = 0; attempt < 40 && !coverButton; attempt += 1) {
+          coverButton = document.querySelector('.article-cover-add');
+          if (!coverButton) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!coverButton) return { ok: false, error: '头条号未找到单图封面上传控件' };
+        const singleCover = document.querySelector('.article-cover-radio-group input[value="2"]');
+        if (singleCover && !singleCover.checked) singleCover.click();
+        coverButton.click();
+
+        let fileInput;
+        for (let attempt = 0; attempt < 40 && !fileInput; attempt += 1) {
+          fileInput = [...document.querySelectorAll('.byte-drawer input[type="file"]')]
+            .find(element => String(element.accept || '').includes('image'));
+          if (!fileInput) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!fileInput) return { ok: false, error: '头条号封面文件选择器尚未就绪' };
+        const binary = atob(input.coverBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        const extension = input.coverMime === 'image/png' ? 'png'
+          : input.coverMime === 'image/webp' ? 'webp' : 'jpg';
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(
+          [bytes],
+          'oil-cover.' + extension,
+          { type: input.coverMime }
+        ));
+        fileInput.files = transfer.files;
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        let confirm;
+        for (let attempt = 0; attempt < 80 && !confirm; attempt += 1) {
+          const drawer = [...document.querySelectorAll('.byte-drawer')]
+            .find(element => element.offsetParent);
+          const uploaded = normalizedText(drawer).includes('已上传 1 张图片')
+            && [...(drawer?.querySelectorAll('img[src]') || [])]
+              .some(image => image.naturalWidth > 0);
+          const candidate = [...(drawer?.querySelectorAll('button') || [])]
+            .find(element => normalizedText(element) === '确定' && !element.disabled);
+          if (uploaded && candidate) confirm = candidate;
+          if (!confirm) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        if (!confirm) return { ok: false, error: '头条号封面上传未返回可确认的图片' };
+        confirm.click();
+
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const covers = String(saveResponse?.data?.pgc_feed_covers || '');
+          if (saveResponse?.data?.pgc_id && covers !== '' && covers !== '[]') break;
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+      } finally {
+        XMLHttpRequest.prototype.open = originalOpen;
+        XMLHttpRequest.prototype.send = originalSend;
+      }
+
+      const remoteId = String(saveResponse?.data?.pgc_id || '');
+      const covers = String(saveResponse?.data?.pgc_feed_covers || '');
+      const exclusive = [...document.querySelectorAll('input[type="checkbox"]')]
+        .find(element => normalizedText(element.parentElement?.parentElement) === '头条首发');
+      if (!remoteId || covers === '' || covers === '[]' || exclusive?.checked) {
+        return {
+          ok: false,
+          status: 'REMOTE_UNVERIFIED',
+          exitCode: 4,
+          error: '头条号自动保存未返回完整的草稿 ID、封面或非首发证据',
+          evidence: {
+            remoteIdReturned: Boolean(remoteId),
+            coverReturned: covers !== '' && covers !== '[]',
+            exclusiveDisabled: exclusive?.checked === false,
+            finalPublishBlocked: true,
+          },
+        };
+      }
+      return {
+        ok: true,
+        remoteId,
+        draftUrl: location.origin + '/profile_v4/graphic/publish?pgc_id='
+          + encodeURIComponent(remoteId),
+        evidence: {
+          autosaveEndpointObserved: '/mp/agw/article/publish',
+          draftRequestVerified,
+          saveFlag: 0,
+          coverUploaded: true,
+          exclusiveDisabled: true,
+          finalPublishBlocked: true,
+        },
+      };
+    })(${JSON.stringify(articleInput)})`);
+    return assertSaved(saved, "头条号自动保存草稿失败");
+  },
+
+  async verify({ input: articleInput, saved }) {
+    await openOrReuseTab(saved.draftUrl, { wait: true, timeout: 30 });
+    await wait(4);
+    const verification = await js(String.raw`(async (expectedTitle, expectedId) => {
+      void 'OIL_TOUTIAO_VERIFY';
+      const title = String(
+        document.querySelector('textarea[placeholder*="请输入文章标题"]')?.value || ''
+      ).trim();
+      let listedDraft;
+      let listError = '';
+      for (let attempt = 0; attempt < 12 && !listedDraft; attempt += 1) {
+        try {
+          const response = await fetch(
+            '/mp/agw/creator_center/draft_list?type=2&count=50&app_id=1231'
+          );
+          const payload = await response.json();
+          listedDraft = (payload?.draft_list || [])
+            .find(item => String(item?.gid || '') === expectedId);
+          listError = '';
+        } catch (cause) {
+          listError = cause instanceof Error ? cause.message : String(cause || '');
+        }
+        if (!listedDraft) await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      let graphic = {};
+      try {
+        graphic = JSON.parse(String(listedDraft?.graphic_extra || '{}'));
+      } catch {
+        graphic = {};
+      }
+      let covers = [];
+      try {
+        covers = JSON.parse(String(graphic?.pgc_feed_covers || '[]'));
+      } catch {
+        covers = [];
+      }
+      const idMatched = new URL(location.href).searchParams.get('pgc_id') === expectedId
+        && String(graphic?.pgc_id || '') === expectedId;
+      const titleMatched = title === expectedTitle && listedDraft?.title === expectedTitle;
+      const draftMatched = graphic?.is_draft === true
+        && String(graphic?.status_desc || '') === '草稿';
+      const coverMatched = Array.isArray(covers) && covers.length > 0;
+      const exclusiveDisabled = graphic?.is_exclusive === false
+        && String(graphic?.claim_exclusive || '') === '0';
+      const loggedOut = /\/auth\/page\/login|\/login(?:\?|\/|$)/i.test(location.href);
+      return {
+        verified: idMatched && titleMatched && draftMatched && coverMatched
+          && exclusiveDisabled && !loggedOut,
+        idMatched,
+        titleMatched,
+        draftMatched,
+        coverMatched,
+        exclusiveDisabled,
+        loggedOut,
+        listError,
+        url: location.href,
+      };
+    })(${JSON.stringify(articleInput.title)}, ${JSON.stringify(saved.remoteId)})`);
+    if (verification?.verified !== true) {
+      throw articleFailure("头条号未通过草稿列表与编辑页回读验证", {
+        status: "REMOTE_UNVERIFIED",
+        exitCode: 4,
+        evidence: { ...verification, url: publicDraftUrl(verification?.url) },
+      });
+    }
+    return verification;
+  },
+});
+
+const xiaohongshuNoteWorkspaceUrl =
+  "https://creator.xiaohongshu.com/publish/publish?source=official&from=menu&target=image";
+
+registerArticleAdapter({
+  platform: "xiaohongshu-note",
+
+  async inspect() {
+    await openOrReuseTab(xiaohongshuNoteWorkspaceUrl, { wait: true, timeout: 30 });
+    await wait(2);
+    const current = await pageInfo();
+    const text = await snapshotText();
+    if (/\/login(?:\?|\/|$)/i.test(String(current?.url || ""))
+      || /扫码登录|手机号登录|登录后继续/.test(text)) {
+      throw articleFailure("小红书图文笔记登录态已失效，请在 Ego Browser 完成登录后重试", {
+        status: "BLOCKED_AUTH",
+        exitCode: 2,
+      });
+    }
+    const inspection = await js(String.raw`(async () => {
+      void 'OIL_XHS_NOTE_INSPECT';
+      const upload = document.querySelector('input.upload-input[type="file"]');
+      const databases = typeof indexedDB.databases === 'function'
+        ? await indexedDB.databases()
+        : [];
+      let draftIds = [];
+      if (databases.some(database => database.name === 'draft-database-v1')) {
+        try {
+          const database = await new Promise((resolve, reject) => {
+            const request = indexedDB.open('draft-database-v1');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+          });
+          if (database.objectStoreNames.contains('image-draft')) {
+            const drafts = await new Promise((resolve, reject) => {
+              const transaction = database.transaction('image-draft', 'readonly');
+              const request = transaction.objectStore('image-draft').getAll();
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject(request.error);
+            });
+            draftIds = drafts.map(draft => String(draft?.draftId || '')).filter(Boolean);
+          }
+          database.close();
+        } catch {
+          draftIds = [];
+        }
+      }
+      return {
+        ok: Boolean(upload) && String(document.body?.innerText || '').includes('上传图文'),
+        uploadReady: Boolean(upload),
+        draftIds,
+        url: location.href,
+      };
+    })()`);
+    if (inspection?.ok !== true) {
+      throw articleFailure("小红书图文笔记上传页尚未就绪", {
+        evidence: { ...inspection, url: publicDraftUrl(inspection?.url) },
+      });
+    }
+    return inspection;
+  },
+
+  async saveDraft({ input: articleInput, inspection }) {
+    const filled = await js(String.raw`(async (input) => {
+      void 'OIL_XHS_NOTE_FILL';
+      const fileInput = document.querySelector('input.upload-input[type="file"]');
+      if (!fileInput) return { ok: false, error: '小红书图文笔记上传控件已离开当前页面' };
+      const binary = atob(input.coverBase64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      const extension = input.coverMime === 'image/png' ? 'png'
+        : input.coverMime === 'image/webp' ? 'webp' : 'jpg';
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(
+        [bytes],
+        'oil-cover.' + extension,
+        { type: input.coverMime }
+      ));
+      fileInput.files = transfer.files;
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      let title;
+      let editor;
+      for (let attempt = 0; attempt < 100 && (!title || !editor); attempt += 1) {
+        title = document.querySelector('input[placeholder="填写标题会有更多赞哦"]');
+        editor = document.querySelector('.tiptap.ProseMirror[contenteditable="true"]');
+        if (!title || !editor) await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      if (!title || !editor) {
+        return { ok: false, error: '小红书上传图片后未进入图文笔记编辑器' };
+      }
+
+      const container = document.createElement('div');
+      container.innerHTML = input.html;
+      const articleText = String(container.innerText || container.textContent || '')
+        .replace(/\n{3,}/g, '\n\n').trim();
+      const tagText = input.tags.map(tag => '#' + String(tag).replace(/^#+/, '').trim())
+        .filter(tag => tag.length > 1).join(' ');
+      const noteText = [articleText, tagText].filter(Boolean).join('\n\n');
+      if (input.title.length > 20) {
+        return { ok: false, error: '小红书图文笔记标题超过 20 字' };
+      }
+      if (noteText.length > 1000) {
+        return { ok: false, error: '小红书图文笔记正文与标签合计超过 1000 字' };
+      }
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      if (setter) setter.call(title, input.title);
+      else title.value = input.title;
+      title.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertText',
+        data: input.title,
+      }));
+      title.dispatchEvent(new Event('change', { bubbles: true }));
+      editor.innerHTML = noteText.split(/\n{2,}/).map(block =>
+        '<p>' + block.split('\n').map(line => line
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'))
+          .join('<br>') + '</p>'
+      ).join('');
+      editor.dispatchEvent(new InputEvent('input', {
+        bubbles: true,
+        inputType: 'insertFromPaste',
+        data: null,
+      }));
+      editor.dispatchEvent(new Event('change', { bubbles: true }));
+      editor.dispatchEvent(new Event('blur', { bubbles: true }));
+      return {
+        ok: true,
+        expectedBody: noteText,
+        titleMatched: title.value === input.title,
+        bodyMatched: String(editor.innerText || '').includes(articleText.slice(0, 40)),
+      };
+    })(${JSON.stringify(articleInput)})`);
+    if (filled?.ok !== true || filled.titleMatched !== true || filled.bodyMatched !== true) {
+      throw articleFailure(filled?.error || "小红书图文笔记字段填写失败", {
+        evidence: filled,
+      });
+    }
+
+    await wait(3);
+    await cdp("DOM.enable");
+    const accessibility = await cdp("Accessibility.getFullAXTree");
+    const saveButton = accessibility?.nodes?.find(node =>
+      node?.role?.value === "button" && node?.name?.value === "暂存离开"
+    );
+    if (!saveButton?.backendDOMNodeId) {
+      throw articleFailure("小红书图文笔记未找到“暂存离开”安全控件");
+    }
+    const box = await cdp("DOM.getBoxModel", {
+      backendNodeId: saveButton.backendDOMNodeId,
+    });
+    const quad = box?.model?.content;
+    if (!Array.isArray(quad) || quad.length < 8) {
+      throw articleFailure("小红书图文笔记“暂存离开”控件不可点击");
+    }
+    const x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4;
+    const y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4;
+    await cdp("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x,
+      y,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+    });
+    await cdp("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x,
+      y,
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+    });
+    await wait(6);
+
+    const saved = await js(String.raw`(async (expectedTitle, expectedBody, previousIds) => {
+      void 'OIL_XHS_NOTE_SAVED';
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('draft-database-v1');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      if (!database.objectStoreNames.contains('image-draft')) {
+        database.close();
+        return { ok: false, error: '小红书本地草稿库缺少 image-draft' };
+      }
+      const drafts = await new Promise((resolve, reject) => {
+        const transaction = database.transaction('image-draft', 'readonly');
+        const request = transaction.objectStore('image-draft').getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      database.close();
+      const matched = drafts
+        .filter(draft => String(draft?.content?.draftStore?.title || '') === expectedTitle)
+        .sort((left, right) => Number(right?.timeStamp || 0) - Number(left?.timeStamp || 0))
+        .find(draft => !previousIds.includes(String(draft?.draftId || '')))
+        || drafts
+          .filter(draft => String(draft?.content?.draftStore?.title || '') === expectedTitle)
+          .sort((left, right) => Number(right?.timeStamp || 0) - Number(left?.timeStamp || 0))[0];
+      const localDraftId = String(matched?.draftId || '');
+      const draftBody = String(matched?.content?.draftStore?.desc || '');
+      const imageFileIds = (matched?.content?.draftStore?.imgList || [])
+        .map(image => String(image?.fileId || '')).filter(Boolean);
+      const titleMatched = String(matched?.content?.draftStore?.title || '') === expectedTitle;
+      const bodyMatched = expectedBody.split(/\s+/).filter(Boolean).slice(0, 6)
+        .every(part => draftBody.includes(part));
+      const localNotice = String(document.body?.innerText || '')
+        .includes('草稿存储于当前使用的浏览器本地');
+      return {
+        ok: Boolean(localDraftId) && titleMatched && bodyMatched
+          && imageFileIds.length > 0 && localNotice,
+        localDraftId,
+        titleMatched,
+        bodyMatched,
+        imageStored: imageFileIds.length > 0,
+        localNotice,
+      };
+    })(${JSON.stringify(articleInput.title)}, ${JSON.stringify(filled.expectedBody)}, ${JSON.stringify(inspection.draftIds || [])})`);
+    if (saved?.ok !== true || !saved.localDraftId) {
+      throw articleFailure("小红书图文笔记未写入可回读的浏览器本地草稿", {
+        status: "LOCAL_UNVERIFIED",
+        exitCode: 4,
+        evidence: saved,
+      });
+    }
+    return assertSaved({
+      ok: true,
+      localDraftId: saved.localDraftId,
+      draftReceipt: `xiaohongshu-note:browser-local:${saved.localDraftId}`,
+      draftStorage: "browser-local",
+      draftUrl: xiaohongshuNoteWorkspaceUrl,
+      evidence: {
+        indexedDb: "draft-database-v1/image-draft",
+        imageStored: true,
+        localNoticeVerified: true,
+        finalPublishBlocked: true,
+      },
+    }, "小红书图文笔记本地草稿保存失败");
+  },
+
+  async verify({ input: articleInput, saved }) {
+    const verification = await js(String.raw`(async (expectedTitle, expectedId) => {
+      void 'OIL_XHS_NOTE_VERIFY';
+      const database = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('draft-database-v1');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const draft = await new Promise((resolve, reject) => {
+        const transaction = database.transaction('image-draft', 'readonly');
+        const request = transaction.objectStore('image-draft').get(expectedId);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      database.close();
+      const titleMatched = String(draft?.content?.draftStore?.title || '') === expectedTitle;
+      const imageMatched = (draft?.content?.draftStore?.imgList || [])
+        .some(image => String(image?.fileId || '') !== '');
+      const cardMatched = String(document.body?.innerText || '').includes(expectedTitle);
+      const localNotice = String(document.body?.innerText || '')
+        .includes('草稿存储于当前使用的浏览器本地');
+      return {
+        verified: titleMatched && imageMatched && cardMatched && localNotice,
+        titleMatched,
+        imageMatched,
+        cardMatched,
+        localNotice,
+        url: location.href,
+      };
+    })(${JSON.stringify(articleInput.title)}, ${JSON.stringify(saved.localDraftId)})`);
+    if (verification?.verified !== true) {
+      throw articleFailure("小红书图文笔记未通过浏览器本地草稿回读验证", {
+        status: "LOCAL_UNVERIFIED",
+        exitCode: 4,
+        evidence: { ...verification, url: publicDraftUrl(verification?.url) },
+      });
+    }
+    return verification;
+  },
+});
 
 registerArticleAdapter({
   platform: "wechat-mp",
@@ -2578,11 +3119,18 @@ async function dispatchArticleDraft() {
       });
     }
     const handoff = await handOffTaskSpace(task.id);
+    const browserLocal = saved.draftStorage === "browser-local";
     output({
       ok: true,
-      status: "REMOTE_VERIFIED",
+      status: browserLocal ? "LOCAL_VERIFIED" : "REMOTE_VERIFIED",
       verified: true,
-      remoteId: saved.remoteId,
+      ...(browserLocal ? {
+        draftReceipt: saved.draftReceipt,
+        draftStorage: "browser-local",
+      } : {
+        remoteId: saved.remoteId,
+        draftStorage: "remote",
+      }),
       draftUrl: publicDraftUrl(saved.draftUrl),
       taskSpace: String(task.id),
       handedOff: handoff?.done === true,

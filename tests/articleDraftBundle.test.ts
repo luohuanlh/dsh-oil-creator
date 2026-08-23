@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 const sourceFiles = [
   "core.mjs",
+  "platforms/toutiao.mjs",
+  "platforms/xiaohongshu-note.mjs",
   "platforms/wechat-mp.mjs",
   "platforms/baijiahao.mjs",
   "platforms/penguin.mjs",
@@ -53,7 +55,7 @@ describe("Article Publisher Ego bundle", () => {
       readFile(resolve(articleDir, "dispatch.mjs"), "utf8"),
     ]).then((parts) => parts.join("\n"));
     expect(source).not.toMatch(
-      /wechat-mp|baijiahao|penguin|netease|yidian|dayu|dingduan|xueqiu|eastmoney|10jqka|sohu|weibo|zhihu|ofweek|laohu|futu/,
+      /wechat-mp|toutiao|xiaohongshu-note|baijiahao|penguin|netease|yidian|dayu|dingduan|xueqiu|eastmoney|10jqka|sohu|weibo|zhihu|ofweek|laohu|futu/,
     );
     expect(source).not.toMatch(/if\s*\(input\.platform/);
   });

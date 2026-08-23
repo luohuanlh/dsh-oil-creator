@@ -34,20 +34,41 @@ export interface PreparedArticleDraftRun {
   input: ArticleDraftInput;
 }
 
-export interface ArticleDraftResult {
+interface RemoteArticleDraftResult {
   ok: true;
   platform: ArticleDraftPlatform;
   status: "REMOTE_VERIFIED";
   verified: true;
   remoteId: string;
+  draftStorage: "remote";
   draftUrl: string;
   taskSpace: string;
 }
 
+interface BrowserLocalArticleDraftResult {
+  ok: true;
+  platform: ArticleDraftPlatform;
+  status: "LOCAL_VERIFIED";
+  verified: true;
+  draftReceipt: string;
+  draftStorage: "browser-local";
+  draftUrl: string;
+  taskSpace: string;
+}
+
+export type ArticleDraftResult = RemoteArticleDraftResult | BrowserLocalArticleDraftResult;
+
 export interface ArticleDraftRunHandle {
   pid: number;
   completion: Promise<
-    | { ok: true; url: string; remoteId: string; taskSpace: string }
+    | {
+        ok: true;
+        url: string;
+        remoteId?: string;
+        draftReceipt?: string;
+        draftStorage?: "remote" | "browser-local";
+        taskSpace: string;
+      }
     | { ok: false; error: string }
   >;
 }
@@ -217,10 +238,7 @@ export async function startArticleDraftRun(
   child.stderr?.on("data", (chunk: Buffer | string) => { stderr += String(chunk); });
   child.stdin?.on("error", () => undefined);
   child.stdin?.end(`${prelude}${source}`);
-  const completion = new Promise<
-    | { ok: true; url: string; remoteId: string; taskSpace: string }
-    | { ok: false; error: string }
-  >((resolve) => {
+  const completion = new Promise<Awaited<ArticleDraftRunHandle["completion"]>>((resolve) => {
     child.once("error", (cause) => {
       const code = (cause as NodeJS.ErrnoException).code;
       resolve({
@@ -242,7 +260,10 @@ export async function startArticleDraftRun(
         resolve({
           ok: true,
           url: result.draftUrl,
-          remoteId: result.remoteId,
+          ...(result.status === "REMOTE_VERIFIED"
+            ? { remoteId: result.remoteId }
+            : { draftReceipt: result.draftReceipt }),
+          draftStorage: result.draftStorage,
           taskSpace: result.taskSpace,
         });
       } catch (cause) {
@@ -272,10 +293,16 @@ export function parseArticleDraftOutput(
       if (parsed.verified !== true) {
         throw new Error(`${articlePlatformName(expectedPlatform)}未通过草稿页面验证`);
       }
-      if (parsed.status !== "REMOTE_VERIFIED"
+      const hasRemoteEvidence = parsed.status === "REMOTE_VERIFIED"
+        && typeof parsed.remoteId === "string"
+        && parsed.remoteId.trim() !== ""
+        && parsed.draftStorage === "remote";
+      const hasLocalEvidence = parsed.status === "LOCAL_VERIFIED"
+        && typeof parsed.draftReceipt === "string"
+        && parsed.draftReceipt.trim() !== ""
+        && parsed.draftStorage === "browser-local";
+      if ((!hasRemoteEvidence && !hasLocalEvidence)
         || parsed.platform !== expectedPlatform
-        || typeof parsed.remoteId !== "string"
-        || parsed.remoteId.trim() === ""
         || typeof parsed.draftUrl !== "string"
         || parsed.draftUrl.trim() === ""
         || typeof parsed.taskSpace !== "string"

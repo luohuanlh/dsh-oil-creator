@@ -170,4 +170,27 @@ describe("decodeOverlay", () => {
       draftReceipt: "xiaohongshu:temporary-leave:task-space:21",
     });
   });
+
+  it("保留小红书图文笔记的浏览器本地存储范围", () => {
+    const store = decodeOverlay({
+      items: {
+        demo: {
+          publish: {
+            "xiaohongshu-note": {
+              status: "draft",
+              url: "https://creator.xiaohongshu.com/publish/publish?target=image",
+              draftReceipt: "xiaohongshu-note:browser-local:local-42",
+              draftStorage: "browser-local",
+            },
+          },
+        },
+      },
+    });
+
+    expect(store.items.demo?.publish?.["xiaohongshu-note"]).toMatchObject({
+      status: "draft",
+      draftReceipt: "xiaohongshu-note:browser-local:local-42",
+      draftStorage: "browser-local",
+    });
+  });
 });

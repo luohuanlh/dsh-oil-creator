@@ -21,7 +21,7 @@ export const CREATOR_WORKBENCH_SKILL = {
 ## 唯一流程
 
 1. **内容管理与固定输入**：磁盘文件夹是原始素材的唯一真相来源。工作台会给出用户已经选择的视频 + 可选字幕，或 Markdown 文章 + 封面，以及目标平台。不得擅自替换文件。
-2. **平台绑定**：使用 oil_platform_accounts 列出 24 个平台并打开或检查 Ego Browser 账号；能登录不代表平台已经有草稿适配器。
+2. **平台绑定**：使用 oil_platform_accounts 列出 25 个平台并打开或检查 Ego Browser 账号；能登录不代表平台已经有草稿适配器。
 3. **Harness AI 适配**：先用 oil_distribution_source 读取固定输入。sourceText 来自所选文章/字幕；视频未选字幕时回退到同目录的 script.md 与 topic.md。先应用 sharedRules，再为每个平台生成恰好一个 title、summary、body、tags。默认采用最小必要适配：正文可以复用，只调整平台长度、字段和格式等硬要求；contentProfile 是深度适配参考，只有用户明确要求深度适配或正文确实不适合目标平台时才据此重写。全程保留原文事实，不虚构数据、功能或引语。
 4. **冻结并建草稿**：用 oil_create_platform_drafts 提交同一组固定输入和全部 variants。工具先原子冻结内容，再交给 Ego Browser 上传、填表、保存和验证草稿。
 5. **重试**：只有在用户要求重试已经冻结的内容时才用 oil_prepare_drafts；它复用同一份文案，不重新生成。

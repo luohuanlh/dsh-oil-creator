@@ -30,6 +30,7 @@ export const ACCOUNT_PLATFORM_MARKS: Record<PublishPlatform, AccountPlatformMark
   bilibili: { color: "#00AEEC", glyph: "B", icon: "bilibili" },
   douyin: { color: "#111111", glyph: "抖", icon: "douyin" },
   xiaohongshu: { color: "#FF2442", glyph: "红", icon: "xhs" },
+  "xiaohongshu-note": { color: "#FF2442", glyph: "红", icon: "xhs" },
   channels: { color: "#FA9D3B", glyph: "视", icon: "wechat" },
   kuaishou: officialPlatformMark("kuaishou", "#FF4906", "快"),
   toutiao: officialPlatformMark("toutiao", "#F04142", "头"),

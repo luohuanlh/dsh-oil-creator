@@ -20,14 +20,16 @@ import {
 import { creatorProfileSchema } from "../src/schemas.ts";
 
 describe("creator profile", () => {
-  it("默认启用五个视频草稿平台和八个图文草稿平台", () => {
+  it("默认启用五个视频草稿平台和十个图文草稿平台", () => {
     expect(emptyProfile()).toEqual({
       enabledPlatforms: [
         "bilibili",
         "douyin",
         "xiaohongshu",
+        "xiaohongshu-note",
         "channels",
         "kuaishou",
+        "toutiao",
         "baijiahao",
         "penguin",
         "dingduan",
@@ -52,7 +54,7 @@ describe("creator profile", () => {
     expect(profileIsEmpty(overlay.profile!)).toBe(true);
   });
 
-  it("校验新的 24 平台 profile", () => {
+  it("校验新的 25 平台 profile", () => {
     expect(creatorProfileSchema.parse({
       enabledPlatforms: ["xiaohongshu", "wechat-mp"],
     })).toEqual({ enabledPlatforms: ["xiaohongshu", "wechat-mp"] });

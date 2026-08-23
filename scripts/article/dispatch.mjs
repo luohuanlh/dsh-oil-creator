@@ -17,11 +17,18 @@ async function dispatchArticleDraft() {
       });
     }
     const handoff = await handOffTaskSpace(task.id);
+    const browserLocal = saved.draftStorage === "browser-local";
     output({
       ok: true,
-      status: "REMOTE_VERIFIED",
+      status: browserLocal ? "LOCAL_VERIFIED" : "REMOTE_VERIFIED",
       verified: true,
-      remoteId: saved.remoteId,
+      ...(browserLocal ? {
+        draftReceipt: saved.draftReceipt,
+        draftStorage: "browser-local",
+      } : {
+        remoteId: saved.remoteId,
+        draftStorage: "remote",
+      }),
       draftUrl: publicDraftUrl(saved.draftUrl),
       taskSpace: String(task.id),
       handedOff: handoff?.done === true,

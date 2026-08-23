@@ -15,14 +15,14 @@ import { OFFICIAL_PLATFORM_ICON_SOURCES } from "../src/client/assets/platforms/o
 describe("creator settings platform rows", () => {
   it("账号设置隐藏音频入口和境内 Web 不可用平台", () => {
     expect(PUBLISH_PLATFORMS.map((platform) => PUBLISH_PLATFORM_DEFINITIONS[platform].name))
-      .toHaveLength(24);
-    expect(ACCOUNT_SETTINGS_PLATFORMS).toHaveLength(20);
+      .toHaveLength(25);
+    expect(ACCOUNT_SETTINGS_PLATFORMS).toHaveLength(21);
     expect(ACCOUNT_SETTINGS_PLATFORMS).toContain("kuaishou");
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("netease-music");
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("ximalaya");
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("laohu");
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("futu");
-    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(13);
+    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(15);
   });
 
   it("按视频与图文分组账号工作台，暂不展示音频平台", () => {
@@ -40,9 +40,7 @@ describe("creator settings platform rows", () => {
     expect(implementation).toContain('className="accountGroups"');
     expect(implementation).toContain("<AccountPlatformMark platform={platform} />");
     expect(implementation).toContain('className={`accountGroup ${kind}Group`}');
-    expect(implementation).toContain('additionalPlatforms: ["xiaohongshu"]');
     expect(implementation).toContain('leadingPlatforms: ["wechat-mp"]');
-    expect(implementation).toContain("|| additionalPlatforms.includes(platform)");
     expect(implementation).toContain("!leadingPlatforms.includes(platform)");
     expect(implementation).not.toContain('{ kind: "audio", label: "settings.account.audio" }');
     expect(implementation).toContain("function accountAction(");
@@ -73,11 +71,18 @@ describe("creator settings platform rows", () => {
     expect(ACCOUNT_PLATFORM_MARKS.bilibili.icon).toBe("bilibili");
     expect(ACCOUNT_PLATFORM_MARKS.douyin.icon).toBe("douyin");
     expect(ACCOUNT_PLATFORM_MARKS.xiaohongshu.icon).toBe("xhs");
+    expect(ACCOUNT_PLATFORM_MARKS["xiaohongshu-note"].icon).toBe("xhs");
     expect(ACCOUNT_PLATFORM_MARKS.channels.icon).toBe("wechat");
   });
 
   it("除四个已有矢量标识外，可见平台均使用官网核对后的内嵌图标", () => {
-    const existingVectorIcons = new Set(["bilibili", "douyin", "xiaohongshu", "channels"]);
+    const existingVectorIcons = new Set([
+      "bilibili",
+      "douyin",
+      "xiaohongshu",
+      "xiaohongshu-note",
+      "channels",
+    ]);
     const visiblePlatforms = ACCOUNT_SETTINGS_PLATFORMS;
 
     for (const platform of visiblePlatforms) {

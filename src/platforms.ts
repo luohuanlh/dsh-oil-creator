@@ -34,6 +34,14 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     draftRunner: "video-publisher",
     draftCapability: "page-ready",
   },
+  "xiaohongshu-note": {
+    name: "小红书图文笔记",
+    kind: "article",
+    loginUrl: "https://creator.xiaohongshu.com/",
+    workspaceUrl: "https://creator.xiaohongshu.com/publish/publish?source=official&from=menu&target=image",
+    draftRunner: "article-ego",
+    draftCapability: "local-verified",
+  },
   channels: {
     name: "视频号",
     kind: "video",
@@ -55,8 +63,8 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "article",
     loginUrl: "https://mp.toutiao.com/",
     workspaceUrl: "https://mp.toutiao.com/profile_v4/graphic/publish",
-    draftRunner: null,
-    draftCapability: "manual-handoff",
+    draftRunner: "article-ego",
+    draftCapability: "remote-verified",
   },
   baijiahao: {
     name: "百家号",
@@ -222,6 +230,7 @@ type PlatformWithDraftRunner<Runner extends string> = {
 export type ArticleDraftPlatform = PlatformWithDraftRunner<"article-ego">;
 export type DraftCapability =
   | "remote-verified"
+  | "local-verified"
   | "local-tested"
   | "page-ready"
   | "manual-handoff"
@@ -304,6 +313,7 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
   const definition = PUBLISH_PLATFORM_DEFINITIONS[platform];
   const limits: Partial<Record<PublishPlatform, Pick<PlatformGenerationRule, "titleMax" | "summaryMax" | "tagsMax">>> = {
     xiaohongshu: { titleMax: 20, summaryMax: 100, tagsMax: 10 },
+    "xiaohongshu-note": { titleMax: 20, summaryMax: 100, tagsMax: 10 },
     douyin: { titleMax: 30, summaryMax: 100, tagsMax: 5 },
     bilibili: { titleMax: 80, summaryMax: 200, tagsMax: 10 },
     channels: { titleMax: 16, summaryMax: 120, tagsMax: 5 },
@@ -322,7 +332,9 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
     name: definition.name,
     kind: definition.kind,
     ...limit,
-    guidance: definition.kind === "video"
+    guidance: platform === "xiaohongshu-note"
+      ? "body 是 1000 字以内的图文笔记正文；使用短段落，tags 不带 # 且最多 10 个。"
+      : definition.kind === "video"
       ? "body 是视频说明；tags 不带 #，不得虚构视频中不存在的事实。"
       : definition.kind === "audio"
       ? "body 是音频说明；保留原始音频事实，不得编造曲目、作者或版权信息。"

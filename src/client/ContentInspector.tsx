@@ -117,7 +117,9 @@ function draftLabel(
   if (row.draftState === "running") return t("inspector.draft.running");
   if (row.draftState === "ready") return t("inspector.draft.staged");
   if (row.draftState === "error") return t("inspector.draft.failed");
-  if (row.status === "draft") return t("inspector.publish.draft");
+  if (row.status === "draft") return row.draftStorage === "browser-local"
+    ? t("inspector.publish.localDraft")
+    : t("inspector.publish.draft");
   return t("inspector.publish.unpublished");
 }
 

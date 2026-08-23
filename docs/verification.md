@@ -52,8 +52,9 @@
 | 抖音 | `REMOTE_VERIFIED` | 真实草稿标题一致，远端 `video_id=v0200fg10000da438evog65gkcsbelp0`，draft 入口回读通过 |
 | 快手 | `REMOTE_VERIFIED` | 真实 3 秒 MP4 冷启动首轮 `READY`，服务器快照回读稳定 `fileId=3931762113`、文件名、精确描述、`mediaId` 与时长 |
 | 小红书 | `PAGE_READY` | 已接入 `video-publisher`，本仓库没有逐平台远端保存或 id 回读证据 |
+| 小红书图文笔记 | `LOCAL_VERIFIED` | 独立 `xiaohongshu-note` Adapter 上传图片、填写标题正文并点击“暂存离开”；IndexedDB 草稿 `372ceedf-6807-43e2-9ecb-8fc7de785774` 的图片、标题和正文回读一致，官网明确提示草稿只存当前浏览器本地 |
 | 视频号 | `PAGE_READY` | 已接入 `video-publisher`，本仓库没有逐平台远端保存或 id 回读证据 |
-| 头条号 | `MANUAL_HANDOFF` | 只生成平台版本并打开编辑页；无可靠自动文章草稿证据 |
+| 头条号 | `REMOTE_VERIFIED` | 官方 `save=0` 自动保存得到 `pgc_id=7677183504072901174`；编辑页和草稿列表回读标题、封面、`is_draft=true`、`status_desc=草稿` 与 `claim_exclusive=0` |
 | 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 音频入口，不在 Article Publisher 范围 |
 
 ## 2026-08-23 八个图文平台真实草稿回归
@@ -85,6 +86,15 @@
 - 只读浏览器探针没有保存或发布内容：企鹅、网易、一点、大鱼、顶端、维科均确认未登录；同顺号确认独立创作平台但未登录；老虎和富途确认境内 Web 服务限制。
 - `pnpm check` 通过：51 个测试文件、334 项测试，TypeScript 与 Host/Client/Typert 构建全部成功。
 
+## 2026-08-23 头条号与小红书图文笔记闭环
+
+- 头条号正式编辑器没有独立“存草稿”按钮，而是通过 `/mp/agw/article/publish` 的 `save=0` 请求自动保存。生产 Adapter 只观察页面自己发出的自动保存回执，不点击“预览并发布”或“定时发布”；随后从 `creator_center/draft_list` 回读 `pgc_id`、标题、封面和草稿状态。
+- 头条页面默认勾选“头条首发”。Adapter 在填写前显式关闭该声明，真实草稿 `7677183504072901174` 的列表记录确认 `is_exclusive=false`、`claim_exclusive=0`。自动化没有声明原创或首发。
+- 小红书视频与图文笔记继续使用不同平台目标。`xiaohongshu-note` 上传所选封面、填写二十字以内标题和千字以内正文，通过 CDP 精确点击关闭 Shadow DOM 中的“暂存离开”，从 `draft-database-v1/image-draft` 回读本地草稿 ID、图片 `fileId`、标题和正文。
+- 小红书官网明确提示“草稿存储于当前使用的浏览器本地”；因此结果使用 `LOCAL_VERIFIED`、`draftStorage=browser-local` 和 `draftReceipt`，不生成或伪造远端 ID。真实回归草稿为 `372ceedf-6807-43e2-9ecb-8fc7de785774`。
+- 两个 Adapter 都具备成功、登录失效、保存失败和回读失败 fixture；头条号升级为 `remote-verified`，小红书图文笔记升级为 `local-verified`，均配置 `article-ego` 并可在图文工作台勾选。
+- 本功能提交覆盖 51 个测试文件、346 项测试；当前工作区连同并行兼容性回归共通过 52 个文件、347 项测试。TypeScript 与 Host/Client/Typert 构建、bundle 同步、`git diff --check`、Node 语法和 npm package dry-run 均通过。
+
 ## Remaining Verification Queue
 
 1. **搜狐号**：账号审核通过后验证 `account/list`、`sp-cm`、draft v2 响应 ID、标题回读和 `declareOriginal=false`。
@@ -99,7 +109,6 @@
 |---|---|---|
 | 网易号、一点号、大鱼号、搜狐号、同顺号、维科网 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
 | 老虎财经、富途牛牛 | `LOCAL_TESTED / WEB_LIMITED` | 安全表单 Adapter 已编码，但境内 Web 环境受限；不绕过地域、登录、风控或 App 限制。 |
-| 小红书图文笔记 | `UNSUPPORTED` | 当前 `xiaohongshu` 定义是视频运行器，不能据此升级为图文笔记能力；需要独立的 note 输入、草稿证据和安全回归。 |
 | 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 属于音频平台，不在 Article Publisher 范围。 |
 
 ## 2026-08-23 百家号图文草稿 P0

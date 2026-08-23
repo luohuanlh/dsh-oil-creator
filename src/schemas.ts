@@ -61,6 +61,10 @@ const platformPublishSchema = z.object({
   url: z.string().optional(),
   remoteId: z.string().optional(),
   draftReceipt: z.string().optional(),
+  draftStorage: z.union([
+    z.literal("remote"),
+    z.literal("browser-local"),
+  ]).optional(),
   views: z.number().optional(),
   likes: z.number().optional(),
   comments: z.number().optional(),
@@ -303,6 +307,7 @@ const platformAccountSchema = z.object({
   supportsAutoDraft: z.boolean(),
   draftCapability: z.union([
     z.literal("remote-verified"),
+    z.literal("local-verified"),
     z.literal("local-tested"),
     z.literal("page-ready"),
     z.literal("manual-handoff"),

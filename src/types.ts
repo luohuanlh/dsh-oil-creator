@@ -38,6 +38,7 @@ export interface PlatformPublish extends PublishMetrics {
   url?: string;
   remoteId?: string;
   draftReceipt?: string;
+  draftStorage?: "remote" | "browser-local";
   draftState?: "running" | "ready" | "error";
   draftError?: string;
   draftStartedAt?: number;
@@ -63,6 +64,7 @@ export interface OverlayPublish extends PublishMetrics {
   url?: string;
   remoteId?: string;
   draftReceipt?: string;
+  draftStorage?: "remote" | "browser-local";
   draftState?: "running" | "ready" | "error";
   draftError?: string;
   draftStartedAt?: number;

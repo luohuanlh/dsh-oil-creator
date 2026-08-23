@@ -12,8 +12,8 @@
 | --- | --- |
 | `src/catalog.ts` | 创建内容目录、保存内容类型元数据并扫描文件产物 |
 | `src/distribution.ts` | 枚举候选素材、校验固定选择、读取 AI 输入并原子冻结平台变体 |
-| `src/platforms.ts` | 定义 24 个平台账号入口和草稿适配能力 |
-| `src/articlePlatformProfiles.ts` | 定义 17 个图文平台各自的受众、目标、语气、结构、标签和安全边界 |
+| `src/platforms.ts` | 定义 25 个平台账号入口和草稿适配能力 |
+| `src/articlePlatformProfiles.ts` | 定义 18 个图文平台各自的受众、目标、语气、结构、标签和安全边界 |
 | `src/platformAccounts.ts` | 调用 Ego Browser 打开或检查平台会话 |
 | `scripts/platform-account.mjs` | 浏览器内登录交接和登录状态检查 |
 | `src/coverVariants.ts` | 使用 `sharp` 跨平台读取、居中裁切并缓存 3:4/4:3 视频封面派生文件 |
@@ -34,7 +34,7 @@
 
 ## 状态模型
 
-平台账号记录包括平台标识、是否启用、是否存在自动化运行器、证据等级、最近检查状态和时间。证据等级分为 `remote-verified`、`local-tested`、`page-ready`、`manual-handoff` 和 `unsupported`；登录状态不推导草稿能力。`local-tested` 只代表生产脚本已通过本地契约与模拟回归，不代表真实账号已经保存草稿；头条号保持 `manual-handoff`，不开放自动草稿。
+平台账号记录包括平台标识、是否启用、是否存在自动化运行器、证据等级、最近检查状态和时间。证据等级分为 `remote-verified`、`local-verified`、`local-tested`、`page-ready`、`manual-handoff` 和 `unsupported`；登录状态不推导草稿能力。`local-verified` 表示平台官方只提供浏览器本地草稿且已真实保存回读，`local-tested` 只代表生产脚本通过本地契约与模拟回归。
 
 新建内容的类型元数据位于内容文件夹的 `.oil-content.json`，值为 `video`、`audio` 或 `article`。界面默认选择 `video`；元数据仅用于记录用户意图，不接管用户的素材文件。旧目录没有该文件时保持兼容。
 
@@ -44,7 +44,7 @@
 
 - `running`：外部运行器正在执行；
 - `ready`：投稿页已准备并通过安全检查，但尚无远端保存证据；
-- `draft`：平台草稿已远端保存，并取得标题与远端 id 回读证据；
+- `draft`：平台草稿已保存并取得可回读凭据；`draftStorage` 进一步区分 `remote` 与 `browser-local`；
 - `error`：运行失败，保存错误摘要；
 - `published`：仅兼容历史手工标记，新的自动化不会写入该状态。
 
@@ -93,13 +93,13 @@
 
 ## 统一 Article Publisher
 
-Ego 图文运行器由轻量平台注册表驱动。每个平台注册一个且仅一个 Adapter，必须同时提供 `inspect`、`saveDraft` 和 `verify`；Dispatcher 不包含平台名称或平台分支。成功输出必须同时具备非空远端 ID、编辑 URL、任务空间和 `verified: true`，并标记 `REMOTE_VERIFIED`。登录失效、平台拒绝与回读失败分别输出 `BLOCKED_AUTH`、`BLOCKED_PLATFORM`、`REMOTE_UNVERIFIED`，不能仅凭 HTTP 200 或页面跳转报告成功。
+Ego 图文运行器由轻量平台注册表驱动。每个平台注册一个且仅一个 Adapter，必须同时提供 `inspect`、`saveDraft` 和 `verify`；Dispatcher 不包含平台名称或平台分支。远端成功必须具备远端 ID、编辑 URL、任务空间和 `verified: true`；浏览器本地成功必须具备独立草稿凭据、`draftStorage=browser-local` 和 IndexedDB 回读，二者分别标记 `REMOTE_VERIFIED` 与 `LOCAL_VERIFIED`。
 
 源文件在构建时拼成单个自包含 Ego bundle，避免 stdin 执行环境依赖相对模块解析。bundle 一致性、每个 Adapter 的三阶段契约、core/dispatch 不含平台分支均有自动回归。
 
-企鹅号、知乎、雪球号、东方财富号、微博和顶端新闻已在 2026-08-23 用“测试文章 001”完成真实保存、远端 ID 和标题回读，因此与微信公众号、百家号一起配置 `draftRunner: article-ego` 并进入 `ARTICLE_DRAFT_PLATFORMS`。企鹅号必须先上传封面并完成“无需标注”自主声明，随后 `/marticlepublish/omSave` 才返回正式 `articleId`；验证阶段从 `/main/creation/article?articleId=` 核对 ID/标题，并从内容管理列表回读封面、自主声明和草稿状态。其余八个 Adapter 继续为 `local-tested` 且 `draftRunner=null`：搜狐号、一点号、大鱼号、同顺号和维科网等待账号审核，网易号等待实名认证，老虎财经和富途牛牛在境内 Web 端没有创作入口。
+微信公众号、百家号、企鹅号、知乎、雪球号、东方财富号、微博、顶端新闻和头条号已在 2026-08-23 用“测试文章 001”完成真实远端保存、ID 和标题回读。头条号观察官方 `save=0` 自动保存回执并从草稿列表核对封面、`is_draft` 和非首发状态；小红书图文笔记使用独立平台目标，执行“上传图片 → 填写标题正文 → 暂存离开”，再从 `draft-database-v1/image-draft` 回读本地草稿。其余八个 Adapter 继续为 `local-tested` 且 `draftRunner=null`。
 
-平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手和八个已验证图文平台为 `remote-verified`；小红书、视频号为 `page-ready`；八个未开放 Adapter 为 `local-tested`；头条号为 `manual-handoff`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
+平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手和九个已验证图文平台为 `remote-verified`；小红书图文笔记为 `local-verified`；小红书视频和视频号为 `page-ready`；八个未开放 Adapter 为 `local-tested`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
 
 ## Ego Browser 会话
 

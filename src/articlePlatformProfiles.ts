@@ -34,6 +34,17 @@ export const ARTICLE_PLATFORM_CONTENT_PROFILES = Object.freeze({
     tagApproach: "优先选择主题实体、所属行业和事件类型",
     safeguards: ["不要使用夸张或误导性标题", "明确区分已经发生的事实与预测"],
   }),
+  "xiaohongshu-note": profile({
+    audience: "通过图片和短文发现经验、工具与生活灵感的小红书用户",
+    objective: "用一张可信封面和千字以内正文快速交代主题、过程与可复用结论",
+    tone: "自然、具体、有分享感但不过度营销",
+    titleApproach: "二十字以内直接说明主题或实际收获，不使用悬空的情绪钩子",
+    summaryApproach: "用一句话概括这篇笔记提供的经验或结果",
+    structure: ["开头直接说明主题和结果", "用短段落呈现步骤或要点", "补充边界、注意事项与相关话题"],
+    formatting: "正文控制在一千字以内，短段落呈现；标签放在末尾且不重复堆叠",
+    tagApproach: "选择最多十个高度相关的话题词，以主题、场景和工具为主",
+    safeguards: ["不得虚构亲历、效果或用户反馈", "不得把普通分享包装成无条件有效的承诺"],
+  }),
   baijiahao: profile({
     audience: "通过搜索和推荐获取实用信息的大众读者",
     objective: "让文章脱离原始上下文后仍能完整回答一个明确问题",

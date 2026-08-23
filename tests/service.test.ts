@@ -4,6 +4,17 @@ import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type MockArticleOutcome =
+  | {
+      ok: true;
+      url: string;
+      remoteId?: string;
+      draftReceipt?: string;
+      draftStorage?: "remote" | "browser-local";
+      taskSpace: string;
+    }
+  | { ok: false; error: string };
+
 const draft = vi.hoisted(() => ({
   prepare: vi.fn(async (_item, _dataDir, platforms) => ({
     packagePath: "/tmp/package.json",
@@ -18,8 +29,8 @@ const draft = vi.hoisted(() => ({
 const articleDraft = vi.hoisted(() => ({
   prepare: vi.fn(async (_item, platform) => ({ input: { platform } })),
   start: vi.fn(),
-  finish: undefined as undefined | ((result: { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }) => void),
-  finishes: new Map<string, (result: { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }) => void>(),
+  finish: undefined as undefined | ((result: MockArticleOutcome) => void),
+  finishes: new Map<string, (result: MockArticleOutcome) => void>(),
 }));
 
 vi.mock("../src/draftRunner.ts", () => ({
@@ -112,9 +123,7 @@ beforeEach(() => {
   articleDraft.finish = undefined;
   articleDraft.finishes.clear();
   articleDraft.start.mockImplementation(async (prepared) => {
-    const completion = new Promise<
-      { ok: true; url: string; remoteId: string; taskSpace: string } | { ok: false; error: string }
-    >((resolve) => {
+    const completion = new Promise<MockArticleOutcome>((resolve) => {
       articleDraft.finish = resolve;
       articleDraft.finishes.set(prepared.input.platform, resolve);
     });
@@ -466,6 +475,36 @@ describe("OilCreatorService.startDrafts", () => {
     });
   });
 
+  it("小红书图文笔记保存浏览器本地草稿范围，不伪装远端 ID", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-xhs-note-"));
+    const overlay = emptyOverlay();
+    overlay.profile = { enabledPlatforms: ["xiaohongshu-note"] };
+    overlay.accounts = { "xiaohongshu-note": { status: "active", checkedAt: 1 } };
+    await saveOverlay(root, overlay);
+    const service = probe(root, summary(root, join(root, "missing.mp4")));
+
+    await service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["xiaohongshu-note"] },
+      new AbortController().signal,
+    );
+
+    articleDraft.finish?.({
+      ok: true,
+      url: "https://creator.xiaohongshu.com/publish/publish?target=image",
+      draftReceipt: "xiaohongshu-note:browser-local:local-42",
+      draftStorage: "browser-local",
+      taskSpace: "11",
+    });
+    await vi.waitFor(async () => {
+      expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.["xiaohongshu-note"])
+        .toMatchObject({
+          status: "draft",
+          draftReceipt: "xiaohongshu-note:browser-local:local-42",
+          draftStorage: "browser-local",
+        });
+    });
+  });
+
   it("同一次图文任务并发启动公众号与百家号并独立记录结果", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-service-article-multi-"));
     const overlay = emptyOverlay();
@@ -514,7 +553,7 @@ describe("OilCreatorService.startDrafts", () => {
 });
 
 describe("OilCreatorService.getPlatformAccounts", () => {
-  it("始终返回 24 个平台并区分草稿支持", async () => {
+  it("始终返回 25 个平台并区分草稿支持", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-service-accounts-"));
     const overlay = emptyOverlay();
     overlay.accounts = { zhihu: { status: "active", checkedAt: 1 } };
@@ -522,13 +561,15 @@ describe("OilCreatorService.getPlatformAccounts", () => {
     const service = probe(root, summary(root, join(root, "demo.mp4")));
 
     const result = await service.getPlatformAccounts({}, new AbortController().signal);
-    expect(result.accounts).toHaveLength(24);
+    expect(result.accounts).toHaveLength(25);
     expect(result.accounts.find((row) => row.platform === "zhihu"))
       .toMatchObject({ status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" });
     expect(result.accounts.find((row) => row.platform === "bilibili")?.supportsAutoDraft)
       .toBe(true);
     expect(result.accounts.find((row) => row.platform === "baijiahao"))
       .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "remote-verified" });
+    expect(result.accounts.find((row) => row.platform === "xiaohongshu-note"))
+      .toMatchObject({ status: "unknown", supportsAutoDraft: true, draftCapability: "local-verified" });
     expect(result.accounts.find((row) => row.platform === "netease-music"))
       .toMatchObject({ status: "unknown", supportsAutoDraft: false });
     expect(result.accounts.find((row) => row.platform === "ximalaya"))

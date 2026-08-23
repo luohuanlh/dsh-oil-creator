@@ -15,8 +15,8 @@ import {
 } from "../src/platforms.ts";
 
 describe("platform catalog", () => {
-  it("包含参考实现与两个音频入口共 24 个平台", () => {
-    expect(PUBLISH_PLATFORMS).toHaveLength(24);
+  it("包含参考实现、独立小红书图文目标与两个音频入口共 25 个平台", () => {
+    expect(PUBLISH_PLATFORMS).toHaveLength(25);
     expect(PUBLISH_PLATFORMS.at(-1)).toBe("ximalaya");
     expect(PUBLISH_PLATFORM_DEFINITIONS["wechat-mp"].name).toBe("微信公众号");
     expect(PUBLISH_PLATFORM_DEFINITIONS["netease-music"]).toMatchObject({
@@ -43,13 +43,15 @@ describe("platform catalog", () => {
       .toBe("https://mp.ofweek.com/article/publish.html");
   });
 
-  it("只把十三个真实运行器平台标为自动草稿", () => {
+  it("只把十五个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
       "xiaohongshu",
+      "xiaohongshu-note",
       "channels",
       "kuaishou",
+      "toutiao",
       "baijiahao",
       "penguin",
       "dingduan",
@@ -67,6 +69,8 @@ describe("platform catalog", () => {
     expect(toVideoPublisherPlatform("kuaishou")).toBe("kuaishou");
     expect(toVideoPublisherPlatform("wechat-mp")).toBeUndefined();
     expect(ARTICLE_DRAFT_PLATFORMS).toEqual([
+      "xiaohongshu-note",
+      "toutiao",
       "baijiahao",
       "penguin",
       "dingduan",
@@ -78,14 +82,17 @@ describe("platform catalog", () => {
     ]);
     expect(isArticleDraftPlatform("wechat-mp")).toBe(true);
     expect(isArticleDraftPlatform("zhihu")).toBe(true);
+    expect(isArticleDraftPlatform("toutiao")).toBe(true);
+    expect(isArticleDraftPlatform("xiaohongshu-note")).toBe(true);
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("remote-verified");
     expect(draftCapability("baijiahao")).toBe("remote-verified");
     expect(draftCapability("douyin")).toBe("remote-verified");
     expect(draftCapability("xiaohongshu")).toBe("page-ready");
+    expect(draftCapability("xiaohongshu-note")).toBe("local-verified");
     expect(draftCapability("channels")).toBe("page-ready");
     expect(draftCapability("kuaishou")).toBe("remote-verified");
-    expect(draftCapability("toutiao")).toBe("manual-handoff");
+    expect(draftCapability("toutiao")).toBe("remote-verified");
     expect(draftCapability("zhihu")).toBe("remote-verified");
     expect(draftCapability("sohu")).toBe("local-tested");
     expect(draftCapability("xueqiu")).toBe("remote-verified");
@@ -121,6 +128,7 @@ describe("platform catalog", () => {
 
   it("为全部图文平台提供互相独立的内容 profile", () => {
     expect(ARTICLE_PLATFORMS).toEqual([
+      "xiaohongshu-note",
       "toutiao",
       "baijiahao",
       "penguin",
@@ -151,5 +159,11 @@ describe("platform catalog", () => {
       .toContain("处理反例、限制和常见误解");
     expect(platformGenerationRule("xueqiu").contentProfile?.safeguards)
       .toContain("不得承诺收益或使用确定性买卖建议");
+    expect(platformGenerationRule("xiaohongshu-note")).toMatchObject({
+      titleMax: 20,
+      tagsMax: 10,
+      guidance: expect.stringContaining("1000 字以内"),
+      contentProfile: { formatting: expect.stringContaining("一千字以内") },
+    });
   });
 });

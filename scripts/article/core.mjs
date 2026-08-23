@@ -52,8 +52,10 @@ function articleFailure(message, options = {}) {
 
 function assertSaved(result, fallbackMessage) {
   if (result?.ok !== true
-    || typeof result.remoteId !== "string"
-    || result.remoteId.trim() === ""
+    || !(
+      (typeof result.remoteId === "string" && result.remoteId.trim() !== "")
+      || (typeof result.draftReceipt === "string" && result.draftReceipt.trim() !== "")
+    )
     || typeof result.draftUrl !== "string"
     || result.draftUrl.trim() === "") {
     throw articleFailure(result?.error || fallbackMessage, {

@@ -1,5 +1,7 @@
 export const ARTICLE_DRAFT_SOURCE_FILES = Object.freeze([
   "core.mjs",
+  "platforms/toutiao.mjs",
+  "platforms/xiaohongshu-note.mjs",
   "platforms/wechat-mp.mjs",
   "platforms/baijiahao.mjs",
   "platforms/penguin.mjs",

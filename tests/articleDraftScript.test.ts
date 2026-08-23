@@ -35,6 +35,10 @@ const extendedPlatformsRuntimeFixture = resolve(
   process.cwd(),
   "tests/fixtures/extended-platforms-article-draft-ego-runtime.mjs",
 );
+const toutiaoXhsNoteRuntimeFixture = resolve(
+  process.cwd(),
+  "tests/fixtures/toutiao-xhs-note-article-draft-ego-runtime.mjs",
+);
 const articleDraftScript = resolve(process.cwd(), "scripts/article-draft.mjs");
 
 type ExtendedArticlePlatform =
@@ -210,6 +214,28 @@ async function runExtendedPlatformFixture(
   }
 }
 
+async function runToutiaoXhsNoteFixture(
+  platform: "toutiao" | "xiaohongshu-note",
+  scenario: "success" | "login" | "verification-failure" | "save-failure",
+): Promise<FixtureRun> {
+  try {
+    const result = await execFileAsync(process.execPath, [
+      toutiaoXhsNoteRuntimeFixture,
+      articleDraftScript,
+      platform,
+      scenario,
+    ]);
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (cause) {
+    const failure = cause as { code?: number; stdout?: string; stderr?: string };
+    return {
+      code: typeof failure.code === "number" ? failure.code : 1,
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? "",
+    };
+  }
+}
+
 function jsonLines(output: string): Array<Record<string, unknown>> {
   return output
     .split(/\r?\n/)
@@ -230,13 +256,114 @@ describe("Article Publisher 统一契约", () => {
   });
 
   it("统一输出明确的远端验证或阻塞状态", () => {
-    expect(source).toContain('status: "REMOTE_VERIFIED"');
+    expect(source).toContain('status: browserLocal ? "LOCAL_VERIFIED" : "REMOTE_VERIFIED"');
     expect(source).toContain('status: "BLOCKED_AUTH"');
     expect(source).toContain('status: "REMOTE_UNVERIFIED"');
   });
 
   it("浏览器表达式不以会被 Ego 误判的块注释开头", () => {
     expect(source).not.toContain("String.raw`/* OIL_");
+  });
+});
+
+describe("头条号 Article Adapter", () => {
+  const source = readFileSync(
+    resolve(process.cwd(), "scripts/article/platforms/toutiao.mjs"),
+    "utf8",
+  );
+
+  it("只观察 save=0 自动保存并回读草稿列表", () => {
+    expect(source).toContain("OIL_TOUTIAO_SAVE");
+    expect(source).toContain("save=0");
+    expect(source).toContain("creator_center/draft_list");
+    expect(source).toContain("exclusiveDisabled");
+    expect(source).not.toContain(".click();\n        const publish");
+  });
+
+  it("完成远端草稿 ID、封面、标题与非首发回读", async () => {
+    const result = await runToutiaoXhsNoteFixture("toutiao", "success");
+    const lines = jsonLines(result.stdout);
+    expect(result.code, result.stderr).toBe(0);
+    expect(lines.find((line) => line.platform === "toutiao")).toMatchObject({
+      ok: true,
+      status: "REMOTE_VERIFIED",
+      remoteId: "toutiao-draft-42",
+      draftStorage: "remote",
+      taskSpace: "31",
+      handedOff: true,
+    });
+  });
+
+  it("登录、保存与回读失败保持准确状态", async () => {
+    const login = await runToutiaoXhsNoteFixture("toutiao", "login");
+    expect(login.code).toBe(2);
+    expect(jsonLines(login.stdout).find((line) => line.platform === "toutiao"))
+      .toMatchObject({ ok: false, status: "BLOCKED_AUTH" });
+
+    const saveFailure = await runToutiaoXhsNoteFixture("toutiao", "save-failure");
+    expect(saveFailure.code).toBe(3);
+
+    const verificationFailure = await runToutiaoXhsNoteFixture("toutiao", "verification-failure");
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === "toutiao"))
+      .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+describe("小红书图文笔记 Article Adapter", () => {
+  const source = readFileSync(
+    resolve(process.cwd(), "scripts/article/platforms/xiaohongshu-note.mjs"),
+    "utf8",
+  );
+
+  it("只点击关闭 Shadow DOM 中的暂存离开并回读 IndexedDB", () => {
+    expect(source).toContain("暂存离开");
+    expect(source).toContain("draft-database-v1");
+    expect(source).toContain("image-draft");
+    expect(source).toContain('draftStorage: "browser-local"');
+    expect(source).not.toContain("submit-text");
+  });
+
+  it("返回浏览器本地草稿凭据，不伪装成远端 ID", async () => {
+    const result = await runToutiaoXhsNoteFixture("xiaohongshu-note", "success");
+    const lines = jsonLines(result.stdout);
+    const draft = lines.find((line) => line.platform === "xiaohongshu-note");
+    const trace = lines.find((line) => line.fixture === true);
+    expect(result.code, result.stderr).toBe(0);
+    expect(draft).toMatchObject({
+      ok: true,
+      status: "LOCAL_VERIFIED",
+      verified: true,
+      draftReceipt: "xiaohongshu-note:browser-local:xhs-local-draft-42",
+      draftStorage: "browser-local",
+      taskSpace: "31",
+      handedOff: true,
+    });
+    expect(draft).not.toHaveProperty("remoteId");
+    expect(trace).toMatchObject({
+      cdpCalls: expect.arrayContaining([
+        "Accessibility.getFullAXTree",
+        "DOM.getBoxModel",
+        "Input.dispatchMouseEvent",
+      ]),
+    });
+  });
+
+  it("登录、填写与本地回读失败均不误报远端成功", async () => {
+    const login = await runToutiaoXhsNoteFixture("xiaohongshu-note", "login");
+    expect(login.code).toBe(2);
+
+    const saveFailure = await runToutiaoXhsNoteFixture("xiaohongshu-note", "save-failure");
+    expect(saveFailure.code).toBe(3);
+
+    const verificationFailure = await runToutiaoXhsNoteFixture(
+      "xiaohongshu-note",
+      "verification-failure",
+    );
+    expect(verificationFailure.code).toBe(4);
+    expect(jsonLines(verificationFailure.stdout).find((line) =>
+      line.platform === "xiaohongshu-note"
+    )).toMatchObject({ ok: false, status: "LOCAL_UNVERIFIED" });
   });
 });
 

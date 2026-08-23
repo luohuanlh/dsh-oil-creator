@@ -99,6 +99,9 @@ function platformFromField(field: unknown, fallback: PublishMark): PlatformPubli
   const draftReceipt = typeof record.draftReceipt === "string" && record.draftReceipt.trim() !== ""
     ? record.draftReceipt.trim()
     : undefined;
+  const draftStorage = record.draftStorage === "remote" || record.draftStorage === "browser-local"
+    ? record.draftStorage
+    : undefined;
   const verifiedDraft = rawStatus === "draft"
     && url !== undefined
     && (remoteId !== undefined || draftReceipt !== undefined);
@@ -114,6 +117,7 @@ function platformFromField(field: unknown, fallback: PublishMark): PlatformPubli
         ...(publisherReady(record.status) ? { draftState: "ready" as const } : {}),
         ...(remoteId === undefined ? {} : { remoteId }),
         ...(draftReceipt === undefined ? {} : { draftReceipt }),
+        ...(draftStorage === undefined ? {} : { draftStorage }),
       }
     : {
         status,
@@ -122,6 +126,7 @@ function platformFromField(field: unknown, fallback: PublishMark): PlatformPubli
         ...(publisherReady(record.status) ? { draftState: "ready" as const } : {}),
         ...(remoteId === undefined ? {} : { remoteId }),
         ...(draftReceipt === undefined ? {} : { draftReceipt }),
+        ...(draftStorage === undefined ? {} : { draftStorage }),
       };
 }
 
@@ -180,6 +185,9 @@ export function decodeOverlayPublish(raw: unknown): OverlayItem["publish"] {
     if (typeof record.draftReceipt === "string" && record.draftReceipt.trim() !== "") {
       entry.draftReceipt = record.draftReceipt.trim();
     }
+    if (record.draftStorage === "remote" || record.draftStorage === "browser-local") {
+      entry.draftStorage = record.draftStorage;
+    }
     if (typeof record.views === "number" && Number.isFinite(record.views)) entry.views = record.views;
     if (typeof record.likes === "number" && Number.isFinite(record.likes)) entry.likes = record.likes;
     if (typeof record.comments === "number" && Number.isFinite(record.comments)) {
@@ -232,12 +240,13 @@ export function decodeBurnJob(raw: unknown): BurnJob | undefined {
 
 function copyOverlayFields(over: OverlayPublish): Pick<
   OverlayPublish,
-  "url" | "remoteId" | "draftReceipt" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"
+  "url" | "remoteId" | "draftReceipt" | "draftStorage" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"
 > {
-  const next: Pick<OverlayPublish, "url" | "remoteId" | "draftReceipt" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"> = {};
+  const next: Pick<OverlayPublish, "url" | "remoteId" | "draftReceipt" | "draftStorage" | "views" | "likes" | "comments" | "syncedAt" | "draftState" | "draftError" | "draftStartedAt" | "draftPid"> = {};
   if (over.url !== undefined) next.url = over.url;
   if (over.remoteId !== undefined) next.remoteId = over.remoteId;
   if (over.draftReceipt !== undefined) next.draftReceipt = over.draftReceipt;
+  if (over.draftStorage !== undefined) next.draftStorage = over.draftStorage;
   if (over.views !== undefined) next.views = over.views;
   if (over.likes !== undefined) next.likes = over.likes;
   if (over.comments !== undefined) next.comments = over.comments;

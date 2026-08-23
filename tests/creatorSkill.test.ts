@@ -19,7 +19,7 @@ describe("creator-workbench skill", () => {
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("Ego Browser 只");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("概览只显示");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("各自只有两步");
-    expect(CREATOR_WORKBENCH_SKILL.content).toContain("24 个平台");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("25 个平台");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("不得点击最终");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("apply=false");
     expect(CREATOR_WORKBENCH_SKILL.content).not.toContain("publish-package.json 保存已经确认");

@@ -185,7 +185,7 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
   ctx.tools.register(defineTool({
     name: "oil_platform_accounts",
     description:
-      "列出 24 个平台账号状态，或让 Ego Browser 打开/检查一个平台。open 会把浏览器控制权交给用户登录；check 只检查登录态。",
+      "列出 25 个平台账号状态，或让 Ego Browser 打开/检查一个平台。open 会把浏览器控制权交给用户登录；check 只检查登录态。",
     parameters: {
       action: {
         type: "string",

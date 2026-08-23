@@ -539,6 +539,10 @@ export class OilCreatorService extends TypertRemoteService {
           const draftReceipt = "draftReceipt" in result && typeof result.draftReceipt === "string"
             ? result.draftReceipt.trim()
             : "";
+          const draftStorage = "draftStorage" in result
+            && (result.draftStorage === "remote" || result.draftStorage === "browser-local")
+            ? result.draftStorage
+            : undefined;
           if (url === "" || (remoteId === "" && draftReceipt === "")) {
             const next: OverlayPublish = {
               ...current,
@@ -554,9 +558,11 @@ export class OilCreatorService extends TypertRemoteService {
             url,
             ...(remoteId === "" ? {} : { remoteId }),
             ...(draftReceipt === "" ? {} : { draftReceipt }),
+            ...(draftStorage === undefined ? {} : { draftStorage }),
           };
           if (remoteId === "") delete next.remoteId;
           if (draftReceipt === "") delete next.draftReceipt;
+          if (draftStorage === undefined) delete next.draftStorage;
           delete next.draftState;
           delete next.draftError;
           delete next.draftPid;

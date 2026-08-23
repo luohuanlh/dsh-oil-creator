@@ -85,8 +85,9 @@ describe("WeChat article draft runner", () => {
   it("只接受经过页面回读验证的草稿结果", () => {
     expect(parseArticleDraftOutput([
       "noise",
-      JSON.stringify({ ok: true, platform: "wechat-mp", status: "REMOTE_VERIFIED", verified: true, remoteId: "42", draftUrl: "https://mp.weixin.qq.com/draft/42", taskSpace: "7" }),
-    ].join("\n"), "wechat-mp")).toMatchObject({ ok: true, remoteId: "42", taskSpace: "7" });
+      JSON.stringify({ ok: true, platform: "wechat-mp", status: "REMOTE_VERIFIED", verified: true, remoteId: "42", draftStorage: "remote", draftUrl: "https://mp.weixin.qq.com/draft/42", taskSpace: "7" }),
+    ].join("\n"), "wechat-mp"))
+      .toMatchObject({ ok: true, remoteId: "42", taskSpace: "7" });
 
     expect(() => parseArticleDraftOutput(
       JSON.stringify({ ok: true, verified: false }),
@@ -134,6 +135,7 @@ describe("WeChat article draft runner", () => {
       status: "REMOTE_VERIFIED",
       verified: true,
       remoteId: "article-42",
+      draftStorage: "remote",
       draftUrl: "https://baijiahao.baidu.com/builder/rc/edit?article_id=article-42",
       taskSpace: "9",
     }), "baijiahao")).toMatchObject({ platform: "baijiahao", remoteId: "article-42" });
@@ -143,8 +145,37 @@ describe("WeChat article draft runner", () => {
       status: "REMOTE_VERIFIED",
       verified: true,
       remoteId: "42",
+      draftStorage: "remote",
       draftUrl: "https://mp.weixin.qq.com/draft/42",
       taskSpace: "7",
     }), "baijiahao")).toThrow("图文草稿结果不完整");
+  });
+
+  it("小红书图文笔记只接受明确的浏览器本地草稿凭据", () => {
+    expect(parseArticleDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "xiaohongshu-note",
+      status: "LOCAL_VERIFIED",
+      verified: true,
+      draftReceipt: "xiaohongshu-note:browser-local:local-42",
+      draftStorage: "browser-local",
+      draftUrl: "https://creator.xiaohongshu.com/publish/publish?target=image",
+      taskSpace: "11",
+    }), "xiaohongshu-note")).toMatchObject({
+      status: "LOCAL_VERIFIED",
+      draftReceipt: "xiaohongshu-note:browser-local:local-42",
+      draftStorage: "browser-local",
+    });
+
+    expect(() => parseArticleDraftOutput(JSON.stringify({
+      ok: true,
+      platform: "xiaohongshu-note",
+      status: "REMOTE_VERIFIED",
+      verified: true,
+      remoteId: "local-42",
+      draftStorage: "browser-local",
+      draftUrl: "https://creator.xiaohongshu.com/publish/publish?target=image",
+      taskSpace: "11",
+    }), "xiaohongshu-note")).toThrow("图文草稿结果不完整");
   });
 });
