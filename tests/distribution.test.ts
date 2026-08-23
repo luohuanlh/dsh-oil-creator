@@ -8,6 +8,7 @@ import {
   DISTRIBUTION_PACKAGE_NAME,
   discoverContentAssets,
   freezeDistributionPackage,
+  isFrozenDistributionPackageFresh,
   readFrozenDistributionPackage,
   readDistributionSource,
 } from "../src/distribution.ts";
@@ -188,7 +189,7 @@ describe("distribution package", () => {
     expect(frozen.packagePath).toBe(join(folder, DISTRIBUTION_PACKAGE_NAME));
     expect(JSON.parse(await readFile(frozen.packagePath, "utf8"))).toEqual(frozen.package);
     expect(frozen.package).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: "2026-08-21_demo",
       mode: "video",
       selection: { videoPath: await realpath(video), subtitlePath: await realpath(subtitle) },
@@ -212,12 +213,53 @@ describe("distribution package", () => {
     expect(JSON.parse(await readFile(frozen.packagePath, "utf8"))).toEqual(frozen.package);
   });
 
+  it("文章原文变化后冻结包立即过期，重新冻结不会复用旧平台文案", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-freeze-freshness-"));
+    const article = join(folder, "article.md");
+    const cover = join(folder, "cover.png");
+    await writeFile(article, "# 第一版\n", "utf8");
+    await writeFile(cover, "cover");
+
+    const first = await freezeDistributionPackage({
+      id: "article-freshness",
+      folderPath: folder,
+      selection: { mode: "article", articlePath: article, coverPath: cover },
+      variants: [{
+        platform: "wechat-mp",
+        title: "第一版",
+        summary: "摘要",
+        body: "第一版正文",
+        tags: ["AI"],
+      }],
+    });
+    expect(await isFrozenDistributionPackageFresh(folder, first.package)).toBe(true);
+
+    await writeFile(article, "# 第二版\n", "utf8");
+    expect(await isFrozenDistributionPackageFresh(folder, first.package)).toBe(false);
+
+    const second = await freezeDistributionPackage({
+      id: "article-freshness",
+      folderPath: folder,
+      selection: { mode: "article", articlePath: article, coverPath: cover },
+      variants: [{
+        platform: "wechat-mp",
+        title: "第二版",
+        summary: "新摘要",
+        body: "第二版正文",
+        tags: ["AI"],
+      }],
+    });
+    expect(second.package.sourceDigest).not.toBe(first.package.sourceDigest);
+    expect(second.package.variants["wechat-mp"]?.body).toBe("第二版正文");
+  });
+
   it("拒绝消费被篡改为内容目录之外路径的冻结包", async () => {
     const folder = await mkdtemp(join(tmpdir(), "oil-freeze-tampered-"));
     const outside = join(await mkdtemp(join(tmpdir(), "oil-freeze-secret-")), "secret.mp4");
     await writeFile(outside, "secret");
     await writeFile(join(folder, DISTRIBUTION_PACKAGE_NAME), JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      sourceDigest: "0".repeat(64),
       id: "demo",
       mode: "video",
       createdAt: "2026-08-21T12:00:00.000Z",

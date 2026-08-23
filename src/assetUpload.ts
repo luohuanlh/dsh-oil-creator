@@ -8,10 +8,10 @@ import { pipeline } from "node:stream/promises";
 
 import {
   commitTemporaryContentAsset,
+  type AssetUploadKind,
   validateAssetImport,
 } from "./assetImport.ts";
 import { findFreePort } from "./ports.ts";
-import type { AssetImportKind } from "./types.ts";
 
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -34,7 +34,7 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
 
 export async function startAssetUploadServer(input: {
   folderPath: string;
-  kind: AssetImportKind;
+  kind: AssetUploadKind;
   name: string;
   expectedSize: number;
   onImported?: (asset: { name: string; path: string }) => void | Promise<void>;

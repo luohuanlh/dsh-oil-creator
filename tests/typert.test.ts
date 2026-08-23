@@ -20,6 +20,8 @@ describe("handwritten TYPERT", () => {
       "getCoverThumb",
       "getVideoPlayback",
       "getArticleMedia",
+      "saveArticle",
+      "prepareArticleImageUpload",
       "getSettings",
       "getCapabilities",
       "getRevision",

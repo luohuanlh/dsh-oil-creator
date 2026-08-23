@@ -232,6 +232,33 @@ export const articleMediaResultSchema = z.object({
   found: z.boolean(),
   origin: z.string(),
   text: z.string(),
+  revision: z.string(),
+  editable: z.boolean(),
+});
+
+export const saveArticleRequestSchema = z.object({
+  id: z.string().min(1),
+  path: z.string().min(1),
+  text: z.string().max(2 * 1024 * 1024),
+  expectedRevision: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+export const saveArticleResultSchema = z.object({
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+  savedAt: z.number().int().nonnegative(),
+});
+
+export const prepareArticleImageUploadRequestSchema = z.object({
+  id: z.string().min(1),
+  articlePath: z.string().min(1),
+  name: z.string().min(1).max(255),
+  mimeType: z.string().max(128),
+  size: z.number().int().positive().max(20 * 1024 * 1024),
+});
+
+export const prepareArticleImageUploadResultSchema = z.object({
+  url: z.string().url(),
+  markdownPrefix: z.string().min(1),
 });
 
 export const subtitleTextResultSchema = z.object({

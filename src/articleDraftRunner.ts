@@ -3,7 +3,10 @@ import { access, readFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readFrozenDistributionPackage } from "./distribution.ts";
+import {
+  isFrozenDistributionPackageFresh,
+  readFrozenDistributionPackage,
+} from "./distribution.ts";
 import {
   isArticleDraftPlatform,
   PUBLISH_PLATFORM_DEFINITIONS,
@@ -166,6 +169,9 @@ export async function prepareArticleDraftRun(
   const platformName = articlePlatformName(articlePlatform);
   const frozen = await readFrozenDistributionPackage(item.folderPath);
   if (frozen === undefined) throw new Error("缺少 Harness 冻结分发包");
+  if (!await isFrozenDistributionPackageFresh(item.folderPath, frozen)) {
+    throw new Error("文章已修改，请重新生成平台文案");
+  }
   if (frozen.id !== item.id) throw new Error("冻结分发包与当前内容不匹配");
   if (frozen.mode !== "article" || frozen.selection.mode !== "article") {
     throw new Error(`${platformName}草稿需要文章 + 封面冻结分发包`);

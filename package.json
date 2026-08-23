@@ -74,7 +74,9 @@
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
+    "@codemirror/lang-markdown": "^6.5.2",
     "@deepseek-ai/schemastery": "3.18.1",
+    "codemirror": "^6.0.2",
     "sharp": "^0.35.3",
     "zod": "^4.4.3"
   },

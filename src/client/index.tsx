@@ -27,7 +27,11 @@ import type {
   PlatformAccountsResult,
   PrepareAssetUploadRequest,
   PrepareAssetUploadResult,
+  PrepareArticleImageUploadRequest,
+  PrepareArticleImageUploadResult,
   PublishPlatform,
+  SaveArticleRequest,
+  SaveArticleResult,
   VideoPlaybackResult,
 } from "../types.ts";
 import { startLibraryLiveSync } from "./catalogSync.ts";
@@ -73,6 +77,10 @@ interface OilCreatorRemote {
   getCoverThumb: (request: { id: string }) => Promise<RemoteAnswer<CoverThumbResult>>;
   getVideoPlayback: (request: { id: string; path: string }) => Promise<RemoteAnswer<VideoPlaybackResult>>;
   getArticleMedia: (request: { id: string; path: string }) => Promise<RemoteAnswer<ArticleMediaResult>>;
+  saveArticle: (request: SaveArticleRequest) => Promise<RemoteAnswer<SaveArticleResult>>;
+  prepareArticleImageUpload: (
+    request: PrepareArticleImageUploadRequest,
+  ) => Promise<RemoteAnswer<PrepareArticleImageUploadResult>>;
   getSettings: (request: Record<string, never>) => Promise<RemoteAnswer<LibrarySettings>>;
   getCapabilities: (request: Record<string, never>) => Promise<RemoteAnswer<{ capabilities: CreatorCapabilities }>>;
   getRevision: (request: Record<string, never>) => Promise<RemoteAnswer<{ revision: number }>>;
@@ -152,11 +160,26 @@ export function apply(ctx: ClientContext): void {
     },
     getArticleMedia: async (id, path) => {
       const remote = remoteOf();
-      if (remote === undefined) return { found: false, origin: "", text: "" };
+      if (remote === undefined) {
+        return { found: false, origin: "", text: "", revision: "", editable: false };
+      }
       const answer = await remote.getArticleMedia({ id, path });
       return answer.ok && answer.value !== undefined
         ? answer.value
-        : { found: false, origin: "", text: "" };
+        : { found: false, origin: "", text: "", revision: "", editable: false };
+    },
+    saveArticle: async (request) => {
+      const remote = remoteOf();
+      if (remote === undefined) throw new Error("remote unavailable");
+      return unwrap(await remote.saveArticle(request), "article save failed");
+    },
+    prepareArticleImageUpload: async (request) => {
+      const remote = remoteOf();
+      if (remote === undefined) throw new Error("remote unavailable");
+      return unwrap(
+        await remote.prepareArticleImageUpload(request),
+        "article image upload failed",
+      );
     },
     pickDirectory: () => ctx.workspaces.pickDirectory(),
     openPath: (path) => ctx.workspaces.openPath(path),

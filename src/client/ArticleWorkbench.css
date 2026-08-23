@@ -1,0 +1,170 @@
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleWorkbench {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--oil-line) 86%, var(--oil-accent));
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--oil-paper) 96%, white), var(--oil-paper));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 70%);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleEditorToolbar {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--oil-line);
+  background: color-mix(in srgb, var(--oil-paper-deep) 72%, transparent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleViewSwitch {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--oil-line);
+  border-radius: 7px;
+  background: var(--oil-paper);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleViewSwitch button,
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleToolbarButton,
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleConflictBanner button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--oil-ink-soft);
+  font: 650 11px/1 var(--oil-font-body);
+  cursor: pointer;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleViewSwitch button[aria-selected="true"] {
+  background: var(--oil-ink);
+  color: var(--oil-paper);
+  box-shadow: 0 1px 4px rgb(35 29 25 / 18%);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleToolbarButton {
+  border: 1px solid var(--oil-line);
+  background: var(--oil-paper);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleToolbarButton.primary {
+  border-color: var(--oil-accent);
+  background: var(--oil-accent);
+  color: white;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] :is(.articleViewSwitch button, .articleToolbarButton, .articleConflictBanner button):disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleSaveState {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--oil-ink-soft);
+  font-size: 10px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleSaveState.conflict {
+  color: #a74431;
+  font-weight: 700;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor {
+  min-height: 360px;
+  background:
+    linear-gradient(90deg, transparent 43px, color-mix(in srgb, var(--oil-line) 65%, transparent) 44px, transparent 45px),
+    var(--oil-paper);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor .cm-editor {
+  min-height: 360px;
+  background: transparent;
+  color: var(--oil-ink);
+  font: 12px/1.72 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor .cm-editor.cm-focused {
+  outline: 2px solid color-mix(in srgb, var(--oil-accent) 58%, transparent);
+  outline-offset: -2px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor .cm-scroller {
+  min-height: 360px;
+  max-height: 560px;
+  font-family: inherit;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor .cm-gutters {
+  border-right: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--oil-ink-soft) 62%, transparent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor .cm-activeLine,
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleCodeEditor .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--oil-accent) 7%, transparent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleLivePreview {
+  min-height: 360px;
+  max-height: 560px !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleConflictBanner,
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleEditorError,
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleReadonlyHint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--oil-line);
+  background: #fff4e8;
+  color: #8a3d2d;
+  font-size: 11px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleConflictBanner button {
+  flex: none;
+  background: #8a3d2d;
+  color: white;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleReadonlyHint {
+  background: var(--oil-paper-deep);
+  color: var(--oil-ink-soft);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleWorkbenchEmpty {
+  margin-top: 14px;
+  padding: 26px;
+  border: 1px dashed var(--oil-line);
+  border-radius: 10px;
+  color: var(--oil-ink-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  [data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleEditorToolbar {
+    flex-wrap: wrap;
+  }
+
+  [data-plugin="dsh-oil-creator"][data-surface="inspector"] .articleSaveState {
+    order: 3;
+    min-width: 100%;
+    text-align: left;
+  }
+}

@@ -56,7 +56,10 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).not.toContain("queueTimeout");
     expect(implementation).not.toContain("120_000");
     expect(implementation).toContain("getVideoPlayback(selectedId, videoPath)");
-    expect(implementation).toContain("getArticleMedia(selectedId, articlePath)");
+    expect(implementation).toContain("<ArticleWorkbench");
+    expect(implementation).toContain("getArticleMedia={getArticleMedia}");
+    expect(implementation).toContain("saveArticle={saveArticle}");
+    expect(implementation).toContain("prepareArticleImageUpload={prepareArticleImageUpload}");
     expect(implementation).not.toContain("enabledPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");
     expect(implementation).not.toContain("publish-package.json");
   });
@@ -153,6 +156,28 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).not.toContain('className="packageHint"');
     expect(locales).not.toContain("选了 .srt/.ass/.vtt/.txt");
     expect(implementation).not.toContain('className="packageState"');
+  });
+
+  it("Markdown 工作台支持源码编辑、显式保存和本地插图", () => {
+    const workbench = readFileSync(
+      resolve(process.cwd(), "src/client/ArticleWorkbench.tsx"),
+      "utf8",
+    );
+    const editor = readFileSync(
+      resolve(process.cwd(), "src/client/ArticleEditor.tsx"),
+      "utf8",
+    );
+
+    expect(editor).toContain("basicSetup");
+    expect(editor).toContain("markdown()");
+    expect(editor).toContain("insertMarkdown");
+    expect(editor).toContain('event.key.toLowerCase() === "s"');
+    expect(workbench).toContain("saveArticle({");
+    expect(workbench).toContain("expectedRevision: document.revision");
+    expect(workbench).toContain("prepareArticleImageUpload({");
+    expect(workbench).toContain('method: "PUT"');
+    expect(workbench).toContain("rewriteArticleImages(text, document.origin)");
+    expect(workbench).toContain('window.addEventListener("beforeunload"');
   });
 
   it("视频和字幕支持选择本地文件，导入后立即成为当前素材", () => {

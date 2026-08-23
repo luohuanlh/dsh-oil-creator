@@ -1,18 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   IconCloseOutline16,
-  MarkdownText,
 } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { InjectFace, PropsLocale, PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
 
-import { rewriteArticleImages } from "../articleMarkdown.ts";
 import { resolveContentType } from "../contentType.ts";
 import {
   PUBLISH_PLATFORM_DEFINITIONS,
   supportsAutoDraft,
 } from "../platforms.ts";
 import type {
-  ArticleMediaResult,
   AssetImportKind,
   AssetSelection,
   ContentDetail,
@@ -23,6 +20,7 @@ import type {
   VideoPlaybackResult,
 } from "../types.ts";
 import type { CreatorViewFace } from "./face.ts";
+import { ArticleWorkbench } from "./ArticleWorkbench.tsx";
 import {
   applyConversationInset,
   clearConversationInset,
@@ -136,6 +134,8 @@ export function ContentInspector({
   getContent,
   getVideoPlayback,
   getArticleMedia,
+  saveArticle,
+  prepareArticleImageUpload,
   getSettings,
   getPlatformAccounts,
   importAsset,
@@ -169,8 +169,7 @@ export function ContentInspector({
   const [dragging, setDragging] = useState(false);
   const [videoSrc, setVideoSrc] = useState<string>();
   const [videoReady, setVideoReady] = useState(false);
-  const [articleOrigin, setArticleOrigin] = useState<string>();
-  const [articlePreview, setArticlePreview] = useState("");
+  const [articleDirty, setArticleDirty] = useState(false);
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
   const videoFileInput = useRef<HTMLInputElement>(null);
   const subtitleFileInput = useRef<HTMLInputElement>(null);
@@ -190,8 +189,7 @@ export function ContentInspector({
     setQueued(false);
     setVideoSrc(undefined);
     setVideoReady(false);
-    setArticleOrigin(undefined);
-    setArticlePreview("");
+    setArticleDirty(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -288,23 +286,6 @@ export function ContentInspector({
     return () => { cancelled = true; };
   }, [contentType, selectedId, videoPath, libraryEpoch, getVideoPlayback, ready]);
 
-  useEffect(() => {
-    if (contentType !== "article" || selectedId === null || articlePath === "" || !ready()) return;
-    let cancelled = false;
-    void getArticleMedia(selectedId, articlePath).then((next: ArticleMediaResult) => {
-      if (!cancelled) {
-        setArticleOrigin(next.found ? next.origin : undefined);
-        setArticlePreview(next.found ? next.text : "");
-      }
-    }, () => {
-      if (!cancelled) {
-        setArticleOrigin(undefined);
-        setArticlePreview("");
-      }
-    });
-    return () => { cancelled = true; };
-  }, [contentType, selectedId, articlePath, libraryEpoch, getArticleMedia, ready]);
-
   const shownWidth = expanded ? panelWidth : 0;
   useEffect(() => {
     if (selectedId === null) {
@@ -363,6 +344,7 @@ export function ContentInspector({
     && currentSessionId !== undefined
     && !busy
     && !queued
+    && !articleDirty
     && !hasRunningDraft;
 
   const togglePlatform = (platform: PublishPlatform) => {
@@ -481,16 +463,26 @@ export function ContentInspector({
               src={videoSrc}
             />
           )
-      : articlePreview.trim() === ""
+      : articlePath === ""
         ? null
         : (
-          <div className="article workflowPreview">
-            <MarkdownText
-              text={articleOrigin === undefined
-                ? articlePreview
-                : rewriteArticleImages(articlePreview, articleOrigin)}
-            />
-          </div>
+          <ArticleWorkbench
+            key={articlePath}
+            id={detail.id}
+            path={articlePath}
+            libraryEpoch={libraryEpoch}
+            t={t}
+            getArticleMedia={getArticleMedia}
+            saveArticle={saveArticle}
+            prepareArticleImageUpload={prepareArticleImageUpload}
+            onDirtyChange={setArticleDirty}
+            onSaved={() => {
+              setQueued(false);
+              setDetail((current) => current === undefined
+                ? current
+                : { ...current, hasDistributionPackage: false });
+            }}
+          />
         );
 
     return (
@@ -629,7 +621,15 @@ export function ContentInspector({
                         aria-label={t("inspector.asset.article")}
                         className="assetSelect"
                         value={articlePath}
-                        onChange={(event) => { setArticlePath(event.target.value); setQueued(false); }}
+                        onChange={(event) => {
+                          const nextPath = event.target.value;
+                          if (articleDirty && !window.confirm(t("inspector.article.discardConfirm"))) {
+                            return;
+                          }
+                          setArticlePath(nextPath);
+                          setArticleDirty(false);
+                          setQueued(false);
+                        }}
                       >
                         <option value="">{t("inspector.asset.choose")}</option>
                         {detail.assets.articles.map((asset) => (
@@ -640,7 +640,11 @@ export function ContentInspector({
                         type="button"
                         className="assetImportButton"
                         disabled={importingAsset !== undefined}
-                        onClick={() => { articleFileInput.current?.click(); }}
+                        onClick={() => {
+                          if (articleDirty
+                            && !window.confirm(t("inspector.article.discardConfirm"))) return;
+                          articleFileInput.current?.click();
+                        }}
                       >
                         {importingAsset === "article"
                           ? t("inspector.asset.importing")
@@ -856,6 +860,7 @@ export function ContentInspector({
               className="close"
               aria-label={t("inspector.close")}
               onClick={() => {
+                if (articleDirty && !window.confirm(t("inspector.article.discardConfirm"))) return;
                 setSelectedId(null);
                 closeDetails();
               }}

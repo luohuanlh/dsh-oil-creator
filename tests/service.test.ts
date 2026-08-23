@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -631,11 +631,57 @@ describe("OilCreatorService Harness distribution", () => {
     );
 
     expect(video).toMatchObject({ found: true, kind: "raw" });
-    expect(article).toMatchObject({ found: true, text: "# 当前选择文章" });
+    expect(article).toMatchObject({
+      found: true,
+      text: "# 当前选择文章",
+      editable: true,
+    });
+    expect(article.revision).toMatch(/^[a-f0-9]{64}$/);
     await expect(service.getArticleMedia(
       { id: item.id, path: outsideArticle },
       new AbortController().signal,
     )).rejects.toThrow("不属于当前内容文件夹");
+    await service.stopServers();
+  });
+
+  it("保存所选 Markdown 并把正文插图流式写入文章同级目录", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-article-edit-"));
+    const video = join(root, "demo.mp4");
+    const article = join(root, "article.md");
+    await Promise.all([
+      writeFile(video, "video"),
+      writeFile(article, "# 初稿\n"),
+    ]);
+    const item = summary(root, video);
+    item.articlePath = article;
+    item.assets.articles = [{ name: "article.md", path: article }];
+    const service = probe(root, item);
+    const signal = new AbortController().signal;
+
+    const loaded = await service.getArticleMedia({ id: item.id, path: article }, signal);
+    const saved = await service.saveArticle({
+      id: item.id,
+      path: article,
+      text: "# 定稿\n\n正文。\n",
+      expectedRevision: loaded.revision,
+    }, signal);
+    expect(await readFile(article, "utf8")).toBe("# 定稿\n\n正文。\n");
+    expect(saved.revision).not.toBe(loaded.revision);
+
+    const image = new TextEncoder().encode("image");
+    const prepared = await service.prepareArticleImageUpload({
+      id: item.id,
+      articlePath: article,
+      name: "chart.png",
+      mimeType: "image/png",
+      size: image.byteLength,
+    }, signal);
+    const response = await fetch(prepared.url, { method: "PUT", body: image });
+    const result = await response.json() as { asset: { name: string; path: string } };
+    expect(response.status).toBe(201);
+    expect(prepared.markdownPrefix).toBe("images/");
+    expect(result.asset.path).toBe(join(await realpath(root), "images", result.asset.name));
+    expect(await readFile(result.asset.path, "utf8")).toBe("image");
     await service.stopServers();
   });
 

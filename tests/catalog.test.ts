@@ -28,7 +28,10 @@ import {
 } from "../src/catalog.ts";
 import { emptyOverlay } from "../src/overlay.ts";
 import { emptyBurn, emptyPublish } from "../src/publishStatus.ts";
-import { DISTRIBUTION_PACKAGE_NAME } from "../src/distribution.ts";
+import {
+  DISTRIBUTION_PACKAGE_NAME,
+  distributionSourceDigest,
+} from "../src/distribution.ts";
 
 describe("folderNameForTitle", () => {
   it("prefixes today and strips path characters", () => {
@@ -90,10 +93,11 @@ describe("scanLibrary workbench assets", () => {
     await writeFile(join(created.folderPath, "cover.jpg"), "cover");
     await writeFile(join(created.folderPath, "公众号文章", "article.md"), "# 正文");
     await writeFile(join(created.folderPath, DISTRIBUTION_PACKAGE_NAME), JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: created.id,
       mode: "video",
       createdAt: "2026-08-21T12:00:00.000Z",
+      sourceDigest: distributionSourceDigest(""),
       selection: { mode: "video", videoPath: join(created.folderPath, "take-a.mp4") },
       variants: {
         bilibili: { title: "标题", summary: "摘要", body: "正文", tags: ["AI"] },
@@ -138,10 +142,11 @@ describe("scanLibrary workbench assets", () => {
     await writeFile(scriptPath, "# 正文\n");
     await writeFile(coverPath, "cover");
     await writeFile(join(created.folderPath, DISTRIBUTION_PACKAGE_NAME), JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: created.id,
       mode: "article",
       createdAt: "2026-08-20T12:00:00.000Z",
+      sourceDigest: distributionSourceDigest("# 正文"),
       selection: { mode: "article", articlePath: scriptPath, coverPath },
       variants: {
         baijiahao: { title: "标题", summary: "摘要", body: "正文", tags: ["AI"] },

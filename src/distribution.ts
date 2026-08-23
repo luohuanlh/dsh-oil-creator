@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -51,10 +52,11 @@ export interface PlatformVariant {
 }
 
 export interface FrozenDistributionPackage {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: string;
   mode: AssetSelection["mode"];
   createdAt: string;
+  sourceDigest: string;
   selection: AssetSelection;
   variants: Partial<Record<PublishPlatform, Omit<PlatformVariant, "platform">>>;
 }
@@ -65,6 +67,10 @@ const ARTICLE_EXTENSIONS = new Set([".md", ".markdown", ".html", ".htm"]);
 const COVER_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
 export type DistributionAssetKind = "video" | "subtitle" | "article" | "cover";
+
+export function distributionSourceDigest(sourceText: string): string {
+  return createHash("sha256").update(sourceText, "utf8").digest("hex");
+}
 
 const ASSET_RULES: Record<DistributionAssetKind, {
   extensions: ReadonlySet<string>;
@@ -265,10 +271,11 @@ export async function freezeDistributionPackage(input: {
           : {}),
       };
   const frozen: FrozenDistributionPackage = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: input.id,
     mode: selection.mode,
     createdAt: input.createdAt ?? new Date().toISOString(),
+    sourceDigest: distributionSourceDigest(source.sourceText),
     selection,
     variants,
   };
@@ -277,6 +284,7 @@ export async function freezeDistributionPackage(input: {
   const existing = await readFrozenDistributionPackage(input.folderPath);
   if (existing !== undefined
     && existing.id === frozen.id
+    && existing.sourceDigest === frozen.sourceDigest
     && sameSelection(existing.selection, frozen.selection)
     && sameVariantPlatforms(existing.variants, frozen.variants)) {
     // 同一固定输入和平台集合视为重试：保留最初冻结的文案与时间戳。
@@ -378,24 +386,41 @@ export async function readFrozenDistributionPackage(
     ) as unknown;
     if (typeof parsed !== "object" || parsed === null) return undefined;
     const record = parsed as Record<string, unknown>;
-    if (record.schemaVersion !== 1
+    if (record.schemaVersion !== 2
       || typeof record.id !== "string"
       || record.id.trim() === ""
       || typeof record.createdAt !== "string"
-      || record.createdAt.trim() === "") return undefined;
+      || record.createdAt.trim() === ""
+      || typeof record.sourceDigest !== "string"
+      || !/^[a-f0-9]{64}$/.test(record.sourceDigest)) return undefined;
     const selection = await selectionFromUnknown(folderPath, record.selection);
     if (selection === undefined || record.mode !== selection.mode) return undefined;
     const variants = variantsFromUnknown(record.variants, selection.mode);
     if (variants === undefined) return undefined;
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: record.id.trim(),
       mode: selection.mode,
       createdAt: record.createdAt,
+      sourceDigest: record.sourceDigest,
       selection,
       variants,
     };
   } catch {
     return undefined;
+  }
+}
+
+export async function isFrozenDistributionPackageFresh(
+  folderPath: string,
+  frozen?: FrozenDistributionPackage,
+): Promise<boolean> {
+  const current = frozen ?? await readFrozenDistributionPackage(folderPath);
+  if (current === undefined) return false;
+  try {
+    const source = await readDistributionSource(folderPath, current.selection);
+    return distributionSourceDigest(source.sourceText) === current.sourceDigest;
+  } catch {
+    return false;
   }
 }

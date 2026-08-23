@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
-import { dirname, isAbsolute } from "node:path";
+import { stat } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 
 import type { Context } from "@deepseek-ai/cordis";
 import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
@@ -21,6 +21,11 @@ import { inspectCreatorSetup } from "./capabilities.ts";
 import { expandHomePath, resolveDataDir, type Config } from "./config.ts";
 import { importContentAsset } from "./assetImport.ts";
 import { startAssetUploadServer } from "./assetUpload.ts";
+import {
+  articleImageUploadTarget,
+  readArticleDocument,
+  saveArticleDocument,
+} from "./articleDocument.ts";
 import {
   prepareDraftRun,
   startVideoDraftRun,
@@ -87,6 +92,10 @@ import type {
   PlatformAccountsResult,
   PrepareAssetUploadRequest,
   PrepareAssetUploadResult,
+  PrepareArticleImageUploadRequest,
+  PrepareArticleImageUploadResult,
+  SaveArticleRequest,
+  SaveArticleResult,
   SetLibraryRootRequest,
   SetProfileRequest,
   StartDraftsRequest,
@@ -293,18 +302,69 @@ export class OilCreatorService extends TypertRemoteService {
   ): Promise<ArticleMediaResult> {
     signal.throwIfAborted();
     const item = await this.find(request.id);
-    if (item === undefined) return { found: false, origin: "", text: "" };
-    const articlePath = await validateLocalContentAsset(item.folderPath, request.path, "article");
-    const text = await readFile(articlePath, "utf8");
-    const root = dirname(articlePath);
+    if (item === undefined) {
+      return { found: false, origin: "", text: "", revision: "", editable: false };
+    }
+    const document = await readArticleDocument(item.folderPath, request.path);
+    const root = document.root;
     const existing = this.articles.get(request.id);
     if (existing !== undefined && existing.root === root) {
-      return { found: true, origin: existing.origin, text };
+      return {
+        found: true,
+        origin: existing.origin,
+        text: document.text,
+        revision: document.revision,
+        editable: document.editable,
+      };
     }
     existing?.close();
     const session = await startArticleServer(root);
     this.articles.set(request.id, { origin: session.origin, root, close: session.close });
-    return { found: true, origin: session.origin, text };
+    return {
+      found: true,
+      origin: session.origin,
+      text: document.text,
+      revision: document.revision,
+      editable: document.editable,
+    };
+  }
+
+  async saveArticle(
+    request: SaveArticleRequest,
+    signal: AbortSignal,
+  ): Promise<SaveArticleResult> {
+    signal.throwIfAborted();
+    const item = await this.find(request.id);
+    if (item === undefined) throw new Error(`content not found: ${request.id}`);
+    const saved = await saveArticleDocument(item.folderPath, request);
+    this.invalidateCatalog();
+    return saved;
+  }
+
+  async prepareArticleImageUpload(
+    request: PrepareArticleImageUploadRequest,
+    signal: AbortSignal,
+  ): Promise<PrepareArticleImageUploadResult> {
+    signal.throwIfAborted();
+    const item = await this.find(request.id);
+    if (item === undefined) throw new Error(`content not found: ${request.id}`);
+    const target = await articleImageUploadTarget(
+      item.folderPath,
+      request.articlePath,
+      request.name,
+    );
+    let close: () => void = () => {};
+    const upload = await startAssetUploadServer({
+      folderPath: target.folderPath,
+      kind: "article-image",
+      name: target.name,
+      expectedSize: request.size,
+      onImported: () => { this.invalidateCatalog(); },
+      onSettled: () => { this.assetUploads.delete(close); },
+    });
+    close = upload.close;
+    this.assetUploads.add(close);
+    return { url: upload.url, markdownPrefix: target.markdownPrefix };
   }
 
   async getSettings(

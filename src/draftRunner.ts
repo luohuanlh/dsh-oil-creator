@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 
 import { defaultFindSkillDir } from "./capabilities.ts";
 import { prepareCoverVariant } from "./coverVariants.ts";
-import { readFrozenDistributionPackage } from "./distribution.ts";
+import {
+  isFrozenDistributionPackageFresh,
+  readFrozenDistributionPackage,
+} from "./distribution.ts";
 import {
   PUBLISH_PLATFORM_DEFINITIONS,
   supportsAutoDraft,
@@ -77,6 +80,9 @@ export async function prepareDraftRun(
   const source = await readFrozenDistributionPackage(item.folderPath);
   if (source === undefined) {
     throw new Error("缺少 Harness 冻结分发包；请先在工作台选择素材并生成平台变体");
+  }
+  if (!await isFrozenDistributionPackageFresh(item.folderPath, source)) {
+    throw new Error("源素材已修改，请重新生成平台文案");
   }
   if (source.id !== item.id) throw new Error("冻结分发包与当前内容不匹配");
   if (source.mode !== "video" || source.selection.mode !== "video") {

@@ -12,6 +12,7 @@ import {
 import { emptyBurn, mergePublish, readFolderPublish } from "./publishStatus.ts";
 import {
   discoverContentAssets,
+  isFrozenDistributionPackageFresh,
   readFrozenDistributionPackage,
 } from "./distribution.ts";
 import { resolveContentType } from "./contentType.ts";
@@ -263,6 +264,10 @@ async function scanFolder(
   const packageJson = packagePath === undefined ? undefined : await readJson(packagePath);
   const assets = await discoverContentAssets(folderPath);
   const distributionPackage = await readFrozenDistributionPackage(folderPath);
+  const distributionPackageFresh = await isFrozenDistributionPackageFresh(
+    folderPath,
+    distributionPackage,
+  );
   const overlayTitle = overlay.items[folderName]?.title;
   const title = overlayTitle ?? folderTitle;
 
@@ -316,7 +321,7 @@ async function scanFolder(
     subtitles,
     assets,
     hasPublishPackage: packageJson !== undefined,
-    hasDistributionPackage: distributionPackage !== undefined,
+    hasDistributionPackage: distributionPackageFresh,
     hasArticle: articlePath !== undefined,
     waitingForExport: overlayItem?.waitingForExport === true,
     ...(overlayItem?.exportTimedOut === true ? { exportTimedOut: true } : {}),

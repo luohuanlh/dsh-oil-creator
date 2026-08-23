@@ -15,7 +15,11 @@ import type {
   PlatformAccountsResult,
   PrepareAssetUploadRequest,
   PrepareAssetUploadResult,
+  PrepareArticleImageUploadRequest,
+  PrepareArticleImageUploadResult,
   PublishPlatform,
+  SaveArticleRequest,
+  SaveArticleResult,
   VideoPlaybackResult,
 } from "../types.ts";
 
@@ -29,6 +33,10 @@ export interface CreatorViewFace {
   getCoverThumb: (id: string) => Promise<CoverThumbResult>;
   getVideoPlayback: (id: string, path: string) => Promise<VideoPlaybackResult>;
   getArticleMedia: (id: string, path: string) => Promise<ArticleMediaResult>;
+  saveArticle: (request: SaveArticleRequest) => Promise<SaveArticleResult>;
+  prepareArticleImageUpload: (
+    request: PrepareArticleImageUploadRequest,
+  ) => Promise<PrepareArticleImageUploadResult>;
   pickDirectory: () => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
   getSettings: () => Promise<LibrarySettings>;

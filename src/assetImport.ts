@@ -5,7 +5,9 @@ import type { AssetImportKind, ImportAssetRequest } from "./types.ts";
 
 const MEBIBYTE = 1024 * 1024;
 
-const IMPORT_RULES: Record<AssetImportKind, {
+export type AssetUploadKind = AssetImportKind | "article-image";
+
+const IMPORT_RULES: Record<AssetUploadKind, {
   extensions: ReadonlySet<string>;
   maxBytes: number;
   label: string;
@@ -30,6 +32,11 @@ const IMPORT_RULES: Record<AssetImportKind, {
     maxBytes: 20 * MEBIBYTE,
     label: "文章封面",
   },
+  "article-image": {
+    extensions: new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"]),
+    maxBytes: 20 * MEBIBYTE,
+    label: "正文插图",
+  },
 };
 
 function decodeBase64(value: string): Buffer {
@@ -48,7 +55,7 @@ function safeAssetName(name: string): string {
 }
 
 export function validateAssetImport(
-  kind: AssetImportKind,
+  kind: AssetUploadKind,
   rawName: string,
   size: number,
 ): { name: string; maxBytes: number; label: string } {

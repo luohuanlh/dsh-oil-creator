@@ -306,6 +306,33 @@ export interface ArticleMediaResult {
   found: boolean;
   origin: string;
   text: string;
+  revision: string;
+  editable: boolean;
+}
+
+export interface SaveArticleRequest {
+  id: string;
+  path: string;
+  text: string;
+  expectedRevision: string;
+}
+
+export interface SaveArticleResult {
+  revision: string;
+  savedAt: number;
+}
+
+export interface PrepareArticleImageUploadRequest {
+  id: string;
+  articlePath: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface PrepareArticleImageUploadResult {
+  url: string;
+  markdownPrefix: string;
 }
 
 export interface SubtitleTextResult {
