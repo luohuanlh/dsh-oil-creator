@@ -32,6 +32,7 @@ describe("creatorGuideText", () => {
     expect(guide).toContain("最终发表");
     expect(guide).toContain("图文草稿");
     expect(guide).toContain("不需要手写 publish-package.json");
+    expect(guide).toContain("默认复用可用的正文");
     expect(guide).toContain("微信公众号");
   });
 

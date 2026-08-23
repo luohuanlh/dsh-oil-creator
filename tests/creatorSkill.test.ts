@@ -12,6 +12,9 @@ describe("creator-workbench skill", () => {
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("oil_platform_accounts");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("oil_distribution_source");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("oil_create_platform_drafts");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("contentProfile");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("默认采用最小必要适配");
+    expect(CREATOR_WORKBENCH_SKILL.content).toContain("正文可以复用");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("Harness AI");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("Ego Browser 只");
     expect(CREATOR_WORKBENCH_SKILL.content).toContain("概览只显示");

@@ -22,7 +22,7 @@ export function buildDistributionPrompt(request: DistributionPromptRequest): str
     `固定输入：${JSON.stringify(toolInput, null, 2)}`,
     "",
     "1. 先使用 oil_distribution_source 读取固定输入中的本地素材和平台约束。",
-    "2. 只基于返回的 sourceText（所选文章/字幕，或视频同目录脚本与选题）生成每个平台恰好一个 variant：title、summary、body、tags；遵守各平台长度限制，不虚构事实。",
+    "2. 只基于返回的 sourceText（所选文章/字幕，或视频同目录脚本与选题）生成每个平台恰好一个 variant：title、summary、body、tags。先应用 sharedRules，默认复用可用的正文，只做满足平台长度、字段和格式要求所需的最小调整；只有用户明确要求深度适配或正文确实不适合目标平台时，才按 contentProfile 重写。",
     "   如固定输入包含 articleTitle 或 articleSummary，将它们作为用户提供的标题/摘要参考；可按平台限制适配，但不得改变原意。",
     "3. 使用 oil_create_platform_drafts 提交同一组固定输入和全部 variants。该工具会先冻结内容，再交给 Ego Browser 建草稿。",
     "4. 任一平台不受支持、账号失效或页面失败时如实报告，不得伪造成功，也不得点击最终发表。",

@@ -266,6 +266,7 @@ export interface DistributionSourceResult {
   title: string;
   selection: AssetSelection;
   sourceText: string;
+  sharedRules: readonly string[];
   platforms: PlatformGenerationRule[];
 }
 

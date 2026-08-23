@@ -49,6 +49,7 @@ import {
   PUBLISH_PLATFORM_DEFINITIONS,
   PUBLISH_PLATFORMS,
   platformGenerationRule,
+  SHARED_PLATFORM_GENERATION_RULES,
   supportsAutoDraft,
   type PublishPlatform,
 } from "./platforms.ts";
@@ -676,6 +677,7 @@ export class OilCreatorService extends TypertRemoteService {
       title: item.title,
       selection: request.selection,
       sourceText: source.sourceText,
+      sharedRules: SHARED_PLATFORM_GENERATION_RULES,
       platforms: platforms.map(platformGenerationRule),
     };
   }

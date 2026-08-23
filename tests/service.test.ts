@@ -613,10 +613,35 @@ describe("OilCreatorService Harness distribution", () => {
     }, new AbortController().signal);
 
     expect(result.sourceText).toContain("你好 Harness");
+    expect(result.sharedRules).toContain(
+      "body 使用 Markdown；tags 不带 #，且不得用同义词重复占位。",
+    );
+    expect(result.sharedRules).toContain(
+      "默认采用最小必要适配：正文可以跨平台复用，只调整不符合平台硬限制的字段；用户明确要求深度适配时，才按 contentProfile 重写。",
+    );
     expect(result.platforms).toEqual([
       expect.objectContaining({ platform: "bilibili", titleMax: 80, tagsMax: 10 }),
       expect.objectContaining({ platform: "douyin", titleMax: 30, tagsMax: 5 }),
     ]);
+  });
+
+  it("只返回本次选中的图文平台 profile", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-service-article-profiles-"));
+    const article = join(root, "article.md");
+    const cover = join(root, "cover.png");
+    await writeFile(article, "# 原文\n\n一篇关于市场结构的文章。\n");
+    await writeFile(cover, "cover");
+    const service = probe(root, summary(root, join(root, "demo.mp4")));
+
+    const result = await service.getDistributionSource({
+      id: "2026-08-21_demo",
+      selection: { mode: "article", articlePath: article, coverPath: cover },
+      platforms: ["wechat-mp", "zhihu", "xueqiu"],
+    }, new AbortController().signal);
+
+    expect(result.platforms.map((rule) => rule.platform))
+      .toEqual(["wechat-mp", "zhihu", "xueqiu"]);
+    expect(new Set(result.platforms.map((rule) => rule.contentProfile?.objective)).size).toBe(3);
   });
 
   it("提交 AI 平台变体后原子写入冻结包", async () => {

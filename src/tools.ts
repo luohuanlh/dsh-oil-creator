@@ -218,7 +218,7 @@ export function registerCreatorTools(ctx: ToolsContext, service: OilCreatorServi
   ctx.tools.register(defineTool({
     name: "oil_distribution_source",
     description:
-      "读取工作台中用户明确选择的视频/字幕或文章/封面，并返回原文与各目标平台的生成约束。只读取文件，不写入也不启动浏览器。",
+      "读取工作台中用户明确选择的视频/字幕或文章/封面，并返回原文、共享规则与各目标平台独立的生成约束和内容 profile。只读取文件，不写入也不启动浏览器。",
     parameters: distributionParameters,
     output: {
       schema: JSON_VALUE,

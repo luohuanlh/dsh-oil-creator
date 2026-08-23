@@ -27,6 +27,9 @@ describe("distribution Harness prompt", () => {
     expect(prompt).toContain("/content/demo.srt");
     expect(prompt).toContain('"coverPath": "/content/cover-4x3.png"');
     expect(prompt).toContain('"bilibili"');
+    expect(prompt).toContain("contentProfile");
+    expect(prompt).toContain("默认复用可用的正文");
+    expect(prompt).toContain("用户明确要求深度适配");
     expect(prompt).toContain("不得点击最终发表");
   });
 

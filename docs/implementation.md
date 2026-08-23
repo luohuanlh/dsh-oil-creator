@@ -13,6 +13,7 @@
 | `src/catalog.ts` | 创建内容目录、保存内容类型元数据并扫描文件产物 |
 | `src/distribution.ts` | 枚举候选素材、校验固定选择、读取 AI 输入并原子冻结平台变体 |
 | `src/platforms.ts` | 定义 24 个平台账号入口和草稿适配能力 |
+| `src/articlePlatformProfiles.ts` | 定义 17 个图文平台各自的受众、目标、语气、结构、标签和安全边界 |
 | `src/platformAccounts.ts` | 调用 Ego Browser 打开或检查平台会话 |
 | `scripts/platform-account.mjs` | 浏览器内登录交接和登录状态检查 |
 | `src/coverVariants.ts` | 使用 `sharp` 跨平台读取、居中裁切并缓存 3:4/4:3 视频封面派生文件 |
@@ -73,8 +74,8 @@
 
 详情页不会直接调用固定模型，也不保存 API Key。它把结构化固定输入排入当前 Harness 会话：
 
-1. Agent 调用 `oil_distribution_source`，插件校验文件确实属于当前内容目录并返回正文/字幕与平台长度约束；
-2. Agent 生成逐平台变体；
+1. Agent 调用 `oil_distribution_source`，插件校验文件确实属于当前内容目录，并返回正文/字幕、共享事实规则，以及本次目标平台各自的长度约束和 `contentProfile`；
+2. Agent 先应用共享规则，默认复用可用正文并只做平台硬限制所需的最小调整；只有用户明确要求深度适配或正文不适合目标平台时，才按 `contentProfile` 重写；
 3. Agent 调用 `oil_create_platform_drafts`，插件先冻结，再启动 Ego；
 4. 已冻结内容的纯重试使用 `oil_prepare_drafts`。
 

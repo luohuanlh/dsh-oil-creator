@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ARTICLE_PLATFORMS,
   ARTICLE_DRAFT_PLATFORMS,
   AUTO_DRAFT_PLATFORMS,
   draftCapability,
@@ -8,6 +9,7 @@ import {
   normalizeEnabledPlatforms,
   PUBLISH_PLATFORM_DEFINITIONS,
   PUBLISH_PLATFORMS,
+  platformGenerationRule,
   supportsAutoDraft,
   toVideoPublisherPlatform,
 } from "../src/platforms.ts";
@@ -115,5 +117,39 @@ describe("platform catalog", () => {
   it("迁移旧版 wechat id 并过滤无效值", () => {
     expect(normalizeEnabledPlatforms(["wechat", "douyin", "invalid"]))
       .toEqual(["douyin", "channels"]);
+  });
+
+  it("为全部图文平台提供互相独立的内容 profile", () => {
+    expect(ARTICLE_PLATFORMS).toEqual([
+      "toutiao",
+      "baijiahao",
+      "penguin",
+      "netease",
+      "yidian",
+      "dayu",
+      "dingduan",
+      "xueqiu",
+      "eastmoney",
+      "10jqka",
+      "sohu",
+      "weibo",
+      "zhihu",
+      "ofweek",
+      "laohu",
+      "futu",
+      "wechat-mp",
+    ]);
+    const rules = ARTICLE_PLATFORMS.map(platformGenerationRule);
+    expect(rules.every((rule) => rule.contentProfile !== undefined)).toBe(true);
+    expect(new Set(rules.map((rule) => rule.contentProfile?.objective)).size)
+      .toBe(ARTICLE_PLATFORMS.length);
+    expect(platformGenerationRule("wechat-mp").contentProfile).toMatchObject({
+      audience: expect.stringContaining("订阅"),
+      formatting: expect.stringContaining("Markdown"),
+    });
+    expect(platformGenerationRule("zhihu").contentProfile?.structure)
+      .toContain("处理反例、限制和常见误解");
+    expect(platformGenerationRule("xueqiu").contentProfile?.safeguards)
+      .toContain("不得承诺收益或使用确定性买卖建议");
   });
 });

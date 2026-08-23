@@ -1,3 +1,8 @@
+import {
+  articlePlatformContentProfile,
+  type PlatformContentProfile,
+} from "./articlePlatformProfiles.ts";
+
 /**
  * 平台目录参考 dsh-context-flow 的 22 平台清单，并补充网易云音乐、喜马拉雅听音频入口。
  *
@@ -201,6 +206,13 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
 
 export type PublishPlatform = keyof typeof PUBLISH_PLATFORM_DEFINITIONS;
 export type PlatformKind = (typeof PUBLISH_PLATFORM_DEFINITIONS)[PublishPlatform]["kind"];
+type PlatformOfKind<Kind extends PlatformKind> = {
+  [Platform in PublishPlatform]:
+    (typeof PUBLISH_PLATFORM_DEFINITIONS)[Platform]["kind"] extends Kind
+      ? Platform
+      : never;
+}[PublishPlatform];
+export type ArticlePlatform = PlatformOfKind<"article">;
 type PlatformWithDraftRunner<Runner extends string> = {
   [Platform in PublishPlatform]:
     (typeof PUBLISH_PLATFORM_DEFINITIONS)[Platform]["draftRunner"] extends Runner
@@ -217,6 +229,12 @@ export type DraftCapability =
 
 export const PUBLISH_PLATFORMS = Object.freeze(
   Object.keys(PUBLISH_PLATFORM_DEFINITIONS) as [PublishPlatform, ...PublishPlatform[]],
+);
+
+export const ARTICLE_PLATFORMS = Object.freeze(
+  PUBLISH_PLATFORMS.filter((platform): platform is ArticlePlatform =>
+    PUBLISH_PLATFORM_DEFINITIONS[platform].kind === "article"
+  ),
 );
 
 // 底层目录保留全部平台；设置页隐藏音频入口和当前境内 Web 不可用的平台。
@@ -271,7 +289,16 @@ export interface PlatformGenerationRule {
   summaryMax: number;
   tagsMax: number;
   guidance: string;
+  contentProfile?: PlatformContentProfile;
 }
+
+export const SHARED_PLATFORM_GENERATION_RULES = Object.freeze([
+  "只使用 sourceText 和 selection 中用户明确提供的标题、摘要信息，不引入外部事实。",
+  "保留原文中的人物、机构、数据、日期、单位、引语和结论边界；信息不足时省略，不猜测补全。",
+  "可以重组表达和结构，但不得改变作者立场、事实关系或论据强度。",
+  "默认采用最小必要适配：正文可以跨平台复用，只调整不符合平台硬限制的字段；用户明确要求深度适配时，才按 contentProfile 重写。",
+  "body 使用 Markdown；tags 不带 #，且不得用同义词重复占位。",
+]);
 
 export function platformGenerationRule(platform: PublishPlatform): PlatformGenerationRule {
   const definition = PUBLISH_PLATFORM_DEFINITIONS[platform];
@@ -284,6 +311,12 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
     baijiahao: { titleMax: 30, summaryMax: 120, tagsMax: 5 },
   };
   const limit = limits[platform] ?? { titleMax: 64, summaryMax: 120, tagsMax: 5 };
+  const contentProfile = definition.kind === "article"
+    ? articlePlatformContentProfile(platform)
+    : undefined;
+  if (definition.kind === "article" && contentProfile === undefined) {
+    throw new Error(`图文平台缺少内容 profile：${platform}`);
+  }
   return {
     platform,
     name: definition.name,
@@ -294,6 +327,7 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
       : definition.kind === "audio"
       ? "body 是音频说明；保留原始音频事实，不得编造曲目、作者或版权信息。"
       : "body 是适配该平台的完整文章；保留原文事实，不得编造数据或引语。",
+    ...(contentProfile === undefined ? {} : { contentProfile }),
   };
 }
 
