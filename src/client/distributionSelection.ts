@@ -48,3 +48,11 @@ export function defaultDistributionPlatforms(
   );
   return availablePlatforms.filter((platform) => active.has(platform));
 }
+
+export function invertDistributionPlatforms(
+  availablePlatforms: readonly PublishPlatform[],
+  selectedPlatforms: readonly PublishPlatform[],
+): PublishPlatform[] {
+  const selected = new Set(selectedPlatforms);
+  return availablePlatforms.filter((platform) => !selected.has(platform));
+}

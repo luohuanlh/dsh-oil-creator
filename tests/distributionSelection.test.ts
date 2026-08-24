@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   defaultDistributionPlatforms,
+  invertDistributionPlatforms,
   orderDistributionPlatforms,
   visibleDistributionPlatforms,
 } from "../src/client/distributionSelection.ts";
@@ -27,6 +28,21 @@ describe("defaultDistributionPlatforms", () => {
         { platform: "douyin", status: "active", supportsAutoDraft: true, draftCapability: "remote-verified" },
       ],
     )).toEqual(["douyin", "bilibili"]);
+  });
+});
+
+describe("invertDistributionPlatforms", () => {
+  it("只反选当前工作流可用的平台并保持展示顺序", () => {
+    expect(invertDistributionPlatforms(
+      ["wechat-mp", "xiaohongshu-note", "toutiao"],
+      ["wechat-mp", "toutiao", "kuaishou"],
+    )).toEqual(["xiaohongshu-note"]);
+  });
+
+  it("支持从全选切换为空选，也支持从空选切换为全选", () => {
+    const available = ["wechat-mp", "xiaohongshu-note"] as const;
+    expect(invertDistributionPlatforms(available, available)).toEqual([]);
+    expect(invertDistributionPlatforms(available, [])).toEqual([...available]);
   });
 });
 

@@ -32,6 +32,7 @@ import {
 } from "./contentSelection.ts";
 import {
   defaultDistributionPlatforms,
+  invertDistributionPlatforms,
   visibleDistributionPlatforms,
 } from "./distributionSelection.ts";
 import { remoteDraftProgress } from "./draftProgress.ts";
@@ -353,6 +354,13 @@ export function ContentInspector({
       current.includes(platform)
         ? current.filter((item) => item !== platform)
         : availablePlatforms.filter((item) => current.includes(item) || item === platform)
+    );
+  };
+
+  const invertPlatforms = () => {
+    setQueued(false);
+    setSelectedPlatforms((current) =>
+      invertDistributionPlatforms(availablePlatforms, current)
     );
   };
 
@@ -741,11 +749,20 @@ export function ContentInspector({
             className="workflowSurface draftSurface"
             title={t("inspector.distribution.title")}
             titleAside={(
-              <ActionButton tone="primary" disabled={!canStart} onClick={onStartDrafts}>
-                {busy || hasRunningDraft
-                  ? t("inspector.draft.running")
-                  : t("inspector.draft.aiStart")}
-              </ActionButton>
+              <div className="draftHeadingActions">
+                <ActionButton
+                  tone="ghost"
+                  disabled={availablePlatforms.length === 0}
+                  onClick={invertPlatforms}
+                >
+                  {t("inspector.distribution.invert")}
+                </ActionButton>
+                <ActionButton tone="primary" disabled={!canStart} onClick={onStartDrafts}>
+                  {busy || hasRunningDraft
+                    ? t("inspector.draft.running")
+                    : t("inspector.draft.aiStart")}
+                </ActionButton>
+              </div>
             )}
           >
             {workflowPlatforms.length === 0

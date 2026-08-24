@@ -49,6 +49,8 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).toContain("detail.assets.covers");
     expect(implementation).toContain("queueDistribution");
     expect(implementation).toContain("visibleDistributionPlatforms(workflowMode, enabledPlatforms)");
+    expect(implementation).toContain("invertDistributionPlatforms(availablePlatforms, current)");
+    expect(implementation).toContain('t("inspector.distribution.invert")');
     expect(implementation).toContain('disabled={!supportsDraft}');
     expect(implementation).toContain('t("inspector.draft.unsupported")');
     expect(implementation).toContain("selectedPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");
@@ -265,7 +267,8 @@ describe("content inspector distribution workbench", () => {
 
     expect(implementation).not.toContain('className="title"');
     expect(implementation).toContain('className="workflowSurface draftSurface"');
-    expect(implementation).toContain('titleAside={(\n              <ActionButton');
+    expect(implementation).toContain('titleAside={(\n              <div className="draftHeadingActions">');
+    expect(implementation).toContain('tone="ghost"');
     expect(implementation.match(/<ActionBar>/g)).toHaveLength(1);
     expect(implementation).not.toContain('t("inspector.distribution.ready")');
     expect(implementation).not.toContain('t("inspector.distribution.hint")');

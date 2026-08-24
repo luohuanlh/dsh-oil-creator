@@ -651,6 +651,12 @@
   margin-left: auto;
 }
 
+[data-plugin="dsh-oil-creator"][data-surface="inspector"] .draftHeadingActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 [data-plugin="dsh-oil-creator"][data-surface="inspector"] .draftSurface .oilSurfaceHeadingAside button {
   min-height: 30px;
   border-radius: 999px;
