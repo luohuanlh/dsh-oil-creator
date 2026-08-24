@@ -315,6 +315,7 @@ export class OilCreatorService extends TypertRemoteService {
         text: document.text,
         revision: document.revision,
         editable: document.editable,
+        ...(document.previewHtml === undefined ? {} : { previewHtml: document.previewHtml }),
       };
     }
     existing?.close();
@@ -326,6 +327,7 @@ export class OilCreatorService extends TypertRemoteService {
       text: document.text,
       revision: document.revision,
       editable: document.editable,
+      ...(document.previewHtml === undefined ? {} : { previewHtml: document.previewHtml }),
     };
   }
 

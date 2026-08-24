@@ -65,6 +65,40 @@ describe("ArticleDocument", () => {
     await expect(readArticleDocument(folder, outside)).rejects.toThrow("不属于当前内容文件夹");
   });
 
+  it("Markdown 冲突副本自动关联同名微信公众号富文本预览", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-article-rich-preview-"));
+    const richArticle = join(folder, "pre-market-wechat-body.md");
+    const markdownArticle = join(folder, "pre-market-wechat-body-2.md");
+    const richHtml = '<section data-wechat-draft="pre-market" style="color:#172033">陪你看盘 · 盘前观察 · 正文内容</section>';
+    await Promise.all([
+      writeFile(richArticle, richHtml, "utf8"),
+      writeFile(markdownArticle, "# 陪你看盘 · 盘前观察\n\n正文内容\n", "utf8"),
+    ]);
+
+    const loaded = await readArticleDocument(folder, markdownArticle);
+
+    expect(loaded.text).toBe("# 陪你看盘 · 盘前观察\n\n正文内容\n");
+    expect(loaded.previewHtml).toBe(richHtml);
+  });
+
+  it("不把同名但正文不同的富文本误认为预览副本", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-article-rich-mismatch-"));
+    const richArticle = join(folder, "article.md");
+    const markdownArticle = join(folder, "article-2.md");
+    await Promise.all([
+      writeFile(
+        richArticle,
+        '<section data-wechat-draft="pre-market">另一篇完全不同的公众号正文内容</section>',
+        "utf8",
+      ),
+      writeFile(markdownArticle, "# 当前文章\n\n这是正确选择的 Markdown 正文。\n", "utf8"),
+    ]);
+
+    const loaded = await readArticleDocument(folder, markdownArticle);
+
+    expect(loaded.previewHtml).toBeUndefined();
+  });
+
   it("为正文插图创建文章同级 images 目录和安全文件名", async () => {
     const folder = await mkdtemp(join(tmpdir(), "oil-article-image-"));
     const article = join(folder, "公众号文章", "article.md");

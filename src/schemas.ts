@@ -234,6 +234,7 @@ export const articleMediaResultSchema = z.object({
   text: z.string(),
   revision: z.string(),
   editable: z.boolean(),
+  previewHtml: z.string().optional(),
 });
 
 export const saveArticleRequestSchema = z.object({

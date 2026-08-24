@@ -71,7 +71,8 @@ describe("WeChat article draft runner", () => {
       summary: "公众号摘要",
       coverMime: "image/png",
     });
-    expect(prepared.input.html).toContain("<h1>平台正文</h1>");
+    expect(prepared.input.html).toContain('class="article-lead"');
+    expect(prepared.input.html).toContain(">平台正文</div>");
     expect(prepared.input.html).toContain("<strong>适配后</strong>");
     expect(prepared.input.coverBase64).not.toBe("");
   });
@@ -80,6 +81,36 @@ describe("WeChat article draft runner", () => {
     const html = markdownToWechatHtml("# 标题\n\n<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;");
     expect(html).not.toContain("<script>");
+  });
+
+  it("上传复用微信富文本框架并保留表格、实体与列表续段语义", () => {
+    const html = markdownToWechatHtml([
+      "| **AI算力投入** | **11 条** |",
+      "| ------------------ | -------: |",
+      "",
+      "| **02** |   |",
+      "| ------ | - |",
+      "",
+      "## 市场节奏",
+      "",
+      "- **关键时点：**&#x6309;时间顺序整理如下",
+      "",
+      "  **9月9-11日：**&#x4E2D;国国际光电博览会",
+      "",
+      "- **AI算力投入：**&#x963F;里巴巴启动大额配售",
+      "",
+      "  **事件背景：**&#x963F;里巴巴宣布拟配售新股",
+    ].join("\n"));
+
+    expect(html).toContain('data-wechat-draft="markdown-frame"');
+    expect(html).toContain('class="signal-row"');
+    expect(html).toContain('class="section-index"');
+    expect(html).toContain('class="key-moments"');
+    expect(html).toContain("<strong>9月9-11日：</strong>中国国际光电博览会");
+    expect(html).toContain('class="list-detail"');
+    expect(html).toContain("<strong>事件背景：</strong>阿里巴巴宣布拟配售新股");
+    expect(html).not.toContain("&amp;#x");
+    expect(html).not.toContain("| ------ |");
   });
 
   it("只接受经过页面回读验证的草稿结果", () => {

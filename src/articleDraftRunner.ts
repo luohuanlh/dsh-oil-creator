@@ -7,6 +7,7 @@ import {
   isFrozenDistributionPackageFresh,
   readFrozenDistributionPackage,
 } from "./distribution.ts";
+import { renderMarkdownWechatHtml } from "./articlePreview.ts";
 import {
   isArticleDraftPlatform,
   PUBLISH_PLATFORM_DEFINITIONS,
@@ -76,7 +77,11 @@ export interface ArticleDraftRunHandle {
   >;
 }
 
-function escapeHtml(value: string): string {
+export function markdownToWechatHtml(markdown: string): string {
+  return renderMarkdownWechatHtml(markdown);
+}
+
+function escapeBasicHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -85,25 +90,25 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function inlineMarkdown(value: string): string {
-  return escapeHtml(value)
+function basicInlineMarkdown(value: string): string {
+  return escapeBasicHtml(value)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
-export function markdownToWechatHtml(markdown: string): string {
+function markdownToBasicArticleHtml(markdown: string): string {
   const blocks: string[] = [];
   let paragraph: string[] = [];
   let list: string[] = [];
   let code: string[] | undefined;
   const flushParagraph = (): void => {
     if (paragraph.length === 0) return;
-    blocks.push(`<p>${paragraph.map(inlineMarkdown).join("<br>")}</p>`);
+    blocks.push(`<p>${paragraph.map(basicInlineMarkdown).join("<br>")}</p>`);
     paragraph = [];
   };
   const flushList = (): void => {
     if (list.length === 0) return;
-    blocks.push(`<ul>${list.map((line) => `<li>${inlineMarkdown(line)}</li>`).join("")}</ul>`);
+    blocks.push(`<ul>${list.map((line) => `<li>${basicInlineMarkdown(line)}</li>`).join("")}</ul>`);
     list = [];
   };
 
@@ -114,7 +119,7 @@ export function markdownToWechatHtml(markdown: string): string {
       flushList();
       if (code === undefined) code = [];
       else {
-        blocks.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+        blocks.push(`<pre><code>${escapeBasicHtml(code.join("\n"))}</code></pre>`);
         code = undefined;
       }
       continue;
@@ -133,7 +138,7 @@ export function markdownToWechatHtml(markdown: string): string {
       flushParagraph();
       flushList();
       const level = heading[1].length;
-      blocks.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      blocks.push(`<h${level}>${basicInlineMarkdown(heading[2])}</h${level}>`);
       continue;
     }
     const bullet = /^[-*+]\s+(.+)$/.exec(line);
@@ -147,7 +152,7 @@ export function markdownToWechatHtml(markdown: string): string {
   }
   flushParagraph();
   flushList();
-  if (code !== undefined) blocks.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+  if (code !== undefined) blocks.push(`<pre><code>${escapeBasicHtml(code.join("\n"))}</code></pre>`);
   return `<section style="margin:0 6px;line-height:1.75;font-size:15px;color:#333">${blocks.join("")}</section>`;
 }
 
@@ -186,7 +191,9 @@ export async function prepareArticleDraftRun(
       id: item.id,
       title: variant.title,
       summary: variant.summary,
-      html: markdownToWechatHtml(variant.body),
+      html: articlePlatform === "wechat-mp"
+        ? markdownToWechatHtml(variant.body)
+        : markdownToBasicArticleHtml(variant.body),
       tags: variant.tags,
       coverMime: imageMime(frozen.selection.coverPath),
       coverBase64: cover.toString("base64"),

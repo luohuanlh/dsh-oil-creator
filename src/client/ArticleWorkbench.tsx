@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { MarkdownText } from "@deepseek-ai/dsh-client-ui-primitives";
 
-import { rewriteArticleImages } from "../articleMarkdown.ts";
 import type { ArticleMediaResult } from "../types.ts";
 import type { CreatorViewFace } from "./face.ts";
 import type { CreatorKey } from "./locales.ts";
 import { ArticleEditor, type ArticleEditorHandle } from "./ArticleEditor.tsx";
+import { ArticlePreview } from "./ArticlePreview.tsx";
 import "./ArticleWorkbench.css";
 
 type ArticleWorkbenchProps = Pick<
@@ -132,10 +131,11 @@ export function ArticleWorkbench({
       text,
       expectedRevision: document.revision,
     }).then((result) => {
-      setDocument((current) => current === undefined ? current : {
-        ...current,
-        text,
-        revision: result.revision,
+      setDocument((current) => {
+        if (current === undefined) return current;
+        const next = { ...current, text, revision: result.revision };
+        delete next.previewHtml;
+        return next;
       });
       setConflict(false);
       setSavedOnce(true);
@@ -299,11 +299,13 @@ export function ArticleWorkbench({
           onImageFiles={(files) => { void uploadImages(files); }}
         />
       ) : (
-        <div className="article workflowPreview articleLivePreview">
-          <MarkdownText
-            text={document.origin === "" ? text : rewriteArticleImages(text, document.origin)}
-          />
-        </div>
+        <ArticlePreview
+          path={path}
+          text={text}
+          origin={document.origin}
+          label={t("inspector.article.preview")}
+          richHtml={dirty ? undefined : document.previewHtml}
+        />
       )}
     </section>
   );

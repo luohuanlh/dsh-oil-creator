@@ -308,6 +308,7 @@ export interface ArticleMediaResult {
   text: string;
   revision: string;
   editable: boolean;
+  previewHtml?: string;
 }
 
 export interface SaveArticleRequest {

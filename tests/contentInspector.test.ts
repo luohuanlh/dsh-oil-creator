@@ -167,6 +167,10 @@ describe("content inspector distribution workbench", () => {
       resolve(process.cwd(), "src/client/ArticleEditor.tsx"),
       "utf8",
     );
+    const preview = readFileSync(
+      resolve(process.cwd(), "src/client/ArticlePreview.tsx"),
+      "utf8",
+    );
 
     expect(editor).toContain("basicSetup");
     expect(editor).toContain("markdown()");
@@ -176,7 +180,9 @@ describe("content inspector distribution workbench", () => {
     expect(workbench).toContain("expectedRevision: document.revision");
     expect(workbench).toContain("prepareArticleImageUpload({");
     expect(workbench).toContain('method: "PUT"');
-    expect(workbench).toContain("rewriteArticleImages(text, document.origin)");
+    expect(workbench).toContain("<ArticlePreview");
+    expect(preview).toContain("rewriteArticleImages(source, origin)");
+    expect(preview).toContain("buildMarkdownRichArticlePreviewDocument(markdown, origin)");
     expect(workbench).toContain('window.addEventListener("beforeunload"');
   });
 
