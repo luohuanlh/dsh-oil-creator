@@ -77,6 +77,14 @@ function ContentTypeGlyph({
   );
 }
 
+function DeleteGlyph() {
+  return (
+    <svg className="rowDeleteGlyph" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3.5 4.5h9M6 2.75h4M5 4.75l.45 8h5.1l.45-8M6.75 6.5v4.25M9.25 6.5v4.25" />
+    </svg>
+  );
+}
+
 function ContentTypeMark({
   type,
   label,
@@ -110,6 +118,7 @@ export function ContentSidebarPanel({
   getCoverThumb,
   refreshCatalog,
   createContent,
+  deleteContent,
 }: CreatorViewFace & {
   t: (key: CreatorKey) => string;
 }) {
@@ -129,6 +138,9 @@ export function ContentSidebarPanel({
   const [createName, setCreateName] = useState("");
   const [createType, setCreateType] = useState<ContentType>("video");
   const [createError, setCreateError] = useState<string | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<ContentSummary>();
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string>();
 
   const loadList = async (nextQuery = query) => {
     if (!ready()) {
@@ -208,6 +220,29 @@ export function ContentSidebarPanel({
       setCreateError(cause instanceof Error ? cause.message : t("create.failed"));
     } finally {
       setCreating(false);
+    }
+  };
+
+  const closeDelete = (): void => {
+    if (deleting) return;
+    setDeleteTarget(undefined);
+    setDeleteError(undefined);
+  };
+
+  const onDelete = async (): Promise<void> => {
+    if (deleteTarget === undefined || deleting) return;
+    const deletedId = deleteTarget.id;
+    setDeleting(true);
+    setDeleteError(undefined);
+    try {
+      await deleteContent(deletedId);
+      setItems((current) => current.filter((item) => item.id !== deletedId));
+      if (selectedIdRef.current === deletedId) setSelectedId(null);
+      setDeleteTarget(undefined);
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : t("delete.failed"));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -363,6 +398,35 @@ export function ContentSidebarPanel({
           {createError !== undefined && <div className="createError">{createError}</div>}
         </div>
       </Modal>
+      <Modal
+        open={deleteTarget !== undefined}
+        onClose={closeDelete}
+        title={t("delete.title")}
+        closeLabel={t("delete.cancel")}
+        footer={(
+          <>
+            <Button variant="outline" disabled={deleting} onClick={closeDelete}>
+              {t("delete.cancel")}
+            </Button>
+            <Button
+              className="deleteConfirmButton"
+              data-plugin="dsh-oil-creator"
+              variant="primary"
+              disabled={deleting}
+              onClick={() => { void onDelete(); }}
+            >
+              {deleting ? t("delete.deleting") : t("delete.confirm")}
+            </Button>
+          </>
+        )}
+      >
+        <div data-plugin="dsh-oil-creator" data-surface="delete-dialog">
+          <p className="deletePrompt">{t("delete.prompt")}</p>
+          <strong className="deleteTargetTitle">{deleteTarget?.title}</strong>
+          <p className="deleteTrashHint">{t("delete.trashHint")}</p>
+          {deleteError !== undefined && <div className="deleteError">{deleteError}</div>}
+        </div>
+      </Modal>
       <div className="contentList">
         {error !== undefined && <div className="contentEmpty">{error}</div>}
         {error === undefined && items.length === 0 && !loading && (
@@ -371,42 +435,56 @@ export function ContentSidebarPanel({
         {items.map((item, index) => {
           const contentType = resolveContentType(item);
           return (
-            <button
-              key={item.id}
-              type="button"
-              className={item.id === selectedId ? "contentRow selected" : "contentRow"}
-              data-workflow={item.workflow}
-              data-content-type={contentType}
-              onClick={() => {
-                setSelectedId(item.id === selectedId ? null : item.id);
-              }}
-            >
-              <span className="rowIndex" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-              <span className="rowCover">
-                <CoverThumb
-                  id={item.id}
-                  load={getCoverThumb}
-                  revision={coverThumbRevision(item.covers, item.assets.covers)}
-                  fallback={<IconBrowseOutline16 className="coverFallback" size={20} />}
-                />
-              </span>
-              <span className="rowBody">
-                <span className="rowTitleLine">
-                  <ContentTypeMark
-                    type={contentType}
-                    label={t(`create.type.${contentType}` as CreatorKey)}
+            <div key={item.id} className="contentRowShell">
+              <button
+                type="button"
+                className={item.id === selectedId ? "contentRow selected" : "contentRow"}
+                data-workflow={item.workflow}
+                data-content-type={contentType}
+                onClick={() => {
+                  setSelectedId(item.id === selectedId ? null : item.id);
+                }}
+              >
+                <span className="rowIndex" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <span className="rowCover">
+                  <CoverThumb
+                    id={item.id}
+                    load={getCoverThumb}
+                    revision={coverThumbRevision(item.covers, item.assets.covers)}
+                    fallback={<IconBrowseOutline16 className="coverFallback" size={20} />}
                   />
-                  <span className="rowTitle">{item.title}</span>
                 </span>
-                <span className="rowMeta">
-                  <WorkflowStatusDot
-                    workflow={item.workflow}
-                    label={t(`inspector.stage.${item.workflow}` as CreatorKey)}
-                  />
-                  <span className="rowDate">{formatRelativeTime(item.recordedAt, Date.now(), t)}</span>
+                <span className="rowBody">
+                  <span className="rowTitleLine">
+                    <ContentTypeMark
+                      type={contentType}
+                      label={t(`create.type.${contentType}` as CreatorKey)}
+                    />
+                    <span className="rowTitle">{item.title}</span>
+                  </span>
+                  <span className="rowMeta">
+                    <WorkflowStatusDot
+                      workflow={item.workflow}
+                      label={t(`inspector.stage.${item.workflow}` as CreatorKey)}
+                    />
+                    <span className="rowDate">{formatRelativeTime(item.recordedAt, Date.now(), t)}</span>
+                  </span>
                 </span>
-              </span>
-            </button>
+              </button>
+              <button
+                type="button"
+                className="rowDeleteButton"
+                aria-label={`${t("delete.action")}：${item.title}`}
+                title={t("delete.action")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeleteError(undefined);
+                  setDeleteTarget(item);
+                }}
+              >
+                <DeleteGlyph />
+              </button>
+            </div>
           );
         })}
       </div>

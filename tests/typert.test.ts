@@ -28,6 +28,7 @@ describe("handwritten TYPERT", () => {
       "setLibraryRoot",
       "refreshCatalog",
       "createContent",
+      "deleteContent",
       "setProfile",
       "getPlatformAccounts",
       "openPlatformAccount",

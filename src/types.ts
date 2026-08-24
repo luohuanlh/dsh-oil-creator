@@ -355,6 +355,11 @@ export interface CreateContentResult {
   folderPath: string;
 }
 
+export interface DeleteContentResult {
+  id: string;
+  trashedAt: number;
+}
+
 export interface SetContentStageRequest {
   id: string;
   readyToRecord: boolean;

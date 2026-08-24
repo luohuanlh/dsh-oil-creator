@@ -23,4 +23,16 @@ describe("content sidebar status", () => {
     expect(implementation).toContain("<WorkflowStatusDot");
     expect(implementation).not.toContain("<StatusPill tone={WORKFLOW_TONE[item.workflow]}");
   });
+
+  it("内容条目提供带确认弹窗的可恢复删除入口", () => {
+    const implementation = readFileSync(
+      resolve(process.cwd(), "src/client/sidebar/ContentSidebarPanel.tsx"),
+      "utf8",
+    );
+
+    expect(implementation).toContain("rowDeleteButton");
+    expect(implementation).toContain("deleteContent(deletedId)");
+    expect(implementation).toContain('t("delete.confirm")');
+    expect(implementation).toContain('t("delete.trashHint")');
+  });
 });

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -33,6 +33,10 @@ const articleDraft = vi.hoisted(() => ({
   finishes: new Map<string, (result: MockArticleOutcome) => void>(),
 }));
 
+const trash = vi.hoisted(() => ({
+  move: vi.fn(async () => undefined),
+}));
+
 vi.mock("../src/draftRunner.ts", () => ({
   prepareDraftRun: draft.prepare,
   startVideoDraftRun: draft.start,
@@ -41,6 +45,10 @@ vi.mock("../src/draftRunner.ts", () => ({
 vi.mock("../src/articleDraftRunner.ts", () => ({
   prepareArticleDraftRun: articleDraft.prepare,
   startArticleDraftRun: articleDraft.start,
+}));
+
+vi.mock("../src/trash.ts", () => ({
+  movePathToTrash: trash.move,
 }));
 
 import { OilCreatorService } from "../src/service.ts";
@@ -107,6 +115,7 @@ function probe(dataDir: string, item: ContentSummary): OilCreatorService {
 }
 
 beforeEach(() => {
+  trash.move.mockClear();
   draft.prepare.mockClear();
   draft.start.mockReset();
   draft.finish = undefined;
@@ -131,6 +140,73 @@ beforeEach(() => {
       pid: prepared.input.platform === "wechat-mp" ? 54321 : 54322,
       completion,
     };
+  });
+});
+
+describe("OilCreatorService.deleteContent", () => {
+  it("只把内容文件夹移到废纸篓并清理对应状态", async () => {
+    const libraryRoot = await mkdtemp(join(tmpdir(), "oil-delete-library-"));
+    const dataDir = await mkdtemp(join(tmpdir(), "oil-delete-data-"));
+    const folder = join(libraryRoot, "2026-08-21_demo");
+    const video = join(folder, "demo.mp4");
+    await mkdir(folder);
+    await writeFile(video, "video");
+    const overlay = emptyOverlay();
+    overlay.items["2026-08-21_demo"] = { title: "保留前状态" };
+    await saveOverlay(dataDir, overlay);
+    const item = summary(folder, video);
+    const service = probe(dataDir, item);
+    service.libraryRoot = libraryRoot;
+    service.scanned = vi.fn(async () => ({ libraryRoot, items: [item], overlay }));
+    const closeVideo = vi.fn();
+    service.videos.set("2026-08-21_demo", { url: "http://local/video", path: video, close: closeVideo });
+
+    const result = await service.deleteContent(
+      { id: "2026-08-21_demo" },
+      new AbortController().signal,
+    );
+
+    expect(result).toMatchObject({ id: "2026-08-21_demo", trashedAt: expect.any(Number) });
+    expect(trash.move).toHaveBeenCalledWith(await realpath(folder));
+    expect(closeVideo).toHaveBeenCalledOnce();
+    expect(service.videos.has("2026-08-21_demo")).toBe(false);
+    expect((await loadOverlay(dataDir)).items["2026-08-21_demo"]).toBeUndefined();
+    expect(service.invalidateCatalog).toHaveBeenCalled();
+  });
+
+  it("拒绝删除内容库之外的目录和仍有任务运行的内容", async () => {
+    const libraryRoot = await mkdtemp(join(tmpdir(), "oil-delete-safe-root-"));
+    const outside = await mkdtemp(join(tmpdir(), "oil-delete-outside-"));
+    const outsideItem = summary(outside, join(outside, "demo.mp4"));
+    const outsideService = probe(libraryRoot, outsideItem);
+    outsideService.libraryRoot = libraryRoot;
+    outsideService.scanned = vi.fn(async () => ({
+      libraryRoot,
+      items: [outsideItem],
+      overlay: emptyOverlay(),
+    }));
+
+    await expect(outsideService.deleteContent(
+      { id: outsideItem.id },
+      new AbortController().signal,
+    )).rejects.toThrow("不属于当前内容库");
+
+    const folder = join(libraryRoot, "2026-08-21_demo");
+    await mkdir(folder);
+    const running = summary(folder, join(folder, "demo.mp4"));
+    running.burn.status = "running";
+    const runningService = probe(libraryRoot, running);
+    runningService.libraryRoot = libraryRoot;
+    runningService.scanned = vi.fn(async () => ({
+      libraryRoot,
+      items: [running],
+      overlay: emptyOverlay(),
+    }));
+    await expect(runningService.deleteContent(
+      { id: running.id },
+      new AbortController().signal,
+    )).rejects.toThrow("任务仍在运行");
+    expect(trash.move).not.toHaveBeenCalled();
   });
 });
 

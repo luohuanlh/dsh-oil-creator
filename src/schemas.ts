@@ -392,6 +392,11 @@ export const createContentResultSchema = z.object({
   folderPath: z.string().min(1),
 });
 
+export const deleteContentResultSchema = z.object({
+  id: z.string().min(1),
+  trashedAt: z.number().int().nonnegative(),
+});
+
 export const setProfileRequestSchema = z.object({
   profile: creatorProfileSchema,
 });

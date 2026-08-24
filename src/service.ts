@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
-import { stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { dirname, isAbsolute } from "node:path";
 
 import type { Context } from "@deepseek-ai/cordis";
 import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
@@ -62,6 +62,7 @@ import { pidAlive } from "./processAlive.ts";
 import { coverThumb } from "./thumbs.ts";
 import { startArticleServer } from "./articleServe.ts";
 import { playbackOf, startVideoServer } from "./videoServe.ts";
+import { movePathToTrash } from "./trash.ts";
 import type {
   ArticleMediaResult,
   AssetPreviewRequest,
@@ -76,6 +77,7 @@ import type {
   CreatorSetupRequest,
   CreatorSetupResult,
   CreatorSetupStatus,
+  DeleteContentResult,
   DistributionSourceRequest,
   DistributionSourceResult,
   IdRequest,
@@ -795,6 +797,55 @@ export class OilCreatorService extends TypertRemoteService {
     );
     this.invalidateCatalog();
     return created;
+  }
+
+  async deleteContent(
+    request: IdRequest,
+    signal: AbortSignal,
+  ): Promise<DeleteContentResult> {
+    signal.throwIfAborted();
+    const { libraryRoot, items } = await this.scanned();
+    const item = items.find((candidate) => candidate.id === request.id);
+    if (item === undefined) throw new Error(`content not found: ${request.id}`);
+
+    const hasRunningJob = [item.burn, item.subtitleJob, item.coverJob]
+      .some((job) => job.status === "running")
+      || Object.values(item.publish).some((row) => row.draftState === "running")
+      || [...this.draftStarts].some((key) => key.startsWith(`${item.id}:`));
+    if (hasRunningJob || this.assetUploads.size > 0) {
+      throw new Error("内容任务仍在运行，完成或停止后才能删除");
+    }
+
+    const [root, folder] = await Promise.all([
+      realpath(libraryRoot),
+      realpath(item.folderPath),
+    ]);
+    if (folder === root || dirname(folder) !== root) {
+      throw new Error("所选内容文件夹不属于当前内容库，拒绝删除");
+    }
+
+    const video = this.videos.get(item.id);
+    video?.close();
+    this.videos.delete(item.id);
+    const article = this.articles.get(item.id);
+    article?.close();
+    this.articles.delete(item.id);
+
+    await movePathToTrash(folder);
+    try {
+      await withOverlayLock(this.dataDir, async () => {
+        const overlay = await loadOverlay(this.dataDir);
+        delete overlay.items[item.id];
+        await saveOverlay(this.dataDir, overlay);
+      });
+    } catch (cause) {
+      process.emitWarning(
+        `内容已移到废纸篓，但状态清理失败：${cause instanceof Error ? cause.message : String(cause)}`,
+        { code: "OIL_CONTENT_TRASH_STATE_CLEANUP_FAILED" },
+      );
+    }
+    this.invalidateCatalog();
+    return { id: item.id, trashedAt: Date.now() };
   }
 
   async find(id: string) {

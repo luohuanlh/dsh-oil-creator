@@ -7,6 +7,7 @@ import type {
   CoverThumbResult,
   CreatorCapabilities,
   CreatorProfile,
+  DeleteContentResult,
   LibrarySettings,
   ImportAssetRequest,
   ImportAssetResult,
@@ -48,6 +49,7 @@ export interface CreatorViewFace {
     title: string,
     contentType: ContentType,
   ) => Promise<{ id: string; folderPath: string }>;
+  deleteContent: (id: string) => Promise<DeleteContentResult>;
   getPlatformAccounts: () => Promise<PlatformAccountsResult>;
   openPlatformAccount: (platform: PublishPlatform) => Promise<OpenPlatformAccountResult>;
   checkPlatformAccount: (platform: PublishPlatform) => Promise<PlatformAccountsResult>;

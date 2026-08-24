@@ -19,6 +19,7 @@ import type {
   CreateContentResult,
   CreatorCapabilities,
   CreatorProfile,
+  DeleteContentResult,
   LibrarySettings,
   ImportAssetRequest,
   ImportAssetResult,
@@ -91,6 +92,7 @@ interface OilCreatorRemote {
     title: string;
     contentType?: ContentType;
   }) => Promise<RemoteAnswer<CreateContentResult>>;
+  deleteContent: (request: { id: string }) => Promise<RemoteAnswer<DeleteContentResult>>;
   getPlatformAccounts: (request: Record<string, never>) => Promise<RemoteAnswer<PlatformAccountsResult>>;
   openPlatformAccount: (request: { platform: PublishPlatform }) => Promise<RemoteAnswer<OpenPlatformAccountResult>>;
   checkPlatformAccount: (request: { platform: PublishPlatform }) => Promise<RemoteAnswer<PlatformAccountsResult>>;
@@ -226,6 +228,13 @@ export function apply(ctx: ClientContext): void {
       );
       bumpLibrary();
       return created;
+    },
+    deleteContent: async (id) => {
+      const remote = remoteOf();
+      if (remote === undefined) throw new Error("remote unavailable");
+      const deleted = unwrap(await remote.deleteContent({ id }), "delete failed");
+      bumpLibrary();
+      return deleted;
     },
     getPlatformAccounts: async () => {
       const remote = remoteOf();

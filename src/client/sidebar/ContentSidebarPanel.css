@@ -509,6 +509,10 @@
   scrollbar-color: var(--oil-line) transparent;
 }
 
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .contentRowShell {
+  position: relative;
+}
+
 [data-plugin="dsh-oil-creator"][data-surface="sidebar"] .contentRow {
   position: relative;
   display: grid;
@@ -517,10 +521,61 @@
   gap: 9px;
   min-height: 78px;
   margin: 0;
-  padding: 7px 7px 7px 4px;
+  padding: 7px 36px 7px 4px;
   border-bottom: 1px solid color-mix(in srgb, var(--oil-line) 68%, transparent);
   border-radius: 0;
   background: transparent;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .rowDeleteButton {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 7px;
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--oil-paper-raised) 90%, transparent);
+  color: var(--oil-ink-faint);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%) scale(0.9);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] :is(
+  .contentRowShell:hover,
+  .contentRowShell:focus-within
+) .rowDeleteButton,
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .contentRow.selected + .rowDeleteButton {
+  opacity: 1;
+  transform: translateY(-50%) scale(1);
+  pointer-events: auto;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .rowDeleteButton:hover {
+  border-color: color-mix(in srgb, #b84b3b 34%, var(--oil-line));
+  color: #a74431;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .rowDeleteButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, #b84b3b 55%, transparent);
+  outline-offset: 1px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="sidebar"] .rowDeleteGlyph {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="sidebar"] .contentRow::before {
@@ -557,6 +612,48 @@
 
 [data-plugin="dsh-oil-creator"][data-surface="sidebar"] .contentRow.selected .rowIndex {
   color: var(--oil-accent);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="delete-dialog"] {
+  color: var(--oil-ink-soft);
+  font-family: var(--oil-font-body);
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="delete-dialog"] .deletePrompt {
+  margin: 0 0 8px;
+  color: var(--oil-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="delete-dialog"] .deleteTargetTitle {
+  display: block;
+  margin-bottom: 10px;
+  color: #a74431;
+  font-size: 13px;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="delete-dialog"] .deleteTrashHint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+[data-plugin="dsh-oil-creator"][data-surface="delete-dialog"] .deleteError {
+  margin-top: 12px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, #b84b3b 34%, var(--oil-line));
+  border-radius: 7px;
+  background: color-mix(in srgb, #b84b3b 8%, var(--oil-paper));
+  color: #a74431;
+  font-size: 12px;
+}
+
+[data-plugin="dsh-oil-creator"].deleteConfirmButton,
+[data-plugin="dsh-oil-creator"] .deleteConfirmButton {
+  border-color: #a74431 !important;
+  background: #a74431 !important;
+  color: #fff !important;
 }
 
 [data-plugin="dsh-oil-creator"][data-surface="sidebar"] .rowCover {
