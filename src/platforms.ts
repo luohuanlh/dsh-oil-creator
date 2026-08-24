@@ -167,8 +167,8 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "article",
     loginUrl: "https://mp.ofweek.com/",
     workspaceUrl: "https://mp.ofweek.com/article/publish.html",
-    draftRunner: null,
-    draftCapability: "local-tested",
+    draftRunner: "article-ego",
+    draftCapability: "remote-verified",
   },
   laohu: {
     name: "老虎财经",
@@ -319,6 +319,7 @@ export function platformGenerationRule(platform: PublishPlatform): PlatformGener
     channels: { titleMax: 16, summaryMax: 120, tagsMax: 5 },
     kuaishou: { titleMax: 64, summaryMax: 380, tagsMax: 4 },
     baijiahao: { titleMax: 30, summaryMax: 120, tagsMax: 5 },
+    ofweek: { titleMax: 50, summaryMax: 120, tagsMax: 5 },
   };
   const limit = limits[platform] ?? { titleMax: 64, summaryMax: 120, tagsMax: 5 };
   const contentProfile = definition.kind === "article"

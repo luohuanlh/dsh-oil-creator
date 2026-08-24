@@ -19,6 +19,7 @@
 | Harness 主按钮到 UI 回显的完整黄金路径 | 主按钮、AI、冻结、Ego READY、远端保存、overlay 与 UI 回显全链路 | 已证明 |
 | 微信公众号远端草稿与 id 回读 | 真实 `appmsgid=503330667`，重新打开草稿后标题“测试文章 001”一致 | 已证明 |
 | 百家号远端草稿与 id 回读 | 真实 `article_id=1874282284679284233`，封面上传、编辑 URL 与标题回读一致 | 已证明 |
+| 维科网远端草稿与 id 回读 | 真实 `id=2186865`，必填关键字/行业、草稿列表与编辑页标题回读一致 | 已证明 |
 | 第二个视频平台远端草稿闭环 | 抖音 `READY` → “暂存离开” → draft 标题与 `video_id` 回读 | 已证明 |
 
 ## 2026-08-23 五平台单作业并发调度
@@ -41,7 +42,7 @@
 | 大鱼号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 新注册账号审核中；Adapter 使用 `globalConfig.utoken`、`/dashboard/save-draft` 和 `draft_id`，审核通过后复测 |
 | 顶端新闻 | `REMOTE_VERIFIED` | 真实 `save_type=1` 草稿 `nd_id=3204434`；`/api/draft/show`、编辑 URL 与标题回读一致 |
 | 同顺号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 手机绑定完成，实名入驻审核中；未进入编辑器或执行草稿保存 |
-| 维科网 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 维科号审核中；官方文章入口与安全表单门禁已实现，审核通过后复测 |
+| 维科网 | `REMOTE_VERIFIED` | 审核通过后专用 Adapter 调用页面官方 `/home/news/ajax_add` 且固定 `is_draf=1`；草稿列表返回 `id=2186865`，编辑页标题、ID、关键字、行业和正文回读一致 |
 | 老虎财经 | `LOCAL_TESTED + WEB_LIMITED` | 境内 Web 端只展示服务调整页，没有登录、创作或草稿入口；不绕过地区限制 |
 | 富途牛牛 | `LOCAL_TESTED + WEB_LIMITED` | 境内 Web 页面明确暂停服务，仅提供存量客户 App 通道；没有 Web 创作或草稿入口 |
 | 知乎 | `REMOTE_VERIFIED` | 真实草稿 `2074817313006793960`；draft create/PATCH 与 `/p/{id}/edit` 标题回读一致 |
@@ -65,6 +66,14 @@
 - 企鹅号此前只调用 `/editorCache/update`，原因是自主声明未完成；选择“无需标注”并确认后，正式草稿接口返回 `articleId`。编辑页回读 ID/标题，内容管理列表回读封面、`self_declare` 和 `status=0`，共同完成闭环。
 - 八个图文平台的 `draftCapability` 已升级为 `remote-verified`，`draftRunner` 配置为 `article-ego`，可在工作台勾选；其余八个未开放 Adapter 继续保持禁用。
 - `pnpm check` 通过：51 个测试文件、337 项测试，TypeScript 与 Host/Client/Typert 构建全部成功；bundle 同步、`git diff --check`、Node 语法和 npm package dry-run 均通过。
+
+## 2026-08-24 维科网真实草稿回归
+
+- 账号审核通过后进入正式 `article/publish.html` 编辑器，确认“发布”和“存草稿”是两个独立控件；本次只操作 `#draf`，没有点击“发布”。
+- 维科网草稿必须同时填写原标题、关键字、发布行业和 TinyMCE 正文。专用 Adapter 从平台 tags 生成不超过 20 字的关键字，并根据标题、摘要、tags 与正文选择最匹配的官方行业分类。
+- 页面官方保存协议为 `POST /home/news/ajax_add` 并追加 `is_draf=1`；随后调用 `/article/ajax_articles.html` 的草稿筛选回读最新记录，再打开 `/article/edit/id/{id}.html` 核对标题、隐藏 ID、关键字、行业与正文。
+- 手工安全探针草稿 `2186848` 证明官方草稿控件和编辑页回读；生产 Adapter 首次实跑在 ID 解析不足时准确返回 `REMOTE_UNVERIFIED`，改用官方草稿列表接口后再次实跑得到 `id=2186865` 并完成全字段回读。
+- 维科网升级为 `remote-verified`、配置 `article-ego` 并开放工作台 checkbox；契约回归继续覆盖登录失效、保存失败和回读失败，且不包含最终发布动作。
 
 ## 2026-08-23 统一 Article Publisher 与五平台本地适配
 
@@ -100,14 +109,14 @@
 1. **搜狐号**：账号审核通过后验证 `account/list`、`sp-cm`、draft v2 响应 ID、标题回读和 `declareOriginal=false`。
 2. **网易号**：完成实名认证后执行一次 `operation=saveDraft`，从内容管理列表回读 `articleId`，再打开编辑页核对标题。
 3. **一点号、大鱼号**：账号审核通过后分别验证 `/model/Article` 的 `status=0` 与 `/dashboard/save-draft` 的 `_id`，再核对编辑页标题。
-4. **同顺号、维科网**：实名/账号审核通过后核对真实编辑器与明确草稿控件；若页面只有发布动作，继续保持阻塞。
+4. **同顺号**：实名审核通过后核对真实编辑器与明确草稿控件；若页面只有发布动作，继续保持阻塞。
 5. **老虎财经、富途牛牛**：只有平台在允许的账号/地域环境提供 Web 草稿能力时才复测；不绕过境内服务限制。
 
 ## Remaining Platform Audit
 
 | 平台 | 状态 | 阻塞证据与下一步 |
 |---|---|---|
-| 网易号、一点号、大鱼号、搜狐号、同顺号、维科网 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
+| 网易号、一点号、大鱼号、搜狐号、同顺号 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
 | 老虎财经、富途牛牛 | `LOCAL_TESTED / WEB_LIMITED` | 安全表单 Adapter 已编码，但境内 Web 环境受限；不绕过地域、登录、风控或 App 限制。 |
 | 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 属于音频平台，不在 Article Publisher 范围。 |
 

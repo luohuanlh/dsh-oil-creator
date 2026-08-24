@@ -49,7 +49,7 @@ const draftUrls = {
   dayu: "https://mp.dayu.com/dashboard/article/write?draft_id=dayu-draft-42",
   dingduan: "https://mp.topnews.cn/#/scriptWrite?draftId=dingduan-draft-42",
   "10jqka": "https://t.10jqka.com.cn/newcircle/creation/editor?draftId=10jqka-draft-42",
-  ofweek: "https://mp.ofweek.com/article/publish.html?article_id=ofweek-draft-42",
+  ofweek: "https://mp.ofweek.com/article/edit/id/ofweek-draft-42.html",
   laohu: "https://www.laohu8.com/editor?draftId=laohu-draft-42",
   futu: "https://www.futunn.com/community/editor?draftId=futu-draft-42",
 };
@@ -95,6 +95,9 @@ async function js(source) {
     "OIL_DINGDUAN_INSPECT",
     "OIL_DINGDUAN_SAVE",
     "OIL_DINGDUAN_VERIFY",
+    "OIL_OFWEEK_INSPECT",
+    "OIL_OFWEEK_SAVE",
+    "OIL_OFWEEK_VERIFY",
   ].find((marker) => source.includes(marker));
   if (!stage) throw new Error(`unexpected browser expression for ${platform}`);
   state.stages.push(stage);
@@ -103,6 +106,11 @@ async function js(source) {
     if (stage === "OIL_BROWSER_FORM_INSPECT") {
       if (scenario === "login") return { titleSelector: "", contentSelector: "", url: state.href };
       return { titleSelector: "#title", contentSelector: "#content", url: state.href };
+    }
+    if (platform === "ofweek") {
+      return scenario === "login"
+        ? { ok: false, draftControlReady: false, url: state.href }
+        : { ok: true, draftControlReady: true, url: state.href };
     }
     if (platform === "netease") {
       return { ok: true, wemediaId: "media-7", categoryPath: "1/2" };

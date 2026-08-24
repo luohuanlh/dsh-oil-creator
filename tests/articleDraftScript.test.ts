@@ -876,7 +876,14 @@ const extendedPlatformCases = [
   {
     platform: "ofweek",
     name: "维科网",
-    markers: ["mp.ofweek.com/article/publish.html", "saveBrowserDraftForm", "保存草稿"],
+    markers: [
+      "mp.ofweek.com/article/publish.html",
+      "/home/news/ajax_add",
+      "/article/ajax_articles.html",
+      "isDraft: 1",
+      "edit_url",
+      "OIL_OFWEEK_VERIFY",
+    ],
   },
   {
     platform: "laohu",

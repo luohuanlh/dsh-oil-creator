@@ -43,7 +43,7 @@ describe("platform catalog", () => {
       .toBe("https://mp.ofweek.com/article/publish.html");
   });
 
-  it("只把十五个真实运行器平台标为自动草稿", () => {
+  it("只把十六个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
@@ -59,6 +59,7 @@ describe("platform catalog", () => {
       "eastmoney",
       "weibo",
       "zhihu",
+      "ofweek",
       "wechat-mp",
     ]);
     expect(AUTO_DRAFT_PLATFORMS.every(supportsAutoDraft)).toBe(true);
@@ -78,12 +79,14 @@ describe("platform catalog", () => {
       "eastmoney",
       "weibo",
       "zhihu",
+      "ofweek",
       "wechat-mp",
     ]);
     expect(isArticleDraftPlatform("wechat-mp")).toBe(true);
     expect(isArticleDraftPlatform("zhihu")).toBe(true);
     expect(isArticleDraftPlatform("toutiao")).toBe(true);
     expect(isArticleDraftPlatform("xiaohongshu-note")).toBe(true);
+    expect(isArticleDraftPlatform("ofweek")).toBe(true);
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("remote-verified");
     expect(draftCapability("baijiahao")).toBe("remote-verified");
@@ -104,7 +107,7 @@ describe("platform catalog", () => {
     expect(draftCapability("dayu")).toBe("local-tested");
     expect(draftCapability("dingduan")).toBe("remote-verified");
     expect(draftCapability("10jqka")).toBe("local-tested");
-    expect(draftCapability("ofweek")).toBe("local-tested");
+    expect(draftCapability("ofweek")).toBe("remote-verified");
     expect(draftCapability("laohu")).toBe("local-tested");
     expect(draftCapability("futu")).toBe("local-tested");
     const hiddenLocalAdapters = [
@@ -113,12 +116,12 @@ describe("platform catalog", () => {
       "dayu",
       "10jqka",
       "sohu",
-      "ofweek",
       "laohu",
       "futu",
     ] as const;
     expect(hiddenLocalAdapters.every((platform) => !supportsAutoDraft(platform))).toBe(true);
     expect(supportsAutoDraft("penguin")).toBe(true);
+    expect(supportsAutoDraft("ofweek")).toBe(true);
   });
 
   it("迁移旧版 wechat id 并过滤无效值", () => {
@@ -164,6 +167,10 @@ describe("platform catalog", () => {
       tagsMax: 10,
       guidance: expect.stringContaining("1000 字以内"),
       contentProfile: { formatting: expect.stringContaining("一千字以内") },
+    });
+    expect(platformGenerationRule("ofweek")).toMatchObject({
+      titleMax: 50,
+      tagsMax: 5,
     });
   });
 });
