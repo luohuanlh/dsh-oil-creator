@@ -20,7 +20,7 @@ import {
 import { creatorProfileSchema } from "../src/schemas.ts";
 
 describe("creator profile", () => {
-  it("默认启用五个视频草稿平台和十一个图文草稿平台", () => {
+  it("默认启用五个视频草稿平台和十二个图文草稿平台", () => {
     expect(emptyProfile()).toEqual({
       enabledPlatforms: [
         "bilibili",
@@ -35,6 +35,7 @@ describe("creator profile", () => {
         "dingduan",
         "xueqiu",
         "eastmoney",
+        "sohu",
         "weibo",
         "zhihu",
         "ofweek",

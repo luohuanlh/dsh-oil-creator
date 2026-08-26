@@ -26,7 +26,7 @@ describe("creator settings platform rows", () => {
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("ximalaya");
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("laohu");
     expect(ACCOUNT_SETTINGS_PLATFORMS).not.toContain("futu");
-    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(16);
+    expect(AUTO_DRAFT_PLATFORMS).toHaveLength(17);
   });
 
   it("按视频与图文分组账号工作台，暂不展示音频平台", () => {

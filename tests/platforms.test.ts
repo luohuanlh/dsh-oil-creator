@@ -43,7 +43,7 @@ describe("platform catalog", () => {
       .toBe("https://mp.ofweek.com/article/publish.html");
   });
 
-  it("只把十六个真实运行器平台标为自动草稿", () => {
+  it("只把十七个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
@@ -57,6 +57,7 @@ describe("platform catalog", () => {
       "dingduan",
       "xueqiu",
       "eastmoney",
+      "sohu",
       "weibo",
       "zhihu",
       "ofweek",
@@ -77,6 +78,7 @@ describe("platform catalog", () => {
       "dingduan",
       "xueqiu",
       "eastmoney",
+      "sohu",
       "weibo",
       "zhihu",
       "ofweek",
@@ -87,6 +89,7 @@ describe("platform catalog", () => {
     expect(isArticleDraftPlatform("toutiao")).toBe(true);
     expect(isArticleDraftPlatform("xiaohongshu-note")).toBe(true);
     expect(isArticleDraftPlatform("ofweek")).toBe(true);
+    expect(isArticleDraftPlatform("sohu")).toBe(true);
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("remote-verified");
     expect(draftCapability("baijiahao")).toBe("remote-verified");
@@ -97,7 +100,7 @@ describe("platform catalog", () => {
     expect(draftCapability("kuaishou")).toBe("remote-verified");
     expect(draftCapability("toutiao")).toBe("remote-verified");
     expect(draftCapability("zhihu")).toBe("remote-verified");
-    expect(draftCapability("sohu")).toBe("local-tested");
+    expect(draftCapability("sohu")).toBe("remote-verified");
     expect(draftCapability("xueqiu")).toBe("remote-verified");
     expect(draftCapability("eastmoney")).toBe("remote-verified");
     expect(draftCapability("weibo")).toBe("remote-verified");
@@ -115,13 +118,13 @@ describe("platform catalog", () => {
       "yidian",
       "dayu",
       "10jqka",
-      "sohu",
       "laohu",
       "futu",
     ] as const;
     expect(hiddenLocalAdapters.every((platform) => !supportsAutoDraft(platform))).toBe(true);
     expect(supportsAutoDraft("penguin")).toBe(true);
     expect(supportsAutoDraft("ofweek")).toBe(true);
+    expect(supportsAutoDraft("sohu")).toBe(true);
   });
 
   it("迁移旧版 wechat id 并过滤无效值", () => {

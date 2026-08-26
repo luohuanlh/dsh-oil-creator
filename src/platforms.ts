@@ -143,8 +143,8 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     kind: "article",
     loginUrl: "https://mp.sohu.com/",
     workspaceUrl: "https://mp.sohu.com/mpfe/v4/contentManagement/news/addarticle",
-    draftRunner: null,
-    draftCapability: "local-tested",
+    draftRunner: "article-ego",
+    draftCapability: "remote-verified",
   },
   weibo: {
     name: "微博",

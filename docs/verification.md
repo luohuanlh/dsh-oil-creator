@@ -46,7 +46,7 @@
 | 老虎财经 | `LOCAL_TESTED + WEB_LIMITED` | 境内 Web 端只展示服务调整页，没有登录、创作或草稿入口；不绕过地区限制 |
 | 富途牛牛 | `LOCAL_TESTED + WEB_LIMITED` | 境内 Web 页面明确暂停服务，仅提供存量客户 App 通道；没有 Web 创作或草稿入口 |
 | 知乎 | `REMOTE_VERIFIED` | 真实草稿 `2074817313006793960`；draft create/PATCH 与 `/p/{id}/edit` 标题回读一致 |
-| 搜狐号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 新注册账号预计审核 3 天；fixture 已覆盖子账号、`sp-cm`、draft v2 和标题/ID 回读 |
+| 搜狐号 | `REMOTE_VERIFIED` | 审核通过后真实 draft v2 草稿 `1068016625`；子账号、`sp-cm`、编辑 URL、标题与 ID 回读一致，且 `declareOriginal=false` |
 | 雪球号 | `REMOTE_VERIFIED` | 真实草稿 `29832025`；标题和新版 `/writeV2/draft/{id}` 回读一致 |
 | 东方财富号 | `REMOTE_VERIFIED` | 真实草稿 `6a8a6b95f679cbf2d23b9079`；两阶段 SaveDraft、hash ID 与标题回读一致，跨域请求不携带 Cookie |
 | 微博 | `REMOTE_VERIFIED` | 真实草稿 `3984870`；draft create/save、`#/draft/{id}` 与标题回读一致 |
@@ -81,7 +81,7 @@
 - 源码拆分为 `scripts/article/core.mjs`、`platforms/*.mjs` 和 `dispatch.mjs`，构建生成单文件 `article-draft.mjs`。`articleDraftBundle.test.ts` 保证 bundle 同步、每个 Adapter 只注册一次完整三阶段契约、core/dispatch 不含平台名或平台分支。
 - 知乎 fixture 验证创建空草稿、PATCH 标题/正文、重新打开 `/p/{id}/edit` 并精确匹配标题和 ID；登录、保存拒绝、回读不一致分别得到 `BLOCKED_AUTH`、`BLOCKED_PLATFORM`、`REMOTE_UNVERIFIED`。
 - 搜狐号 fixture 验证子账号解析、`dv-id`/`sp-cm`、`draft/v2`、`declareOriginal=false` 和编辑页回读；雪球验证唯一草稿保存端点与 `/writeV2/draft/{id}`；东方财富验证两次 `SaveDraft` 嵌套响应；微博验证 `draft/create → draft/save → #/draft/{id}`。
-- 五个平台的本地实现阶段只保存草稿，fixture 请求跟踪不含最终发布端点；当时均保持 `supportsAutoDraft=false`。随后知乎、雪球、东方财富和微博完成真实回归并开放，搜狐号仍等待账号审核。
+- 五个平台的本地实现阶段只保存草稿，fixture 请求跟踪不含最终发布端点；当时均保持 `supportsAutoDraft=false`。随后知乎、雪球、东方财富和微博完成真实回归并开放，搜狐号于 2026-08-26 审核通过后也完成真实回归。
 - 初始 Chrome 只读探针确认五个平台当时均未登录；后续真实回归使用用户明确授权的“测试文章 001”，仍未执行任何最终发表。
 - `pnpm check` 通过：51 个测试文件、307 项测试，TypeScript 与 Host/Client/Typert 构建成功；`git diff --check` 和 npm package dry-run 通过，发布包继续包含生成后的自包含 `article-draft.mjs`。
 
@@ -104,19 +104,25 @@
 - 两个 Adapter 都具备成功、登录失效、保存失败和回读失败 fixture；头条号升级为 `remote-verified`，小红书图文笔记升级为 `local-verified`，均配置 `article-ego` 并可在图文工作台勾选。
 - 本功能提交覆盖 51 个测试文件、346 项测试；当前工作区连同并行兼容性回归共通过 52 个文件、347 项测试。TypeScript 与 Host/Client/Typert 构建、bundle 同步、`git diff --check`、Node 语法和 npm package dry-run 均通过。
 
+## 2026-08-26 搜狐号真实草稿回归
+
+- 审核通过后，官方 `account/list` 返回有效子账号，页面 Cookie 中的 `mp-cv` 可作为 `sp-cm`，草稿请求携带独立 `dv-id`。
+- 使用“测试文章 001”只调用 `POST /mpbp/bp/news/v4/news/draft/v2` 保存草稿，固定 `declareOriginal=false`，返回远端 ID `1068016625`；未调用发布、发表或原创声明接口。
+- 重新打开 `contentStatus=2&id=1068016625` 的编辑页后，URL ID 与标题“测试文章 001”同时回读一致；搜狐号升级为 `remote-verified`、配置 `article-ego` 并开放工作台 checkbox。
+- `pnpm check` 通过：55 个测试文件、373 项测试，TypeScript 与 Host/Client/Typert 构建全部成功；浏览器重载后工作台显示 12 个可勾选图文 Adapter，并确认搜狐号账号为“已绑定”。
+
 ## Remaining Verification Queue
 
-1. **搜狐号**：账号审核通过后验证 `account/list`、`sp-cm`、draft v2 响应 ID、标题回读和 `declareOriginal=false`。
-2. **网易号**：完成实名认证后执行一次 `operation=saveDraft`，从内容管理列表回读 `articleId`，再打开编辑页核对标题。
-3. **一点号、大鱼号**：账号审核通过后分别验证 `/model/Article` 的 `status=0` 与 `/dashboard/save-draft` 的 `_id`，再核对编辑页标题。
-4. **同顺号**：实名审核通过后核对真实编辑器与明确草稿控件；若页面只有发布动作，继续保持阻塞。
-5. **老虎财经、富途牛牛**：只有平台在允许的账号/地域环境提供 Web 草稿能力时才复测；不绕过境内服务限制。
+1. **网易号**：完成实名认证后执行一次 `operation=saveDraft`，从内容管理列表回读 `articleId`，再打开编辑页核对标题。
+2. **一点号、大鱼号**：账号审核通过后分别验证 `/model/Article` 的 `status=0` 与 `/dashboard/save-draft` 的 `_id`，再核对编辑页标题。
+3. **同顺号**：实名审核通过后核对真实编辑器与明确草稿控件；若页面只有发布动作，继续保持阻塞。
+4. **老虎财经、富途牛牛**：只有平台在允许的账号/地域环境提供 Web 草稿能力时才复测；不绕过境内服务限制。
 
 ## Remaining Platform Audit
 
 | 平台 | 状态 | 阻塞证据与下一步 |
 |---|---|---|
-| 网易号、一点号、大鱼号、搜狐号、同顺号 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
+| 网易号、一点号、大鱼号、同顺号 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
 | 老虎财经、富途牛牛 | `LOCAL_TESTED / WEB_LIMITED` | 安全表单 Adapter 已编码，但境内 Web 环境受限；不绕过地域、登录、风控或 App 限制。 |
 | 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 属于音频平台，不在 Article Publisher 范围。 |
 
