@@ -58,6 +58,12 @@ const LOCAL_IMPORT_LIMIT: Record<InlineAssetImportKind, number> = {
 };
 const ARTICLE_META_MAX = 120;
 
+function wechatPreviewDate(value: string | undefined): string | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value ?? "");
+  if (match === null) return undefined;
+  return `${match[1]}年${Number(match[2])}月${Number(match[3])}日`;
+}
+
 function DistributionPlatformMark({ platform }: { platform: PublishPlatform }) {
   const mark = ACCOUNT_PLATFORM_MARKS[platform];
   if (mark.icon !== undefined) return <PlatformMark id={mark.icon} size={16} />;
@@ -457,6 +463,8 @@ export function ContentInspector({
   const renderWorkflow = (workflowMode: AssetSelection["mode"]) => {
     if (detail === undefined) return null;
     const workflowPlatforms = visibleDistributionPlatforms(workflowMode, enabledPlatforms);
+    const previewAuthor = accountMap.get("wechat-mp")?.nickname;
+    const previewDate = wechatPreviewDate(detail.date);
     const preview = workflowMode === "video"
       ? !videoReady
         ? <div className="empty workflowPreview">{t("empty.loading")}</div>
@@ -478,6 +486,13 @@ export function ContentInspector({
             key={articlePath}
             id={detail.id}
             path={articlePath}
+            previewTitle={articleTitle.trim() || detail.title}
+            {...(previewAuthor === undefined
+              ? {}
+              : { previewAuthor })}
+            {...(previewDate === undefined
+              ? {}
+              : { previewDate })}
             libraryEpoch={libraryEpoch}
             t={t}
             getArticleMedia={getArticleMedia}

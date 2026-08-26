@@ -1,5 +1,11 @@
 export type ArticlePreviewFormat = "markdown" | "rich-html";
 
+export interface ArticlePreviewMeta {
+  title?: string;
+  author?: string;
+  date?: string;
+}
+
 const WECHAT_RICH_TEXT = /\bdata-wechat-draft\s*=/i;
 const FULL_HTML_DOCUMENT = /^\s*(?:<!doctype\s+html[^>]*>\s*)?<html\b/i;
 const BLOCKED_PAIRED_TAGS = /<(script|iframe|object|embed|form|button|textarea|select)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
@@ -21,26 +27,35 @@ interface RenderedMarkdownBlock {
 }
 
 const WECHAT_INLINE_STYLE = {
-  article: "margin:0 6px;line-height:1.85;font-size:14px;color:#526070;font-family:'Songti SC','Noto Serif CJK SC','STSong',serif;overflow-wrap:anywhere",
-  lead: "margin:0 0 16px;padding:15px 17px 14px;border-left:3px solid #bd7d22;background:#fbf8f2",
-  kicker: "margin:0 0 8px;color:#b8781e;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:750;letter-spacing:.12em",
-  paragraph: "margin:0 0 14px",
-  disclaimer: "margin:0 0 24px;padding:12px 15px;border:1px solid #e5eaf0;background:#f6f8fa",
-  disclaimerTitle: "margin:0 0 5px;color:#657181;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;line-height:1.42",
-  disclaimerText: "margin:0;color:#8993a1;font-size:11px",
-  heading: "margin:32px 0 14px;color:#273342;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:18px;line-height:1.42",
-  sectionTitle: "margin:24px 0 14px;color:#273342;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;line-height:1.42",
-  sectionIndex: "margin-top:34px;color:#b8781e;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:800;letter-spacing:.08em",
-  list: "margin:8px 0 18px;padding-left:1.4em",
-  listItem: "margin:8px 0;padding-left:.15em",
-  listDetail: "margin:8px 0 0;color:#667486",
-  keyMoments: "margin:16px 0 24px;padding:13px 16px 12px;border-left:3px solid #c58a2f;background:#fbf9f4;color:#738195;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif",
-  keyMomentsTitle: "margin:0 0 10px;color:#536071;font-size:12px",
-  keyMomentEntry: "margin:0 0 8px;font-size:12px;line-height:1.65",
-  signal: "margin:13px 0 14px",
-  signalHeading: "display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:7px;color:#2f3a47;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px",
-  signalCount: "color:#b8781e;font-size:11px;white-space:nowrap",
-  signalTrack: "height:5px;overflow:hidden;background:#e8edf2",
+  article: "box-sizing:border-box;margin:0 auto;padding:4px 4px 28px;max-width:677px;color:#172033;font-family:'PingFang SC',-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;overflow-wrap:anywhere",
+  lead: "margin:0 0 28px;padding:22px 20px;border-left:4px solid #b7791f;background:#f8f6f1",
+  kicker: "margin:0 0 8px;color:#b7791f;font-size:12px;font-weight:700;letter-spacing:2px",
+  leadText: "margin:0;color:#334155;font-size:16px;line-height:1.9",
+  paragraph: "margin:10px 0 0;color:#475569;font-size:15px;line-height:1.9",
+  disclaimer: "margin:0 0 26px;padding:18px;border:1px solid #e2e8f0;background:#f8fafc",
+  disclaimerTitle: "margin:0 0 8px;color:#64748b;font-size:12px;font-weight:700;letter-spacing:1px",
+  disclaimerText: "margin:0;color:#64748b;font-size:13px;line-height:1.8",
+  heading: "margin:30px 0 12px;color:#172033;font-size:20px;font-weight:700;line-height:1.4",
+  sectionTitle: "margin:26px 0 12px;color:#172033;font-size:17px;font-weight:800;line-height:1.5",
+  sectionIndex: "color:#b7791f;font-size:12px;font-weight:700;letter-spacing:1px;vertical-align:middle",
+  list: "margin:12px 0 0;padding-left:20px",
+  listItem: "margin:0 0 10px;padding:0;color:#475569;font-size:15px;line-height:1.85",
+  listCardItem: "margin:0 0 14px;padding:14px 16px;border-left:3px solid #d6b56d;background:#faf8f2;color:#475569;font-size:15px;line-height:1.85;list-style:none",
+  listDetail: "margin:10px 0 0;color:#64748b;font-size:14px;line-height:1.8",
+  keyMoments: "margin:0 0 14px;padding:14px 16px;border-left:3px solid #d6b56d;background:#faf8f2;color:#475569;font-family:'PingFang SC',-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;list-style:none",
+  keyMomentsTitle: "margin:0 0 10px;color:#475569;font-size:15px;line-height:1.85",
+  keyMomentEntry: "margin:0 0 8px;color:#64748b;font-size:14px;line-height:1.75",
+  signalOverview: "margin:26px 0 0;padding:18px 14px;border:1px solid #e2e8f0;background:#f8fafc",
+  signalOverviewTitle: "margin:0;color:#172033;font-size:17px;font-weight:800;line-height:1.5",
+  signalOverviewDescription: "margin:4px 0 14px;color:#64748b;font-size:12px;line-height:1.7",
+  signalOverviewRule: "height:2px;background:#b7791f",
+  signalList: "padding:16px 4px 0",
+  signal: "margin:0 0 14px;padding:0",
+  signalHeading: "width:100%;border:0;border-collapse:collapse;table-layout:fixed",
+  signalName: "width:70%;padding:0;border:0;color:#334155;font-size:13px;font-weight:700;line-height:1.5",
+  signalCount: "width:30%;padding:0;border:0;text-align:right;color:#b7791f;font-size:13px;font-weight:800;line-height:1.5",
+  signalTrack: "width:100%;margin:6px 0 0;border:0;border-collapse:collapse;table-layout:fixed",
+  signalDetail: "margin:5px 0 0;color:#94a3b8;font-size:11px;line-height:1.5",
   tableWrap: "max-width:100%;margin:16px 0;overflow-x:auto",
   table: "width:100%;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif",
   tableHead: "padding:10px 12px;border:1px solid #e3e7eb;background:#f8f7f4;color:#33404f;font-size:12px;text-align:left;vertical-align:top",
@@ -109,6 +124,9 @@ function renderInlineMarkdown(value: string): string {
   };
 
   let rendered = decodeNumericEntities(value)
+    .replace(/\\([\\`*_[\]{}()#+\-.!>])/g, (_all, punctuation: string) => (
+      preserve(escapeHtml(punctuation))
+    ))
     .replace(/`([^`\n]+)`/g, (_all, code: string) => preserve(`<code>${escapeHtml(code)}</code>`))
     .replace(
       /!\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+["'][^"']*["'])?\s*\)/g,
@@ -206,7 +224,11 @@ function plainInline(value: string): string {
     .trim();
 }
 
-function renderTable(lines: string[], index: number): RenderedMarkdownBlock {
+function markdownTable(lines: string[], index: number): {
+  headings: string[];
+  rows: string[][];
+  next: number;
+} {
   const headings = tableCells(lines[index] ?? "");
   let next = index + 2;
   const rows: string[][] = [];
@@ -214,6 +236,34 @@ function renderTable(lines: string[], index: number): RenderedMarkdownBlock {
     rows.push(tableCells(lines[next] ?? ""));
     next += 1;
   }
+  return { headings, rows, next };
+}
+
+function renderSignalRow(name: string, countText: string, detail: string): string {
+  const count = Number.parseInt(countText, 10);
+  const percentage = Math.min(100, Math.max(12, Math.round(count * 7.7)));
+  const remainder = 100 - percentage;
+  return [
+    `<section class="signal-row" style="${WECHAT_INLINE_STYLE.signal}">`,
+    `<table class="signal-heading" style="${WECHAT_INLINE_STYLE.signalHeading}"><tbody><tr>`,
+    `<td width="70%" style="${WECHAT_INLINE_STYLE.signalName}">${renderInlineMarkdown(name)}</td>`,
+    `<td width="30%" style="${WECHAT_INLINE_STYLE.signalCount}">${escapeHtml(countText)}</td>`,
+    "</tr></tbody></table>",
+    `<table class="signal-track" style="${WECHAT_INLINE_STYLE.signalTrack}" aria-hidden="true"><tbody><tr>`,
+    `<td width="${percentage}%" style="height:8px;padding:0;border:0;background:#b7791f;font-size:0;line-height:8px">&nbsp;</td>`,
+    remainder === 0
+      ? ""
+      : `<td width="${remainder}%" style="height:8px;padding:0;border:0;background:#e2e8f0;font-size:0;line-height:8px">&nbsp;</td>`,
+    "</tr></tbody></table>",
+    detail === ""
+      ? ""
+      : `<p class="signal-detail" style="${WECHAT_INLINE_STYLE.signalDetail}">${renderInlineMarkdown(detail)}</p>`,
+    "</section>",
+  ].join("");
+}
+
+function renderTable(lines: string[], index: number): RenderedMarkdownBlock {
+  const { headings, rows, next } = markdownTable(lines, index);
 
   const plainHeadings = headings.map(plainInline);
   if (plainHeadings.every((heading) => heading === "")) return { html: "", next };
@@ -229,20 +279,8 @@ function renderTable(lines: string[], index: number): RenderedMarkdownBlock {
     ? /^(\d+)\s*条$/.exec(plainHeadings[1] ?? "")
     : null;
   if (signalCount !== null) {
-    const count = Number(signalCount[1]);
-    const percentage = Math.min(100, Math.max(12, Math.round(count * 7.7)));
     return {
-      html: [
-        `<section class="signal-row" style="${WECHAT_INLINE_STYLE.signal}">`,
-        `<div class="signal-heading" style="${WECHAT_INLINE_STYLE.signalHeading}">`,
-        `<span>${renderInlineMarkdown(headings[0] ?? "")}</span>`,
-        `<b style="${WECHAT_INLINE_STYLE.signalCount}">${escapeHtml(plainHeadings[1] ?? "")}</b>`,
-        "</div>",
-        `<div class="signal-track" style="${WECHAT_INLINE_STYLE.signalTrack}" aria-hidden="true">`,
-        `<span style="display:block;width:${percentage}%;height:100%;background:#b77a20"></span>`,
-        "</div>",
-        "</section>",
-      ].join(""),
+      html: renderSignalRow(headings[0] ?? "", plainHeadings[1] ?? "", ""),
       next,
     };
   }
@@ -255,6 +293,82 @@ function renderTable(lines: string[], index: number): RenderedMarkdownBlock {
     : `<tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td style="${WECHAT_INLINE_STYLE.tableCell}">${renderInlineMarkdown(cell)}</td>`).join("")}</tr>`).join("")}</tbody>`;
   return {
     html: `<div class="table-scroll" style="${WECHAT_INLINE_STYLE.tableWrap}"><table style="${WECHAT_INLINE_STYLE.table}"><thead><tr>${header}</tr></thead>${body}</table></div>`,
+    next,
+  };
+}
+
+function sectionHeading(index: string, title: string): string {
+  return [
+    '<header class="article-section-heading" style="margin:30px 0 12px;padding:0">',
+    '<table style="width:100%;margin:0;border:0;border-collapse:collapse"><tbody><tr>',
+    `<td class="section-index" width="34" style="padding:0;border:0;${WECHAT_INLINE_STYLE.sectionIndex}">${escapeHtml(index)}</td>`,
+    '<td style="padding:0;border:0;vertical-align:middle">',
+    `<h2 style="margin:0;color:#172033;font-size:20px;font-weight:700;line-height:1.4">${renderInlineMarkdown(title)}</h2>`,
+    "</td></tr></tbody></table>",
+    "</header>",
+  ].join("");
+}
+
+function renderSignalOverview(
+  lines: string[],
+  index: number,
+  title: string,
+): RenderedMarkdownBlock {
+  const descriptionStart = skipBlankLines(lines, index + 1);
+  const description = renderParagraph(lines, descriptionStart);
+  let next = skipBlankLines(lines, description.next);
+  const signals: string[] = [];
+
+  while (next < lines.length) {
+    if (tableStart(lines, next)) {
+      const table = markdownTable(lines, next);
+      const plainHeadings = table.headings.map(plainInline);
+      if (plainHeadings.every((heading) => heading === "")) {
+        next = skipBlankLines(lines, table.next);
+        continue;
+      }
+      const count = table.headings.length === 2
+        ? /^(\d+)\s*条$/.exec(plainHeadings[1] ?? "")
+        : null;
+      if (count === null) break;
+
+      next = skipBlankLines(lines, table.next);
+      while (tableStart(lines, next)) {
+        const spacer = markdownTable(lines, next);
+        if (!spacer.headings.map(plainInline).every((heading) => heading === "")) break;
+        next = skipBlankLines(lines, spacer.next);
+      }
+
+      let detail = "";
+      if (next < lines.length && !blockStart(lines, next)) {
+        const paragraph = renderParagraph(lines, next);
+        detail = lines.slice(next, paragraph.next).map((line) => line.trim()).join("\n");
+        next = skipBlankLines(lines, paragraph.next);
+      }
+      signals.push(renderSignalRow(
+        table.headings[0] ?? "",
+        plainHeadings[1] ?? "",
+        detail,
+      ));
+      continue;
+    }
+    break;
+  }
+
+  return {
+    html: [
+      `<section class="signal-overview" style="${WECHAT_INLINE_STYLE.signalOverview}">`,
+      `<h2 style="${WECHAT_INLINE_STYLE.signalOverviewTitle}">${renderInlineMarkdown(title)}</h2>`,
+      description.next === descriptionStart
+        ? ""
+        : description.html.replace(
+          `style="${WECHAT_INLINE_STYLE.paragraph}"`,
+          `style="${WECHAT_INLINE_STYLE.signalOverviewDescription}"`,
+        ),
+      `<div class="signal-overview-rule" style="${WECHAT_INLINE_STYLE.signalOverviewRule}" aria-hidden="true"></div>`,
+      `<div class="signal-list" style="${WECHAT_INLINE_STYLE.signalList}">${signals.join("")}</div>`,
+      "</section>",
+    ].join(""),
     next,
   };
 }
@@ -306,7 +420,12 @@ export function renderMarkdownWechatHtml(markdown: string): string {
     blocks.push([
       `<header class="article-lead" style="${WECHAT_INLINE_STYLE.lead}">`,
       `<div class="article-kicker" style="${WECHAT_INLINE_STYLE.kicker}">${renderInlineMarkdown(title)}</div>`,
-      lead.next === leadStart ? "" : lead.html,
+      lead.next === leadStart
+        ? ""
+        : lead.html.replace(
+          `style="${WECHAT_INLINE_STYLE.paragraph}"`,
+          `style="${WECHAT_INLINE_STYLE.leadText}"`,
+        ),
       "</header>",
     ].join(""));
     index = lead.next;
@@ -335,6 +454,10 @@ export function renderMarkdownWechatHtml(markdown: string): string {
           "</aside>",
         ].join(""));
         index = content.next;
+      } else if (titleText === "市场关注方向线索分布") {
+        const overview = renderSignalOverview(lines, index, strongTitle);
+        blocks.push(overview.html);
+        index = overview.next;
       } else {
         blocks.push(`<h2 class="article-section-title" style="${WECHAT_INLINE_STYLE.sectionTitle}">${renderInlineMarkdown(strongTitle)}</h2>`);
         index += 1;
@@ -352,6 +475,18 @@ export function renderMarkdownWechatHtml(markdown: string): string {
 
     if (tableStart(lines, index)) {
       const table = renderTable(lines, index);
+      const sectionIndex = /^\d{2}$/.test(plainInline(tableCells(lines[index] ?? "")[0] ?? ""))
+        ? plainInline(tableCells(lines[index] ?? "")[0] ?? "")
+        : undefined;
+      if (sectionIndex !== undefined) {
+        const headingIndex = skipBlankLines(lines, table.next);
+        const heading = HEADING_LINE.exec(lines[headingIndex] ?? "");
+        if (heading !== null) {
+          blocks.push(sectionHeading(sectionIndex, heading[2] ?? ""));
+          index = headingIndex + 1;
+          continue;
+        }
+      }
       if (table.html !== "") blocks.push(table.html);
       index = table.next;
       continue;
@@ -393,7 +528,7 @@ export function renderMarkdownWechatHtml(markdown: string): string {
         }
         const continuation = renderListContinuations(lines, index + 1);
         items.push([
-          `<li style="${WECHAT_INLINE_STYLE.listItem}">`,
+          `<li style="${continuation.html === "" ? WECHAT_INLINE_STYLE.listItem : WECHAT_INLINE_STYLE.listCardItem}">`,
           renderInlineMarkdown(itemText),
           continuation.html,
           "</li>",
@@ -427,7 +562,10 @@ export function renderMarkdownWechatHtml(markdown: string): string {
     index = paragraph.next;
   }
 
-  return `<section data-wechat-draft="markdown-frame" class="oil-wechat-article" style="${WECHAT_INLINE_STYLE.article}">${blocks.join("\n")}</section>`;
+  const template = markdown.includes("市场关注方向线索分布") && /\|\s*\*\*\d{2}\*\*\s*\|/.test(markdown)
+    ? "pre-market"
+    : "markdown-frame";
+  return `<section data-wechat-draft="${template}" class="oil-wechat-article" style="${WECHAT_INLINE_STYLE.article}">${blocks.join("\n")}</section>`;
 }
 
 function previewBase(origin: string): string {
@@ -440,16 +578,38 @@ function previewBase(origin: string): string {
   }
 }
 
+function previewHeader(meta: ArticlePreviewMeta | undefined): string {
+  const title = meta?.title?.trim() ?? "";
+  if (title === "") return "";
+  const author = meta?.author?.trim() ?? "";
+  const date = meta?.date?.trim() ?? "";
+  const details = [author, date]
+    .filter((value) => value !== "")
+    .map((value) => `<span>${escapeHtml(value)}</span>`)
+    .join("");
+  return [
+    '<header class="wechat-preview-header">',
+    `<h1>${escapeHtml(title)}</h1>`,
+    details === "" ? "" : `<div class="wechat-preview-meta">${details}</div>`,
+    "</header>",
+  ].join("");
+}
+
 /**
  * 在无脚本 iframe 中呈现微信公众号富文本。
  *
  * 微信稿的关键样式位于正文内联 style 中；这里仅补齐目标预览页的白底、留白和
  * 窄屏适配。sandbox 是主要隔离边界，字符串清理和 CSP 提供第二层防护。
  */
-export function buildRichArticlePreviewDocument(html: string, origin: string): string {
+export function buildRichArticlePreviewDocument(
+  html: string,
+  origin: string,
+  meta?: ArticlePreviewMeta,
+): string {
   const base = previewBase(origin);
   const baseElement = base === "" ? "" : `<base href="${escapeAttribute(base)}">`;
   const body = safePreviewHtml(html);
+  const header = previewHeader(meta);
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -470,11 +630,21 @@ export function buildRichArticlePreviewDocument(html: string, origin: string): s
     }
     .article-preview-page {
       width: 100%;
+      max-width: 717px;
       margin: 0 auto;
-      padding: 28px 32px 40px;
+      padding: 20px;
       background: #ffffff;
       overflow-wrap: anywhere;
     }
+    .wechat-preview-header { max-width: 677px; margin: 0 auto 22px; }
+    .wechat-preview-header h1 {
+      margin: 0 0 14px;
+      color: rgba(0, 0, 0, .9);
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .wechat-preview-meta { display: flex; flex-wrap: wrap; gap: 8px; color: rgba(0, 0, 0, .3); font-size: 15px; line-height: 20px; }
     img, video, svg { max-width: 100%; height: auto; }
     table { max-width: 100%; }
     @media (max-width: 480px) {
@@ -483,7 +653,7 @@ export function buildRichArticlePreviewDocument(html: string, origin: string): s
   </style>
 </head>
 <body>
-  <main class="article-preview-page">${body}</main>
+  <main class="article-preview-page">${header}${body}</main>
 </body>
 </html>`;
 }
@@ -494,10 +664,15 @@ export function buildRichArticlePreviewDocument(html: string, origin: string): s
  * 原始 Markdown 全部经过转义，只有渲染器生成的结构进入 iframe；因此即使没有
  * 伴随 HTML 文件，也能安全地复用与公众号稿一致的排版框架。
  */
-export function buildMarkdownRichArticlePreviewDocument(markdown: string, origin: string): string {
+export function buildMarkdownRichArticlePreviewDocument(
+  markdown: string,
+  origin: string,
+  meta?: ArticlePreviewMeta,
+): string {
   const base = previewBase(origin);
   const baseElement = base === "" ? "" : `<base href="${escapeAttribute(base)}">`;
   const body = renderMarkdownWechatHtml(markdown);
+  const header = previewHeader(meta);
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -511,93 +686,38 @@ export function buildMarkdownRichArticlePreviewDocument(markdown: string, origin
     html, body { min-width: 0; margin: 0; background: #ffffff; }
     body {
       overflow-x: hidden;
-      color: #526070;
-      font-family: "Songti SC", "Noto Serif CJK SC", "STSong", serif;
+      color: #172033;
+      font-family: "PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
       -webkit-font-smoothing: antialiased;
       text-rendering: optimizeLegibility;
+    }
+    .wechat-preview-page {
+      width: 100%;
+      max-width: 717px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #ffffff;
     }
     .oil-wechat-article {
       width: 100%;
       margin: 0 auto;
-      padding: 28px 32px 44px;
+      max-width: 677px;
       background: #ffffff;
       overflow-wrap: anywhere;
-      font-size: 14px;
-      line-height: 1.85;
     }
-    .article-lead {
-      margin: 0 0 16px;
-      padding: 15px 17px 14px;
-      border-left: 3px solid #bd7d22;
-      background: #fbf8f2;
+    .wechat-preview-header { max-width: 677px; margin: 0 auto 22px; }
+    .wechat-preview-header h1 {
+      margin: 0 0 14px;
+      color: rgba(0, 0, 0, .9);
+      font-size: 22px;
+      font-weight: 500;
+      line-height: 1.4;
     }
-    .article-kicker {
-      margin-bottom: 8px;
-      color: #b8781e;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-      font-size: 11px;
-      font-weight: 750;
-      letter-spacing: .12em;
-    }
-    .article-lead p { margin: 0; color: #4e5967; }
-    .article-disclaimer {
-      margin: 0 0 24px;
-      padding: 12px 15px;
-      border: 1px solid #e5eaf0;
-      background: #f6f8fa;
-    }
-    .article-disclaimer h2 {
-      margin: 0 0 5px;
-      color: #657181;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-      font-size: 12px;
-    }
-    .article-disclaimer p { margin: 0; color: #8993a1; font-size: 11px; }
-    h1, h2, h3, h4, h5, h6 {
-      color: #273342;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-      line-height: 1.42;
-    }
-    h1 { margin: 30px 0 14px; font-size: 23px; }
-    h2 { margin: 32px 0 14px; font-size: 18px; }
-    h3 { margin: 26px 0 10px; font-size: 16px; }
-    h4, h5, h6 { margin: 22px 0 8px; font-size: 14px; }
-    .article-section-title { margin-top: 24px; font-size: 15px; }
-    .section-index {
-      width: max-content;
-      margin-top: 34px;
-      color: #b8781e;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: .08em;
-    }
-    .section-index + h2 { margin-top: 3px; }
-    p { margin: 0 0 14px; }
-    strong { color: #2d3948; font-weight: 750; }
-    a { color: #9d661a; text-decoration: underline; text-underline-offset: 3px; }
-    ul, ol { margin: 8px 0 18px; padding-left: 1.4em; }
-    li { margin: 8px 0; padding-left: .15em; }
-    li::marker { color: #bd7d22; }
-    blockquote {
-      margin: 18px 0;
-      padding: 10px 14px;
-      border-left: 2px solid #c78a33;
-      background: #fbf8f2;
-      color: #687483;
-    }
-    .key-moments {
-      margin: 16px 0 24px;
-      padding: 13px 16px 12px;
-      border-left: 3px solid #c58a2f;
-      background: #fbf9f4;
-      color: #738195;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-    }
-    .key-moments-title { margin: 0 0 10px; color: #536071; font-size: 12px; }
-    .key-moments-list p { margin: 0 0 8px; font-size: 12px; line-height: 1.65; }
+    .wechat-preview-meta { display: flex; flex-wrap: wrap; gap: 8px; color: rgba(0, 0, 0, .3); font-size: 15px; line-height: 20px; }
     .key-moments-list p:last-child { margin-bottom: 0; }
-    .key-moments strong { color: #526175; }
+    strong { color: #334155; font-weight: 700; }
+    a { color: #9d661a; text-decoration: underline; text-underline-offset: 3px; }
+    li::marker { color: #b7791f; }
     hr { height: 1px; margin: 24px 0; border: 0; background: #e8e3da; }
     img, video, svg { display: block; max-width: 100%; height: auto; margin: 18px auto; }
     code {
@@ -610,38 +730,13 @@ export function buildMarkdownRichArticlePreviewDocument(markdown: string, origin
     }
     pre { overflow: auto; margin: 18px 0; padding: 14px; background: #22272e; color: #edf2f7; }
     pre code { padding: 0; background: transparent; color: inherit; }
-    .signal-row { margin: 13px 0 14px; }
-    .signal-heading {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 14px;
-      align-items: baseline;
-      margin-bottom: 7px;
-      color: #2f3a47;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-      font-size: 12px;
-    }
-    .signal-heading b { color: #b8781e; font-size: 11px; white-space: nowrap; }
-    .signal-track { height: 5px; overflow: hidden; background: #e8edf2; }
-    .signal-track span { display: block; height: 100%; background: #b77a20; }
-    .signal-row + p {
-      margin-top: -9px;
-      color: #a1a9b3;
-      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-      font-size: 10px;
-    }
     .table-scroll { max-width: 100%; margin: 16px 0; overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
-    th, td { padding: 10px 12px; border: 1px solid #e3e7eb; text-align: left; vertical-align: top; }
-    th { background: #f8f7f4; color: #33404f; font-size: 12px; }
-    td { font-size: 12px; }
+    table { max-width: 100%; }
     @media (max-width: 480px) {
-      .oil-wechat-article { padding: 20px 16px 34px; font-size: 13px; }
-      .article-lead { padding: 13px 14px 12px; }
-      h2 { font-size: 17px; }
+      .wechat-preview-page { padding: 20px 16px 32px; }
     }
   </style>
 </head>
-<body>${body}</body>
+<body><main class="wechat-preview-page">${header}${body}</main></body>
 </html>`;
 }

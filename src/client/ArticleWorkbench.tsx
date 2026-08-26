@@ -13,6 +13,9 @@ type ArticleWorkbenchProps = Pick<
 > & {
   id: string;
   path: string;
+  previewTitle: string;
+  previewAuthor?: string;
+  previewDate?: string;
   libraryEpoch: number;
   t: (key: CreatorKey) => string;
   onDirtyChange: (dirty: boolean) => void;
@@ -35,6 +38,9 @@ function errorMessage(cause: unknown, fallback: string): string {
 export function ArticleWorkbench({
   id,
   path,
+  previewTitle,
+  previewAuthor,
+  previewDate,
   libraryEpoch,
   t,
   getArticleMedia,
@@ -305,6 +311,9 @@ export function ArticleWorkbench({
           origin={document.origin}
           label={t("inspector.article.preview")}
           richHtml={dirty ? undefined : document.previewHtml}
+          title={previewTitle}
+          {...(previewAuthor === undefined ? {} : { author: previewAuthor })}
+          {...(previewDate === undefined ? {} : { date: previewDate })}
         />
       )}
     </section>

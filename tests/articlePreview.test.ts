@@ -82,6 +82,50 @@ describe("article preview", () => {
     expect(document).not.toContain("<script>alert(1)</script>");
   });
 
+  it("盘前稿使用与公众号成稿一致的 677px 富文本模板和文章页头", () => {
+    const document = buildMarkdownRichArticlePreviewDocument(
+      [
+        "**陪你看盘 · 盘前观察 · 8月24日**",
+        "",
+        "盘前焦点摘要。",
+        "",
+        "**市场关注方向线索分布**",
+        "",
+        "条目多寡不等于上涨概率。",
+        "",
+        "|  |",
+        "| --- |",
+        "",
+        "| **AI算力投入** | **11 条** |",
+        "| --- | --- |",
+        "",
+        "|  |  |",
+        "| --- | --- |",
+        "",
+        "逻辑 3 · 个股 4 · 催化 4",
+        "",
+        "| **01** |",
+        "| --- |",
+        "",
+        "## 盘前摘要",
+        "",
+        "正文。",
+      ].join("\n"),
+      "",
+      { title: "8月24日盘前", author: "短线观市", date: "2026年8月24日" },
+    );
+
+    expect(document).toContain('data-wechat-draft="pre-market"');
+    expect(document).toContain("max-width:677px");
+    expect(document).toContain('class="wechat-preview-header"');
+    expect(document).toContain("8月24日盘前");
+    expect(document).toContain("短线观市");
+    expect(document).toContain('class="signal-overview"');
+    expect(document).toContain('width="85%"');
+    expect(document).toContain('class="article-section-heading"');
+    expect(document).toContain('class="section-index"');
+  });
+
   it("解码数字实体并把关键时点渲染为整块提示卡", () => {
     const document = buildMarkdownRichArticlePreviewDocument(
       [
@@ -105,6 +149,19 @@ describe("article preview", () => {
     expect(document).toContain("<strong>9月10日：</strong>&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(document).not.toContain("&amp;#x4E2D;");
     expect(document).not.toContain("<script>alert(1)</script>");
+  });
+
+  it("把 Markdown 转义星号还原为股票名称中的单个字面量星号", () => {
+    const document = buildMarkdownRichArticlePreviewDocument(
+      "## 风险提示\n\n- \\*ST康佳A停牌筹划重大事项。\n\n\\*不是斜体\\*",
+      "",
+    );
+
+    expect(document).toContain("*ST康佳A停牌筹划重大事项。");
+    expect(document).not.toContain("\\*ST康佳A停牌筹划重大事项。");
+    expect(document).not.toContain("**ST康佳A停牌筹划重大事项。");
+    expect(document).toContain("*不是斜体*");
+    expect(document).not.toContain("<em>不是斜体</em>");
   });
 
   it("React 预览通过无脚本 sandbox iframe 呈现富文本和 Markdown 框架", () => {
