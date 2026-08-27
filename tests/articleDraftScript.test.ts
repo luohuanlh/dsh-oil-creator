@@ -290,7 +290,7 @@ describe("头条号 Article Adapter", () => {
       remoteId: "toutiao-draft-42",
       draftStorage: "remote",
       taskSpace: "31",
-      handedOff: true,
+      handedOff: false,
     });
   });
 
@@ -378,10 +378,11 @@ describe("微信公众号 Ego 草稿脚本", () => {
     expect(source).toContain("content0");
   });
 
-  it("创建后回读标题并把草稿页交给用户", () => {
+  it("创建后回读标题，只有浏览器本地草稿才把页面交给用户", () => {
     expect(source).toContain("verified");
     expect(source).toContain("expectedTitle");
     expect(source).toContain("handOffTaskSpace");
+    expect(source).toContain("browserLocal ? await handOffTaskSpace(task.id)");
   });
 
   it("没有最终发表动作", () => {
@@ -401,13 +402,13 @@ describe("微信公众号 Ego 草稿脚本", () => {
       verified: true,
       remoteId: "appmsg-42",
       taskSpace: "7",
-      handedOff: true,
+      handedOff: false,
     });
     expect(String(draft?.draftUrl)).toContain("appmsgid=appmsg-42");
     expect(String(draft?.draftUrl)).not.toContain("token=");
     expect(trace).toMatchObject({
       fixture: true,
-      handedOff: ["7"],
+      handedOff: [],
       openedDraft: true,
       requests: [
         { kind: "cover", method: "POST", hasFile: true },
@@ -481,7 +482,7 @@ describe("百家号 Ego 草稿脚本", () => {
       verified: true,
       remoteId: "article-42",
       taskSpace: "9",
-      handedOff: true,
+      handedOff: false,
       evidence: {
         coverUploaded: true,
         coverUsedAsFirstImage: true,
@@ -492,7 +493,7 @@ describe("百家号 Ego 草稿脚本", () => {
     );
     expect(trace).toMatchObject({
       fixture: true,
-      handedOff: ["9"],
+      handedOff: [],
       openedDraft: true,
       requests: [
         { kind: "auth", method: "GET" },
@@ -569,11 +570,11 @@ describe("知乎 Article Adapter", () => {
       remoteId: "draft-42",
       draftUrl: "https://zhuanlan.zhihu.com/p/draft-42/edit",
       taskSpace: "11",
-      handedOff: true,
+      handedOff: false,
     });
     expect(trace).toMatchObject({
       fixture: true,
-      handedOff: ["11"],
+      handedOff: [],
       openedDraft: true,
       requests: [
         { kind: "create", method: "POST", title: "Harness 生成的知乎标题", content: "" },
@@ -623,7 +624,7 @@ describe("搜狐号 Article Adapter", () => {
       status: "REMOTE_VERIFIED",
       remoteId: "sohu-draft-42",
       taskSpace: "13",
-      handedOff: true,
+      handedOff: false,
     });
     expect(trace).toMatchObject({
       fixture: true,
@@ -927,13 +928,13 @@ describe.each(extendedPlatformCases)("$name Article Adapter", ({ platform, name,
       verified: true,
       remoteId: `${platform}-draft-42`,
       taskSpace: "23",
-      handedOff: true,
+      handedOff: false,
       evidence: { finalPublishBlocked: true },
     });
     expect(trace).toMatchObject({
       fixture: true,
       platform,
-      handedOff: ["23"],
+      handedOff: [],
       openedDraft: true,
     });
     expect(JSON.stringify(trace)).not.toMatch(/operation.?publish|save_type.?2|群发/);

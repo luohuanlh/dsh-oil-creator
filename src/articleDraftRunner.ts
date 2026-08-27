@@ -18,6 +18,20 @@ import type { ContentSummary } from "./types.ts";
 
 export type { ArticleDraftPlatform } from "./platforms.ts";
 
+export const ARTICLE_DRAFT_TIMEOUT_MS = 10 * 60 * 1000;
+export const ARTICLE_DRAFT_OUTPUT_LIMIT_BYTES = 512 * 1024;
+const ARTICLE_DRAFT_CLEANUP_TIMEOUT_MS = 30 * 1000;
+const ARTICLE_DRAFT_KILL_GRACE_MS = 5 * 1000;
+
+type SpawnProcess = typeof spawn;
+
+export interface StartArticleDraftRunOptions {
+  spawnProcess?: SpawnProcess;
+  timeoutMs?: number;
+  cleanupTimeoutMs?: number;
+  outputLimitBytes?: number;
+}
+
 function articlePlatformName(platform: ArticleDraftPlatform): string {
   return PUBLISH_PLATFORM_DEFINITIONS[platform].name;
 }
@@ -215,80 +229,261 @@ export async function resolveArticleDraftScript(preferred?: string): Promise<str
   throw new Error("article-draft.mjs is missing; rebuild dsh-oil-creator");
 }
 
+interface ArticleDraftFailureDetail {
+  error: string;
+  status?: string;
+  taskSpace?: string;
+  handedOff: boolean;
+}
+
 function articleDraftFailure(
   raw: string,
   code: number | null,
   platform: ArticleDraftPlatform,
-): string {
+): ArticleDraftFailureDetail {
   const lines = raw.split(/\n/).map((line) => line.trim()).filter((line) => line.startsWith("{"));
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     try {
-      const parsed = JSON.parse(lines[index]!) as { error?: string };
-      if (typeof parsed.error === "string" && parsed.error.trim() !== "") return parsed.error;
+      const parsed = JSON.parse(lines[index]!) as {
+        error?: string;
+        status?: string;
+        taskSpace?: string;
+        handedOff?: boolean;
+      };
+      if (typeof parsed.error === "string" && parsed.error.trim() !== "") {
+        return {
+          error: parsed.error,
+          ...(typeof parsed.status === "string" ? { status: parsed.status } : {}),
+          ...(typeof parsed.taskSpace === "string" ? { taskSpace: parsed.taskSpace } : {}),
+          handedOff: parsed.handedOff === true,
+        };
+      }
     } catch {
       continue;
     }
   }
   const detail = raw.trim();
-  return detail === ""
-    ? `${articlePlatformName(platform)}草稿运行器退出：${code}`
-    : detail.slice(-2000);
+  return {
+    error: detail === ""
+      ? `${articlePlatformName(platform)}草稿运行器退出：${code}`
+      : detail.slice(-2000),
+    handedOff: false,
+  };
 }
 
-export async function startArticleDraftRun(
-  prepared: PreparedArticleDraftRun,
-): Promise<ArticleDraftRunHandle> {
-  const source = await readFile(await resolveArticleDraftScript(), "utf8");
-  const prelude = `var OIL_ARTICLE_INPUT = ${JSON.stringify(prepared.input)};\n`;
-  const child = spawn("ego-browser", ["nodejs"], {
+interface EgoNodeProcessResult {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  outputTruncated: boolean;
+  error?: Error;
+}
+
+function appendCappedOutput(
+  current: Buffer,
+  chunk: Buffer | string,
+  limitBytes: number,
+): { buffer: Buffer; truncated: boolean } {
+  const next = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+  if (next.length >= limitBytes) {
+    return { buffer: next.subarray(next.length - limitBytes), truncated: true };
+  }
+  if (current.length + next.length <= limitBytes) {
+    return { buffer: Buffer.concat([current, next]), truncated: false };
+  }
+  const retained = limitBytes - next.length;
+  return {
+    buffer: Buffer.concat([current.subarray(current.length - retained), next]),
+    truncated: true,
+  };
+}
+
+function startEgoNodeProcess(
+  source: string,
+  options: {
+    spawnProcess: SpawnProcess;
+    timeoutMs: number;
+    outputLimitBytes: number;
+  },
+): { pid: number; completion: Promise<EgoNodeProcessResult> } {
+  const child = options.spawnProcess("ego-browser", ["nodejs"], {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env },
   });
   if (child.pid === undefined) throw new Error("Ego Browser 图文草稿运行器启动失败");
-  let stdout = "";
-  let stderr = "";
-  child.stdout?.on("data", (chunk: Buffer | string) => { stdout += String(chunk); });
-  child.stderr?.on("data", (chunk: Buffer | string) => { stderr += String(chunk); });
-  child.stdin?.on("error", () => undefined);
-  child.stdin?.end(`${prelude}${source}`);
-  const completion = new Promise<Awaited<ArticleDraftRunHandle["completion"]>>((resolve) => {
+
+  let stdout: Buffer = Buffer.alloc(0);
+  let stderr: Buffer = Buffer.alloc(0);
+  let outputTruncated = false;
+  let timedOut = false;
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const completion = new Promise<EgoNodeProcessResult>((resolve) => {
+    let settled = false;
+    const finish = (result: EgoNodeProcessResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (killTimer !== undefined) clearTimeout(killTimer);
+      resolve(result);
+    };
+    child.stdout?.on("data", (chunk: Buffer | string) => {
+      const appended = appendCappedOutput(stdout, chunk, options.outputLimitBytes);
+      stdout = appended.buffer;
+      outputTruncated ||= appended.truncated;
+    });
+    child.stderr?.on("data", (chunk: Buffer | string) => {
+      const appended = appendCappedOutput(stderr, chunk, options.outputLimitBytes);
+      stderr = appended.buffer;
+      outputTruncated ||= appended.truncated;
+    });
     child.once("error", (cause) => {
-      const code = (cause as NodeJS.ErrnoException).code;
-      resolve({
-        ok: false,
-        error: code === "ENOENT" ? "未找到 ego-browser，请先安装 Ego Lite" : cause.message,
+      finish({
+        code: null,
+        stdout: stdout.toString("utf8"),
+        stderr: stderr.toString("utf8"),
+        timedOut,
+        outputTruncated,
+        error: cause,
       });
     });
     child.once("exit", (code) => {
-      const raw = `${stdout}\n${stderr}`;
-      if (code !== 0) {
-        resolve({
-          ok: false,
-          error: articleDraftFailure(raw, code, prepared.input.platform),
-        });
-        return;
-      }
-      try {
-        const result = parseArticleDraftOutput(raw, prepared.input.platform);
-        resolve({
-          ok: true,
-          url: result.draftUrl,
-          ...(result.status === "REMOTE_VERIFIED"
-            ? { remoteId: result.remoteId }
-            : { draftReceipt: result.draftReceipt }),
-          draftStorage: result.draftStorage,
-          taskSpace: result.taskSpace,
-        });
-      } catch (cause) {
-        resolve({
-          ok: false,
-          error: cause instanceof Error ? cause.message : String(cause),
-        });
-      }
+      finish({
+        code,
+        stdout: stdout.toString("utf8"),
+        stderr: stderr.toString("utf8"),
+        timedOut,
+        outputTruncated,
+      });
     });
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      killTimer = setTimeout(() => { child.kill("SIGKILL"); }, ARTICLE_DRAFT_KILL_GRACE_MS);
+      killTimer.unref?.();
+    }, options.timeoutMs);
+    timeout.unref?.();
   });
+  child.stdin?.on("error", () => undefined);
+  child.stdin?.end(source);
   child.unref();
   return { pid: child.pid, completion };
+}
+
+async function completeArticleTaskSpace(
+  taskSpace: string,
+  options: {
+    spawnProcess: SpawnProcess;
+    timeoutMs: number;
+    outputLimitBytes: number;
+  },
+): Promise<void> {
+  const source = [
+    `const result = await completeTaskSpace(${JSON.stringify(taskSpace)}, { keep: false });`,
+    "cliLog(JSON.stringify(result));",
+  ].join("\n");
+  const cleanup = startEgoNodeProcess(source, options);
+  const result = await cleanup.completion;
+  if (result.error !== undefined || result.timedOut || result.code !== 0) {
+    throw result.error ?? new Error(
+      result.timedOut
+        ? "Ego Browser task space 清理超时"
+        : `Ego Browser task space 清理失败：${result.code}`,
+    );
+  }
+  const lines = result.stdout.split(/\n/).map((line) => line.trim()).filter(Boolean);
+  const completed = lines.some((line) => {
+    try {
+      return (JSON.parse(line) as { done?: boolean }).done === true;
+    } catch {
+      return false;
+    }
+  });
+  if (!completed) throw new Error("Ego Browser 未确认 task space 已关闭");
+}
+
+async function cleanupArticleTaskSpace(
+  taskSpace: string,
+  options: {
+    spawnProcess: SpawnProcess;
+    timeoutMs: number;
+    outputLimitBytes: number;
+  },
+): Promise<void> {
+  await completeArticleTaskSpace(taskSpace, options).catch((cause) => {
+    process.emitWarning(
+      `Ego Browser task space 清理失败（${taskSpace}）：${cause instanceof Error ? cause.message : String(cause)}`,
+      { code: "OIL_ARTICLE_TASK_SPACE_CLEANUP_FAILED" },
+    );
+  });
+}
+
+export async function startArticleDraftRun(
+  prepared: PreparedArticleDraftRun,
+  options: StartArticleDraftRunOptions = {},
+): Promise<ArticleDraftRunHandle> {
+  const source = await readFile(await resolveArticleDraftScript(), "utf8");
+  const prelude = `var OIL_ARTICLE_INPUT = ${JSON.stringify(prepared.input)};\n`;
+  const spawnProcess = options.spawnProcess ?? spawn;
+  const outputLimitBytes = options.outputLimitBytes ?? ARTICLE_DRAFT_OUTPUT_LIMIT_BYTES;
+  const run = startEgoNodeProcess(`${prelude}${source}`, {
+    spawnProcess,
+    timeoutMs: options.timeoutMs ?? ARTICLE_DRAFT_TIMEOUT_MS,
+    outputLimitBytes,
+  });
+  const cleanupOptions = {
+    spawnProcess,
+    timeoutMs: options.cleanupTimeoutMs ?? ARTICLE_DRAFT_CLEANUP_TIMEOUT_MS,
+    outputLimitBytes,
+  };
+  const completion = run.completion.then(async (processResult) => {
+    const raw = `${processResult.stdout}\n${processResult.stderr}`;
+    if (processResult.error !== undefined) {
+      const code = (processResult.error as NodeJS.ErrnoException).code;
+      return {
+        ok: false as const,
+        error: code === "ENOENT"
+          ? "未找到 ego-browser，请先安装 Ego Lite"
+          : processResult.error.message,
+      };
+    }
+    if (processResult.timedOut) {
+      await cleanupArticleTaskSpace(prepared.input.taskName, cleanupOptions);
+      return {
+        ok: false as const,
+        error: `${articlePlatformName(prepared.input.platform)}草稿运行超过 ${Math.round((options.timeoutMs ?? ARTICLE_DRAFT_TIMEOUT_MS) / 60_000)} 分钟，已终止`,
+      };
+    }
+    if (processResult.code !== 0) {
+      const failure = articleDraftFailure(raw, processResult.code, prepared.input.platform);
+      if (!failure.handedOff) {
+        await cleanupArticleTaskSpace(failure.taskSpace ?? prepared.input.taskName, cleanupOptions);
+      }
+      return { ok: false as const, error: failure.error };
+    }
+    try {
+      const result = parseArticleDraftOutput(raw, prepared.input.platform);
+      if (result.status === "REMOTE_VERIFIED") {
+        await cleanupArticleTaskSpace(result.taskSpace, cleanupOptions);
+      }
+      return {
+        ok: true as const,
+        url: result.draftUrl,
+        ...(result.status === "REMOTE_VERIFIED"
+          ? { remoteId: result.remoteId }
+          : { draftReceipt: result.draftReceipt }),
+        draftStorage: result.draftStorage,
+        taskSpace: result.taskSpace,
+      };
+    } catch (cause) {
+      await cleanupArticleTaskSpace(prepared.input.taskName, cleanupOptions);
+      return {
+        ok: false as const,
+        error: cause instanceof Error ? cause.message : String(cause),
+      };
+    }
+  });
+  return { pid: run.pid, completion };
 }
 
 export function parseArticleDraftOutput(

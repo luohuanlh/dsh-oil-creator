@@ -1,13 +1,18 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
+import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   markdownToWechatHtml,
   parseArticleDraftOutput,
   prepareArticleDraftRun,
+  startArticleDraftRun,
+  type PreparedArticleDraftRun,
 } from "../src/articleDraftRunner.ts";
 import { freezeDistributionPackage } from "../src/distribution.ts";
 import { emptyBurn, emptyPublish } from "../src/publishStatus.ts";
@@ -43,7 +48,149 @@ function articleItem(folderPath: string, articlePath: string, coverPath: string)
   };
 }
 
+function preparedInput(): PreparedArticleDraftRun {
+  return {
+    input: {
+      platform: "wechat-mp",
+      id: "2026-08-27_资源测试",
+      title: "资源测试",
+      summary: "摘要",
+      html: "<p>正文</p>",
+      tags: [],
+      coverMime: "image/png",
+      coverBase64: "iVBORw0KGgo=",
+      taskName: "oil-wechat-resource-test",
+    },
+  };
+}
+
+function spawnFixture(steps: Array<{
+  stdout?: string;
+  stderr?: string;
+  code?: number;
+  exitOnInput?: boolean;
+  exitOnKill?: boolean;
+}>): {
+  spawnProcess: typeof import("node:child_process").spawn;
+  inputs: string[];
+  kills: Array<ReturnType<typeof vi.fn>>;
+} {
+  const inputs: string[] = [];
+  const kills: Array<ReturnType<typeof vi.fn>> = [];
+  let index = 0;
+  const implementation = () => {
+    const step = steps[index++] ?? {};
+    const child = new EventEmitter();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const chunks: Buffer[] = [];
+    let exited = false;
+    const exit = (): void => {
+      if (exited) return;
+      exited = true;
+      if (step.stdout !== undefined) stdout.write(step.stdout);
+      if (step.stderr !== undefined) stderr.write(step.stderr);
+      stdout.end();
+      stderr.end();
+      child.emit("exit", step.code ?? 0, null);
+    };
+    stdin.on("data", (chunk: Buffer) => { chunks.push(Buffer.from(chunk)); });
+    stdin.on("finish", () => {
+      inputs.push(Buffer.concat(chunks).toString("utf8"));
+      if (step.exitOnInput !== false) queueMicrotask(exit);
+    });
+    const kill = vi.fn(() => {
+      if (step.exitOnKill === true) queueMicrotask(exit);
+      return true;
+    });
+    kills.push(kill);
+    Object.assign(child, {
+      pid: 7000 + index,
+      stdin,
+      stdout,
+      stderr,
+      kill,
+      unref: vi.fn(),
+    });
+    return child as unknown as ReturnType<typeof import("node:child_process").spawn>;
+  };
+  return {
+    spawnProcess: vi.fn(implementation) as unknown as typeof import("node:child_process").spawn,
+    inputs,
+    kills,
+  };
+}
+
 describe("WeChat article draft runner", () => {
+  it("限制子进程运行时间与输出，并在远端草稿完成后回收 task space", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/articleDraftRunner.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain("ARTICLE_DRAFT_TIMEOUT_MS");
+    expect(source).toContain("ARTICLE_DRAFT_OUTPUT_LIMIT_BYTES");
+    expect(source).toContain("completeTaskSpace");
+    expect(source).toContain("keep: false");
+  });
+
+  it("只保留有限输出尾部并用独立 Ego 进程关闭远端 task space", async () => {
+    const remote = JSON.stringify({
+      ok: true,
+      platform: "wechat-mp",
+      status: "REMOTE_VERIFIED",
+      verified: true,
+      remoteId: "42",
+      draftStorage: "remote",
+      draftUrl: "https://mp.weixin.qq.com/draft/42",
+      taskSpace: "7",
+    });
+    const fixture = spawnFixture([
+      { stdout: `${"x".repeat(4_096)}\n${remote}\n` },
+      { stdout: `${JSON.stringify({ done: true })}\n` },
+    ]);
+
+    const run = await startArticleDraftRun(preparedInput(), {
+      spawnProcess: fixture.spawnProcess,
+      timeoutMs: 1_000,
+      cleanupTimeoutMs: 1_000,
+      outputLimitBytes: 512,
+    });
+
+    await expect(run.completion).resolves.toMatchObject({
+      ok: true,
+      remoteId: "42",
+      taskSpace: "7",
+    });
+    expect(fixture.spawnProcess).toHaveBeenCalledTimes(2);
+    expect(fixture.inputs[1]).toContain('completeTaskSpace("7", { keep: false })');
+    expect(fixture.kills[0]).not.toHaveBeenCalled();
+  });
+
+  it("运行超时后终止子进程并按 task name 回收空间", async () => {
+    const fixture = spawnFixture([
+      { exitOnInput: false, exitOnKill: true },
+      { stdout: `${JSON.stringify({ done: true })}\n` },
+    ]);
+
+    const run = await startArticleDraftRun(preparedInput(), {
+      spawnProcess: fixture.spawnProcess,
+      timeoutMs: 5,
+      cleanupTimeoutMs: 1_000,
+      outputLimitBytes: 512,
+    });
+
+    await expect(run.completion).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining("已终止"),
+    });
+    expect(fixture.kills[0]).toHaveBeenCalledWith("SIGTERM");
+    expect(fixture.inputs[1]).toContain(
+      'completeTaskSpace("oil-wechat-resource-test", { keep: false })',
+    );
+  });
+
   it("把冻结文章变体和用户选择的封面准备成纯机械 Ego 输入", async () => {
     const folder = await mkdtemp(join(tmpdir(), "oil-article-runner-"));
     const article = join(folder, "article.md");

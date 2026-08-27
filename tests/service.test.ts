@@ -490,8 +490,10 @@ describe("OilCreatorService.startDrafts", () => {
       new AbortController().signal,
     );
 
-    expect(articleDraft.prepare).toHaveBeenCalledWith(content, "wechat-mp");
-    expect(articleDraft.start).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(articleDraft.prepare).toHaveBeenCalledWith(content, "wechat-mp");
+      expect(articleDraft.start).toHaveBeenCalledTimes(1);
+    });
     articleDraft.finish?.({
       ok: true,
       url: "https://mp.weixin.qq.com/draft/42",
@@ -533,8 +535,11 @@ describe("OilCreatorService.startDrafts", () => {
       new AbortController().signal,
     );
 
-    expect(articleDraft.prepare).toHaveBeenCalledWith(content, "baijiahao");
-    expect(articleDraft.start).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(articleDraft.prepare).toHaveBeenCalledWith(content, "baijiahao");
+      expect(articleDraft.start).toHaveBeenCalledTimes(1);
+    });
+    await vi.waitFor(() => { expect(articleDraft.start).toHaveBeenCalledTimes(1); });
     articleDraft.finish?.({
       ok: true,
       url: "https://baijiahao.baidu.com/builder/rc/edit?article_id=42",
@@ -564,6 +569,7 @@ describe("OilCreatorService.startDrafts", () => {
       new AbortController().signal,
     );
 
+    await vi.waitFor(() => { expect(articleDraft.start).toHaveBeenCalledTimes(1); });
     articleDraft.finish?.({
       ok: true,
       url: "https://creator.xiaohongshu.com/publish/publish?target=image",
@@ -581,35 +587,41 @@ describe("OilCreatorService.startDrafts", () => {
     });
   });
 
-  it("同一次图文任务并发启动公众号与百家号并独立记录结果", async () => {
+  it("同一次图文任务最多并发启动两个 Ego 运行器，完成后再启动排队平台", async () => {
     const root = await mkdtemp(join(tmpdir(), "oil-service-article-multi-"));
     const overlay = emptyOverlay();
-    overlay.profile = { enabledPlatforms: ["wechat-mp", "baijiahao"] };
+    overlay.profile = { enabledPlatforms: ["wechat-mp", "baijiahao", "zhihu"] };
     overlay.accounts = {
       "wechat-mp": { status: "active", checkedAt: 1 },
       baijiahao: { status: "active", checkedAt: 1 },
+      zhihu: { status: "active", checkedAt: 1 },
     };
     await saveOverlay(root, overlay);
     const service = probe(root, summary(root, join(root, "missing.mp4")));
 
     const result = await service.startDrafts(
-      { id: "2026-08-21_demo", platforms: ["wechat-mp", "baijiahao"] },
+      { id: "2026-08-21_demo", platforms: ["wechat-mp", "baijiahao", "zhihu"] },
       new AbortController().signal,
     );
 
     expect(result).toMatchObject({
-      platforms: ["wechat-mp", "baijiahao"],
+      platforms: ["wechat-mp", "baijiahao", "zhihu"],
       started: true,
     });
-    expect(articleDraft.prepare.mock.calls.map((call) => call[1]))
-      .toEqual(["wechat-mp", "baijiahao"]);
-    expect(articleDraft.start).toHaveBeenCalledTimes(2);
-    expect(articleDraft.finishes.size).toBe(2);
+    await vi.waitFor(() => {
+      expect(articleDraft.prepare.mock.calls.map((call) => call[1]))
+        .toEqual(["wechat-mp", "baijiahao"]);
+      expect(articleDraft.start).toHaveBeenCalledTimes(2);
+      expect(articleDraft.finishes.size).toBe(2);
+    });
     expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish)
       .toMatchObject({
         "wechat-mp": { draftState: "running", draftPid: 54321 },
         baijiahao: { draftState: "running", draftPid: 54322 },
+        zhihu: { draftState: "running" },
       });
+    expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.zhihu)
+      .not.toHaveProperty("draftPid");
 
     articleDraft.finishes.get("wechat-mp")?.({
       ok: true,
@@ -617,13 +629,26 @@ describe("OilCreatorService.startDrafts", () => {
       remoteId: "42",
       taskSpace: "7",
     });
+    await vi.waitFor(() => {
+      expect(articleDraft.prepare.mock.calls.map((call) => call[1]))
+        .toEqual(["wechat-mp", "baijiahao", "zhihu"]);
+      expect(articleDraft.start).toHaveBeenCalledTimes(3);
+    });
     articleDraft.finishes.get("baijiahao")?.({ ok: false, error: "百家号页面失败" });
+    articleDraft.finishes.get("zhihu")?.({
+      ok: true,
+      url: "https://www.zhihu.com/creator/manage/creation/article/43",
+      remoteId: "43",
+      taskSpace: "9",
+    });
     await vi.waitFor(async () => {
       const publish = (await loadOverlay(root)).items["2026-08-21_demo"]?.publish;
       expect(publish?.["wechat-mp"])
         .toMatchObject({ status: "draft", remoteId: "42" });
       expect(publish?.baijiahao)
         .toMatchObject({ draftState: "error", draftError: "百家号页面失败" });
+      expect(publish?.zhihu)
+        .toMatchObject({ status: "draft", remoteId: "43" });
     });
   });
 });

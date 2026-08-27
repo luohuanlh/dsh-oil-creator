@@ -3355,8 +3355,8 @@ async function dispatchArticleDraft() {
         exitCode: 4,
       });
     }
-    const handoff = await handOffTaskSpace(task.id);
     const browserLocal = saved.draftStorage === "browser-local";
+    const handoff = browserLocal ? await handOffTaskSpace(task.id) : { done: false };
     output({
       ok: true,
       status: browserLocal ? "LOCAL_VERIFIED" : "REMOTE_VERIFIED",

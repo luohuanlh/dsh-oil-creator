@@ -18,6 +18,7 @@ import {
   scanLibrary,
 } from "./catalog.ts";
 import { inspectCreatorSetup } from "./capabilities.ts";
+import { BoundedTaskQueue } from "./boundedTaskQueue.ts";
 import { expandHomePath, resolveDataDir, type Config } from "./config.ts";
 import { importContentAsset } from "./assetImport.ts";
 import { startAssetUploadServer } from "./assetUpload.ts";
@@ -106,6 +107,7 @@ import type {
 } from "./types.ts";
 
 export const OIL_CREATOR_SERVICE = "oilCreator";
+export const ARTICLE_DRAFT_CONCURRENCY = 2;
 
 export class OilCreatorService extends TypertRemoteService {
   // Gateway 会通过 Cordis proxy 调用方法，因此这里不用 #private 字段。
@@ -120,6 +122,7 @@ export class OilCreatorService extends TypertRemoteService {
   articles = new Map<string, { origin: string; root: string; close: () => void }>();
   assetUploads = new Set<() => void>();
   draftStarts = new Set<string>();
+  articleDraftQueue: BoundedTaskQueue | undefined;
 
   constructor(ctx: Context, config: Config) {
     super(ctx, OIL_CREATOR_SERVICE);
@@ -133,6 +136,8 @@ export class OilCreatorService extends TypertRemoteService {
   }
 
   async stopServers(): Promise<void> {
+    this.articleDraftQueue?.close(new Error("内容工作台已停止，排队中的图文草稿已取消"));
+    this.articleDraftQueue = undefined;
     for (const session of this.videos.values()) session.close();
     this.videos.clear();
     for (const session of this.articles.values()) session.close();
@@ -144,6 +149,11 @@ export class OilCreatorService extends TypertRemoteService {
   invalidateCatalog(): void {
     this.cache = undefined;
     this.catalogRevision += 1;
+  }
+
+  enqueueArticleDraft(task: () => Promise<void>): Promise<void> {
+    this.articleDraftQueue ??= new BoundedTaskQueue(ARTICLE_DRAFT_CONCURRENCY);
+    return this.articleDraftQueue.enqueue(task);
   }
 
   stopWatch(): void {
@@ -581,6 +591,7 @@ export class OilCreatorService extends TypertRemoteService {
     for (const key of startKeys) this.draftStarts.add(key);
     let started = false;
     const startErrors: string[] = [];
+    const retainedStartKeys = new Set<string>();
     const applyOutcome = async (
       platform: PublishPlatform,
       result: VideoDraftOutcome,
@@ -658,6 +669,20 @@ export class OilCreatorService extends TypertRemoteService {
         return next;
       });
     };
+    const markQueued = async (targets: readonly PublishPlatform[]): Promise<void> => {
+      const queuedAt = Date.now();
+      await this.patchDraftRows(item.id, targets, (current) => {
+        const next: OverlayPublish = {
+          ...current,
+          status: current.status,
+          draftState: "running",
+          draftStartedAt: queuedAt,
+        };
+        delete next.draftError;
+        delete next.draftPid;
+        return next;
+      });
+    };
     try {
       const videoPlatforms = platforms.filter((platform) =>
         PUBLISH_PLATFORM_DEFINITIONS[platform].draftRunner === "video-publisher"
@@ -700,28 +725,49 @@ export class OilCreatorService extends TypertRemoteService {
           }
         }
       }
-      await Promise.all(articlePlatforms.map(async (platform) => {
-        try {
-          const run = await startArticleDraftRun(await prepareArticleDraftRun(item, platform));
-          started = true;
-          await markRunning([platform], run.pid);
-          void run.completion.then((result) => applyOutcome(platform, result)).catch((cause) => {
-            this.invalidateCatalog();
-            process.emitWarning(
-              `草稿结果写入失败（${platform}）：${cause instanceof Error ? cause.message : String(cause)}`,
-              { code: "OIL_DRAFT_STATE_WRITE_FAILED" },
-            );
+      if (articlePlatforms.length > 0) {
+        await markQueued(articlePlatforms);
+        started = true;
+        for (const platform of articlePlatforms) {
+          const startKey = `${item.id}:${platform}`;
+          const queued = this.enqueueArticleDraft(async () => {
+            let outcome: VideoDraftOutcome;
+            try {
+              const run = await startArticleDraftRun(await prepareArticleDraftRun(item, platform));
+              await markRunning([platform], run.pid);
+              outcome = await run.completion;
+            } catch (cause) {
+              outcome = {
+                ok: false,
+                error: cause instanceof Error ? cause.message : String(cause),
+              };
+            }
+            try {
+              await applyOutcome(platform, outcome);
+            } finally {
+              this.draftStarts.delete(startKey);
+            }
           });
-        } catch (cause) {
-          const message = cause instanceof Error ? cause.message : String(cause);
-          startErrors.push(`${PUBLISH_PLATFORM_DEFINITIONS[platform].name}：${message}`);
-          await applyOutcome(platform, { ok: false, error: message });
+          retainedStartKeys.add(startKey);
+          void queued.catch((cause) => {
+            this.draftStarts.delete(startKey);
+            const message = cause instanceof Error ? cause.message : String(cause);
+            void applyOutcome(platform, { ok: false, error: message }).catch((writeCause) => {
+              this.invalidateCatalog();
+              process.emitWarning(
+                `草稿结果写入失败（${platform}）：${writeCause instanceof Error ? writeCause.message : String(writeCause)}`,
+                { code: "OIL_DRAFT_STATE_WRITE_FAILED" },
+              );
+            });
+          });
         }
-      }));
+      }
       if (!started) throw new Error(startErrors.join("；") || "草稿运行器未启动");
       return { id: item.id, platforms, started };
     } finally {
-      for (const key of startKeys) this.draftStarts.delete(key);
+      for (const key of startKeys) {
+        if (!retainedStartKeys.has(key)) this.draftStarts.delete(key);
+      }
     }
   }
 
