@@ -4,6 +4,7 @@ import type { ArticleMediaResult } from "../types.ts";
 import type { CreatorViewFace } from "./face.ts";
 import type { CreatorKey } from "./locales.ts";
 import { ArticleEditor, type ArticleEditorHandle } from "./ArticleEditor.tsx";
+import { ArticleRequests } from "./articleRequests.ts";
 import { ArticlePreview } from "./ArticlePreview.tsx";
 import "./ArticleWorkbench.css";
 
@@ -62,13 +63,22 @@ export function ArticleWorkbench({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const documentRef = useRef<ArticleMediaResult>();
   const textRef = useRef("");
+  const requests = useRef(new ArticleRequests());
   documentRef.current = document;
   textRef.current = text;
+
+  useEffect(() => {
+    const scope = new ArticleRequests();
+    requests.current = scope;
+    return () => { scope.dispose(); };
+  }, [id, path]);
 
   const dirty = document?.found === true && document.editable && text !== document.text;
 
   const applyDocument = (next: ArticleMediaResult): void => {
     const previous = documentRef.current;
+    documentRef.current = next;
+    textRef.current = next.text;
     setDocument(next);
     setText(next.text);
     setMode((current) => previous === undefined
@@ -80,10 +90,12 @@ export function ArticleWorkbench({
   };
 
   useEffect(() => {
+    const currentRead = requests.current.beginRead();
+    if (currentRead === undefined) return;
     let cancelled = false;
     setLoading(true);
     void getArticleMedia(id, path).then((next) => {
-      if (cancelled) return;
+      if (cancelled || !currentRead()) return;
       const current = documentRef.current;
       const hasLocalChanges = current?.editable === true && textRef.current !== current.text;
       if (hasLocalChanges) {
@@ -94,12 +106,12 @@ export function ArticleWorkbench({
       applyDocument(next);
       setLoading(false);
     }, (cause) => {
-      if (cancelled) return;
+      if (cancelled || !currentRead()) return;
       setError(errorMessage(cause, t("inspector.article.loadError")));
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [id, path, libraryEpoch, getArticleMedia, t]);
+  }, [id, path, libraryEpoch, getArticleMedia, t, saving, uploading]);
 
   useEffect(() => {
     onDirtyChange(dirty);
@@ -117,18 +129,31 @@ export function ArticleWorkbench({
   }, [dirty]);
 
   const reloadFromDisk = (): void => {
+    const currentRead = requests.current.beginRead();
+    if (currentRead === undefined) return;
+    const textAtStart = textRef.current;
     setLoading(true);
     void getArticleMedia(id, path).then((next) => {
+      if (!currentRead()) return;
+      if (textRef.current !== textAtStart) {
+        setConflict(true);
+        setLoading(false);
+        return;
+      }
       applyDocument(next);
       setLoading(false);
     }, (cause) => {
+      if (!currentRead()) return;
       setError(errorMessage(cause, t("inspector.article.loadError")));
       setLoading(false);
     });
   };
 
   const save = (): void => {
-    if (document?.found !== true || !document.editable || !dirty || saving || uploading) return;
+    if (document?.found !== true || !document.editable || !dirty || saving || uploading || conflict) return;
+    const write = requests.current.beginWrite();
+    if (write === undefined) return;
+    setLoading(false);
     setSaving(true);
     setError(undefined);
     void saveArticle({
@@ -137,17 +162,19 @@ export function ArticleWorkbench({
       text,
       expectedRevision: document.revision,
     }).then((result) => {
-      setDocument((current) => {
-        if (current === undefined) return current;
-        const next = { ...current, text, revision: result.revision };
-        delete next.previewHtml;
-        return next;
-      });
+      if (!write.current()) return;
+      const next = { ...document, text, revision: result.revision };
+      delete next.previewHtml;
+      documentRef.current = next;
+      setDocument(next);
+      write.finish();
       setConflict(false);
       setSavedOnce(true);
       setSaving(false);
       onSaved();
     }, (cause) => {
+      if (!write.current()) return;
+      write.finish();
       const message = errorMessage(cause, t("inspector.article.saveError"));
       setConflict(message.includes("外部修改"));
       setError(message);
@@ -156,7 +183,11 @@ export function ArticleWorkbench({
   };
 
   const uploadImages = async (files: File[]): Promise<void> => {
-    if (files.length === 0 || uploading || document?.editable !== true) return;
+    if (files.length === 0 || uploading || saving || document?.editable !== true) return;
+    const scope = requests.current;
+    const write = scope.beginWrite();
+    if (write === undefined) return;
+    setLoading(false);
     setMode("edit");
     setUploading(true);
     setError(undefined);
@@ -169,7 +200,9 @@ export function ArticleWorkbench({
           mimeType: file.type,
           size: file.size,
         });
+        if (!write.current()) return;
         const response = await fetch(prepared.url, {
+          signal: scope.signal,
           method: "PUT",
           body: file,
           ...(file.type === "" ? {} : { headers: { "Content-Type": file.type } }),
@@ -185,14 +218,18 @@ export function ArticleWorkbench({
         if (typeof payload?.asset?.name !== "string") {
           throw new Error(t("inspector.article.imageError"));
         }
+        if (!write.current()) return;
         editorRef.current?.insertMarkdown(
           `![${imageAlt(file.name)}](${prepared.markdownPrefix}${payload.asset.name})`,
         );
       }
     } catch (cause) {
-      setError(errorMessage(cause, t("inspector.article.imageError")));
+      if (write.current()) setError(errorMessage(cause, t("inspector.article.imageError")));
     } finally {
-      setUploading(false);
+      if (write.current()) {
+        write.finish();
+        setUploading(false);
+      }
     }
   };
 
@@ -232,6 +269,7 @@ export function ArticleWorkbench({
             type="button"
             role="tab"
             aria-selected={mode === "preview"}
+            disabled={uploading}
             onClick={() => { setMode("preview"); }}
           >
             {t("inspector.article.preview")}
@@ -283,7 +321,7 @@ export function ArticleWorkbench({
       {conflict && (
         <div className="articleConflictBanner">
           <span>{t("inspector.article.conflictHint")}</span>
-          <button type="button" onClick={reloadFromDisk}>{t("inspector.article.reload")}</button>
+          <button type="button" disabled={saving || uploading || loading} onClick={reloadFromDisk}>{t("inspector.article.reload")}</button>
         </div>
       )}
       {error !== undefined && !conflict && <div className="articleEditorError">{error}</div>}
@@ -297,9 +335,9 @@ export function ArticleWorkbench({
           value={text}
           label={t("inspector.article.editor")}
           onChange={(next) => {
+            textRef.current = next;
             setText(next);
             setSavedOnce(false);
-            setConflict(false);
           }}
           onSave={save}
           onImageFiles={(files) => { void uploadImages(files); }}
