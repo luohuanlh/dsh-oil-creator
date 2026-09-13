@@ -25,7 +25,7 @@ const IMPORT_RULES: Record<AssetUploadKind, {
   article: {
     extensions: new Set([".md", ".markdown", ".html", ".htm"]),
     maxBytes: 2 * MEBIBYTE,
-    label: "Markdown / HTML 文章",
+    label: "Markdown 文章",
   },
   cover: {
     extensions: new Set([".png", ".jpg", ".jpeg", ".webp"]),

@@ -27,7 +27,8 @@ const draft = vi.hoisted(() => ({
 }));
 
 const articleDraft = vi.hoisted(() => ({
-  prepare: vi.fn(async (_item, platform) => ({ input: { platform } })),
+  snapshot: vi.fn(async () => ({})),
+  prepare: vi.fn(async (_item, platform, _snapshot?: unknown) => ({ input: { platform } })),
   start: vi.fn(),
   finish: undefined as undefined | ((result: MockArticleOutcome) => void),
   finishes: new Map<string, (result: MockArticleOutcome) => void>(),
@@ -43,6 +44,7 @@ vi.mock("../src/draftRunner.ts", () => ({
 }));
 
 vi.mock("../src/articleDraftRunner.ts", () => ({
+  captureArticleDraftSnapshot: articleDraft.snapshot,
   prepareArticleDraftRun: articleDraft.prepare,
   startArticleDraftRun: articleDraft.start,
 }));
@@ -127,6 +129,7 @@ beforeEach(() => {
     });
     return { pid: 43210, completion };
   });
+  articleDraft.snapshot.mockClear();
   articleDraft.prepare.mockClear();
   articleDraft.start.mockReset();
   articleDraft.finish = undefined;
@@ -491,7 +494,7 @@ describe("OilCreatorService.startDrafts", () => {
     );
 
     await vi.waitFor(() => {
-      expect(articleDraft.prepare).toHaveBeenCalledWith(content, "wechat-mp");
+      expect(articleDraft.prepare).toHaveBeenCalledWith(content, "wechat-mp", expect.any(Object));
       expect(articleDraft.start).toHaveBeenCalledTimes(1);
     });
     articleDraft.finish?.({
@@ -536,7 +539,7 @@ describe("OilCreatorService.startDrafts", () => {
     );
 
     await vi.waitFor(() => {
-      expect(articleDraft.prepare).toHaveBeenCalledWith(content, "baijiahao");
+      expect(articleDraft.prepare).toHaveBeenCalledWith(content, "baijiahao", expect.any(Object));
       expect(articleDraft.start).toHaveBeenCalledTimes(1);
     });
     await vi.waitFor(() => { expect(articleDraft.start).toHaveBeenCalledTimes(1); });
@@ -645,6 +648,8 @@ describe("OilCreatorService.startDrafts", () => {
         .toEqual(["wechat-mp", "baijiahao", "zhihu"]);
       expect(articleDraft.start).toHaveBeenCalledTimes(3);
     });
+    expect(articleDraft.snapshot).toHaveBeenCalledTimes(1);
+    expect(articleDraft.prepare.mock.calls[2]?.[2]).toBe(articleDraft.prepare.mock.calls[0]?.[2]);
     articleDraft.finishes.get("baijiahao")?.({ ok: false, error: "百家号页面失败" });
     articleDraft.finishes.get("zhihu")?.({
       ok: true,

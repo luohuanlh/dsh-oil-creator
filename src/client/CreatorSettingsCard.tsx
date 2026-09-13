@@ -17,6 +17,7 @@ import type {
   PlatformAccount,
   PublishPlatform,
 } from "../types.ts";
+import { setSelectedContentId } from "./contentSelection.ts";
 import type { CreatorViewFace } from "./face.ts";
 import type { CreatorKey } from "./locales.ts";
 import { CONTENT_WORKBENCH_ICON_SRC } from "./assets/contentWorkbenchIcon.ts";
@@ -225,6 +226,7 @@ export function CreatorSettingsCard({
 
   const onSave = async () => {
     if (!dirty || saving || (dirtyRoot && draftRoot === "")) return;
+    if (dirtyRoot && !setSelectedContentId(null)) return;
     setSaving(true);
     setFailed(undefined);
     try {

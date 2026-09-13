@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -14,7 +15,7 @@ import { describe, expect, it } from "vitest";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const releaseCheck = resolve(root, "scripts/check-release.mjs");
-const buildScript = "tsdown && node scripts/copy-inplace.mjs scripts/platform-account.mjs lib/platform-account.mjs && node scripts/copy-inplace.mjs scripts/article-draft.mjs lib/article-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft.mjs lib/video-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft-runner.mjs lib/video-draft-runner.mjs";
+const buildScript = "node scripts/build-article-draft.mjs && tsdown && node scripts/copy-inplace.mjs scripts/platform-account.mjs lib/platform-account.mjs && node scripts/copy-inplace.mjs scripts/article-draft.mjs lib/article-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft.mjs lib/video-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft-runner.mjs lib/video-draft-runner.mjs";
 const REQUIRED_CHAIN_FILES = [
   "src/creatorSkill.ts",
   "src/capabilities.ts",
@@ -56,6 +57,9 @@ function createRepository() {
       main: "./lib/index.js",
       exports: { ".": "./lib/index.js" },
       files: [
+        "scripts/build-article-draft.mjs",
+        "scripts/copy-inplace.mjs",
+        "scripts/article/",
         "lib/index.js",
         "lib/client.js",
         "lib/typert.host.js",
@@ -81,6 +85,7 @@ function createRepository() {
     ["cordis.patch.yml", "patch\n"],
     ["tsdown.config.ts", "export default {};\n"],
     ["vitest.config.ts", "export default {};\n"],
+    ["scripts/build-article-draft.mjs", "export {};\n"],
     ["scripts/platform-account.mjs", "export {};\n"],
     ["scripts/article-draft.mjs", "export {};\n"],
     ["scripts/video-draft.mjs", "export {};\n"],
@@ -108,6 +113,7 @@ function createRepository() {
     mkdirSync(join(path, ".."), { recursive: true });
     writeFileSync(path, contents);
   }
+  cpSync(resolve(root, "scripts/article"), join(repository, "scripts/article"), { recursive: true });
   for (const command of ["tsc", "vitest", "tsdown"]) {
     const path = join(repository, "node_modules/.bin", command);
     mkdirSync(join(path, ".."), { recursive: true });
@@ -141,6 +147,14 @@ function runReleaseCheck(repository: string) {
 }
 
 describe("release:check", () => {
+  it("当前仓库构建命令与发布门禁一致，生成器输入随包携带", () => {
+    const manifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+    expect(manifest.scripts.build).toBe(buildScript);
+    expect(manifest.files).toContain("scripts/build-article-draft.mjs");
+    expect(manifest.files).toContain("scripts/article/");
+    expect(manifest.files).toContain("scripts/copy-inplace.mjs");
+  });
+
   it("accepts a clean repository with origin and tracked release files", () => {
     const repository = createRepository();
     try {

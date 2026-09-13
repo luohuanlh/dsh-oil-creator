@@ -33,7 +33,7 @@ import {
   startVideoDraftRun,
   type VideoDraftOutcome,
 } from "./draftRunner.ts";
-import { prepareArticleDraftRun, startArticleDraftRun } from "./articleDraftRunner.ts";
+import { captureArticleDraftSnapshot, prepareArticleDraftRun, startArticleDraftRun } from "./articleDraftRunner.ts";
 import {
   freezeDistributionPackage,
   readDistributionSource,
@@ -680,40 +680,47 @@ export class OilCreatorService extends TypertRemoteService {
         }
       }
       if (articlePlatforms.length > 0) {
-        await markQueued(articlePlatforms);
-        started = true;
-        for (const platform of articlePlatforms) {
-          const startKey = `${item.id}:${platform}`;
-          const queued = this.enqueueArticleDraft(async () => {
-            let outcome: VideoDraftOutcome;
-            try {
-              const run = await startArticleDraftRun(await prepareArticleDraftRun(item, platform));
-              await markRunning([platform], run.pid);
-              outcome = await run.completion;
-            } catch (cause) {
-              outcome = {
-                ok: false,
-                error: cause instanceof Error ? cause.message : String(cause),
-              };
-            }
-            try {
-              await applyOutcome(platform, outcome);
-            } finally {
-              this.draftStarts.delete(startKey);
-            }
-          });
-          retainedStartKeys.add(startKey);
-          void queued.catch((cause) => {
-            this.draftStarts.delete(startKey);
-            const message = cause instanceof Error ? cause.message : String(cause);
-            void applyOutcome(platform, { ok: false, error: message }).catch((writeCause) => {
-              this.invalidateCatalog();
-              process.emitWarning(
-                `草稿结果写入失败（${platform}）：${writeCause instanceof Error ? writeCause.message : String(writeCause)}`,
-                { code: "OIL_DRAFT_STATE_WRITE_FAILED" },
-              );
+        try {
+          const snapshot = await captureArticleDraftSnapshot(item);
+          await markQueued(articlePlatforms);
+          started = true;
+          for (const platform of articlePlatforms) {
+            const startKey = `${item.id}:${platform}`;
+            const queued = this.enqueueArticleDraft(async () => {
+              let outcome: VideoDraftOutcome;
+              try {
+                const run = await startArticleDraftRun(await prepareArticleDraftRun(item, platform, snapshot));
+                await markRunning([platform], run.pid);
+                outcome = await run.completion;
+              } catch (cause) {
+                outcome = {
+                  ok: false,
+                  error: cause instanceof Error ? cause.message : String(cause),
+                };
+              }
+              try {
+                await applyOutcome(platform, outcome);
+              } finally {
+                this.draftStarts.delete(startKey);
+              }
             });
-          });
+            retainedStartKeys.add(startKey);
+            void queued.catch((cause) => {
+              this.draftStarts.delete(startKey);
+              const message = cause instanceof Error ? cause.message : String(cause);
+              void applyOutcome(platform, { ok: false, error: message }).catch((writeCause) => {
+                this.invalidateCatalog();
+                process.emitWarning(
+                  `草稿结果写入失败（${platform}）：${writeCause instanceof Error ? writeCause.message : String(writeCause)}`,
+                  { code: "OIL_DRAFT_STATE_WRITE_FAILED" },
+                );
+              });
+            });
+          }
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          startErrors.push(message);
+          for (const platform of articlePlatforms) await applyOutcome(platform, { ok: false, error: message });
         }
       }
       if (!started) throw new Error(startErrors.join("；") || "草稿运行器未启动");

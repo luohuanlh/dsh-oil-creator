@@ -8,6 +8,7 @@ import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  captureArticleDraftSnapshot,
   markdownToWechatHtml,
   parseArticleDraftOutput,
   prepareArticleDraftRun,
@@ -355,5 +356,31 @@ describe("WeChat article draft runner", () => {
       draftUrl: "https://creator.xiaohongshu.com/publish/publish?target=image",
       taskSpace: "11",
     }), "xiaohongshu-note")).toThrow("图文草稿结果不完整");
+  });
+});
+
+
+describe("图文批次快照", () => {
+  it("排队期间替换文案、封面后仍使用入队时输入", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-article-snapshot-"));
+    const article = join(root, "article.md");
+    const cover = join(root, "cover.png");
+    await writeFile(article, "原始正文");
+    await writeFile(cover, "old-cover");
+    const item = articleItem(root, article, cover);
+    const freeze = (title: string) => freezeDistributionPackage({
+      id: item.id, folderPath: root, selection: { mode: "article", articlePath: article, coverPath: cover },
+      variants: [{ platform: "wechat-mp", title, summary: "摘要", body: title, tags: ["测试"] }],
+    });
+    await freeze("旧文案");
+    const snapshot = await captureArticleDraftSnapshot(item);
+    await writeFile(article, "新正文");
+    await writeFile(cover, "new-cover");
+    await freeze("新文案");
+    const queued = await prepareArticleDraftRun(item, "wechat-mp", snapshot);
+    expect(queued.input.title).toBe("旧文案");
+    expect(queued.input.coverBase64).toBe(Buffer.from("old-cover").toString("base64"));
+    const next = await prepareArticleDraftRun(item, "wechat-mp");
+    expect(next.input.title).toBe("新文案");
   });
 });

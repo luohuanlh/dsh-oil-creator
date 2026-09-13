@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  registerContentLeaveGuard,
   bumpLibrary,
   bumpProfile,
   getLibraryEpoch,
@@ -21,6 +22,35 @@ describe("content selection", () => {
     setSidebarTab("sessions");
     setSelectedContentId(null);
     vi.unstubAllGlobals();
+  });
+
+  it("拒绝离开时保持选择，不通知订阅者；确认后允许切换和关闭", () => {
+    setSelectedContentId("draft");
+    const allow = vi.fn(() => false);
+    const release = registerContentLeaveGuard("draft", allow);
+    const listener = vi.fn();
+    const unsubscribe = subscribeSelectedContentId(listener);
+    try {
+      expect(setSelectedContentId("other")).toBe(false);
+      expect(setSelectedContentId(null)).toBe(false);
+      expect(getSelectedContentId()).toBe("draft");
+      expect(listener).not.toHaveBeenCalled();
+      expect(setSelectedContentId("draft")).toBe(true);
+      expect(allow).toHaveBeenCalledTimes(2);
+      allow.mockReturnValue(true);
+      expect(setSelectedContentId("other")).toBe(true);
+      expect(listener).toHaveBeenCalledOnce();
+    } finally { release(); unsubscribe(); }
+  });
+
+  it("编辑器卸载后释放保护，旧清理不会移除新的保护", () => {
+    setSelectedContentId("draft");
+    const old = registerContentLeaveGuard("draft", () => false);
+    const current = registerContentLeaveGuard("draft", () => false);
+    old();
+    expect(setSelectedContentId(null)).toBe(false);
+    current();
+    expect(setSelectedContentId(null)).toBe(true);
   });
 
   it("notifies subscribers and persists", () => {

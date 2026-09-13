@@ -80,10 +80,15 @@ const platformPublishSchema = z.object({
   draftPid: z.number().int().positive().optional(),
 });
 
+const platformPublishResultSchema = platformPublishSchema.default({
+  status: "unpublished",
+  source: "none",
+});
+
 const contentPublishSchema = z.object(
-  Object.fromEntries(PUBLISH_PLATFORMS.map((platform) => [platform, platformPublishSchema])) as Record<
+  Object.fromEntries(PUBLISH_PLATFORMS.map((platform) => [platform, platformPublishResultSchema])) as Record<
     (typeof PUBLISH_PLATFORMS)[number],
-    typeof platformPublishSchema
+    typeof platformPublishResultSchema
   >,
 );
 

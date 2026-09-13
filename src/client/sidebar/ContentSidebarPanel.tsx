@@ -232,6 +232,7 @@ export function ContentSidebarPanel({
   const onDelete = async (): Promise<void> => {
     if (deleteTarget === undefined || deleting) return;
     const deletedId = deleteTarget.id;
+    if (selectedIdRef.current === deletedId && !setSelectedId(null)) return;
     setDeleting(true);
     setDeleteError(undefined);
     try {

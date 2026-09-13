@@ -4,6 +4,7 @@ import type { ArticleMediaResult } from "../types.ts";
 import type { CreatorViewFace } from "./face.ts";
 import type { CreatorKey } from "./locales.ts";
 import { ArticleEditor, type ArticleEditorHandle } from "./ArticleEditor.tsx";
+import { registerContentLeaveGuard } from "./contentSelection.ts";
 import { ArticleRequests } from "./articleRequests.ts";
 import { ArticlePreview } from "./ArticlePreview.tsx";
 import "./ArticleWorkbench.css";
@@ -112,6 +113,12 @@ export function ArticleWorkbench({
     });
     return () => { cancelled = true; };
   }, [id, path, libraryEpoch, getArticleMedia, t, saving, uploading]);
+
+  useEffect(() => registerContentLeaveGuard(id, () => {
+    const current = documentRef.current;
+    return current?.editable !== true || textRef.current === current.text
+      || window.confirm(t("inspector.article.discardConfirm"));
+  }), [id, path, t]);
 
   useEffect(() => {
     onDirtyChange(dirty);

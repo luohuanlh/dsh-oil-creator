@@ -4,6 +4,7 @@ import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  type FrozenDistributionPackage,
   isFrozenDistributionPackageFresh,
   readFrozenDistributionPackage,
 } from "./distribution.ts";
@@ -177,15 +178,13 @@ function imageMime(path: string): string {
   return "image/jpeg";
 }
 
-export async function prepareArticleDraftRun(
-  item: ContentSummary,
-  platform: PublishPlatform,
-): Promise<PreparedArticleDraftRun> {
-  if (!isArticleDraftPlatform(platform)) {
-    throw new Error(`尚未接入图文草稿：${platform}`);
-  }
-  const articlePlatform = platform;
-  const platformName = articlePlatformName(articlePlatform);
+export interface ArticleDraftSnapshot {
+  frozen: FrozenDistributionPackage;
+  coverMime: string;
+  coverBase64: string;
+}
+
+export async function captureArticleDraftSnapshot(item: ContentSummary): Promise<ArticleDraftSnapshot> {
   const frozen = await readFrozenDistributionPackage(item.folderPath);
   if (frozen === undefined) throw new Error("缺少 Harness 冻结分发包");
   if (!await isFrozenDistributionPackageFresh(item.folderPath, frozen)) {
@@ -193,12 +192,24 @@ export async function prepareArticleDraftRun(
   }
   if (frozen.id !== item.id) throw new Error("冻结分发包与当前内容不匹配");
   if (frozen.mode !== "article" || frozen.selection.mode !== "article") {
-    throw new Error(`${platformName}草稿需要文章 + 封面冻结分发包`);
+    throw new Error("图文草稿需要文章 + 封面冻结分发包");
   }
-  const variant = frozen.variants[articlePlatform];
-  if (variant === undefined) throw new Error(`冻结分发包缺少${platformName}平台变体`);
   const cover = await readFile(frozen.selection.coverPath);
   if (cover.length === 0) throw new Error("所选文章封面为空");
+  return { frozen, coverMime: imageMime(frozen.selection.coverPath), coverBase64: cover.toString("base64") };
+}
+
+export async function prepareArticleDraftRun(
+  item: ContentSummary,
+  platform: PublishPlatform,
+  snapshot?: ArticleDraftSnapshot,
+): Promise<PreparedArticleDraftRun> {
+  if (!isArticleDraftPlatform(platform)) throw new Error(`尚未接入图文草稿：${platform}`);
+  const articlePlatform = platform;
+  const platformName = articlePlatformName(platform);
+  const captured = snapshot ?? await captureArticleDraftSnapshot(item);
+  const variant = captured.frozen.variants[articlePlatform];
+  if (variant === undefined) throw new Error(`冻结分发包缺少${platformName}平台变体`);
   return {
     input: {
       platform: articlePlatform,
@@ -209,8 +220,8 @@ export async function prepareArticleDraftRun(
         ? markdownToWechatHtml(variant.body)
         : markdownToBasicArticleHtml(variant.body),
       tags: variant.tags,
-      coverMime: imageMime(frozen.selection.coverPath),
-      coverBase64: cover.toString("base64"),
+      coverMime: captured.coverMime,
+      coverBase64: captured.coverBase64,
       taskName: `oil-${articlePlatform}-draft-${item.id}-${Date.now()}`.slice(0, 120),
     },
   };

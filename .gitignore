@@ -6,3 +6,7 @@ assets/readme/source/
 
 # Serena 本地项目配置
 /.serena/
+
+# 本地代码索引及编辑器配置
+/.codegraph/
+/.cursor/

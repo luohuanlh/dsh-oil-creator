@@ -146,7 +146,7 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).toContain("importAsset({");
     expect(implementation).toContain(".html,.htm");
     expect(implementation.match(/maxLength=\{ARTICLE_META_MAX\}/g)).toHaveLength(2);
-    expect(implementation).toContain("articleTitle.length}/{ARTICLE_META_MAX}");
+    expect(implementation).not.toContain("articleTitle.length}/{ARTICLE_META_MAX}");
     expect(implementation).toContain("articleSummary.length}/{ARTICLE_META_MAX}");
     expect(implementation).toContain("articleTitle: articleTitle.trim()");
     expect(implementation).toContain("articleSummary: articleSummary.trim()");

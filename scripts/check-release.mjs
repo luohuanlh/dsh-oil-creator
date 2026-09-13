@@ -3,7 +3,13 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { ARTICLE_DRAFT_SOURCE_FILES } from "./article/manifest.mjs";
+
+const BUILD_SOURCE_FILES = ["scripts/build-article-draft.mjs", "scripts/article/manifest.mjs",
+  ...ARTICLE_DRAFT_SOURCE_FILES.map((file) => `scripts/article/${file}`)];
+
 const REQUIRED_FILES = [
+  ...BUILD_SOURCE_FILES,
   "package.json",
   "pnpm-lock.yaml",
   "cordis.patch.yml",
@@ -126,7 +132,7 @@ function checkRelease(root) {
   }
 
   const scripts = manifest.scripts ?? {};
-  if (scripts.build !== "tsdown && node scripts/copy-inplace.mjs scripts/platform-account.mjs lib/platform-account.mjs && node scripts/copy-inplace.mjs scripts/article-draft.mjs lib/article-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft.mjs lib/video-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft-runner.mjs lib/video-draft-runner.mjs") {
+  if (scripts.build !== "node scripts/build-article-draft.mjs && tsdown && node scripts/copy-inplace.mjs scripts/platform-account.mjs lib/platform-account.mjs && node scripts/copy-inplace.mjs scripts/article-draft.mjs lib/article-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft.mjs lib/video-draft.mjs && node scripts/copy-inplace.mjs scripts/video-draft-runner.mjs lib/video-draft-runner.mjs") {
     addFailure("build 脚本不是仓库内可复现的 tsdown + lib 拷贝流程");
   }
   if (scripts.prepare !== "npm run build") {
@@ -170,7 +176,7 @@ function checkRelease(root) {
   }
 
   const packageFiles = new Set(manifest.files ?? []);
-  for (const file of [...RUNTIME_FILES, "cordis.patch.yml", "README.md", "assets/readme/hero.svg"]) {
+  for (const file of [...RUNTIME_FILES, "scripts/build-article-draft.mjs", "scripts/copy-inplace.mjs", "scripts/article/", "cordis.patch.yml", "README.md", "assets/readme/hero.svg"]) {
     if (!packageFiles.has(file)) addFailure(`npm tarball 未声明 ${file}`);
   }
   if (manifest.main !== "./lib/index.js") addFailure("main 未指向预构建 lib/index.js");
@@ -212,7 +218,7 @@ function runReleasePipeline(root) {
   const packedFiles = new Set(
     metadata.flatMap((pack) => pack.files ?? []).map((file) => file.path),
   );
-  const missing = [...RUNTIME_FILES, "assets/readme/hero.svg"]
+  const missing = [...RUNTIME_FILES, ...BUILD_SOURCE_FILES, "scripts/copy-inplace.mjs", "assets/readme/hero.svg"]
     .filter((file) => !packedFiles.has(file));
   return missing.length > 0
     ? [`npm pack --dry-run 缺少运行或 Hero 文件：${missing.join(", ")}`]
@@ -230,7 +236,10 @@ try {
 
 if (repositoryRoot) {
   const failures = checkRelease(repositoryRoot);
-  if (failures.length === 0) failures.push(...runReleasePipeline(repositoryRoot));
+  if (failures.length === 0) {
+    failures.push(...runReleasePipeline(repositoryRoot));
+    if (failures.length === 0) failures.push(...checkRelease(repositoryRoot));
+  }
   if (failures.length > 0) {
     console.error(["release:check 失败", ...failures.map((failure) => `- ${failure}`)].join("\n"));
     process.exitCode = 1;

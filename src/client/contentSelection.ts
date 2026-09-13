@@ -14,6 +14,14 @@ const libraryListeners = new Set<Listener>();
 const profileListeners = new Set<Listener>();
 const initialUi = loadCreatorUiState(browserCreatorStorage());
 let selectedId = initialUi.selectedId;
+const leaveGuards = new Map<symbol, { id: string; allow: () => boolean }>();
+
+export function registerContentLeaveGuard(id: string, allow: () => boolean): () => void {
+  const key = Symbol();
+  leaveGuards.set(key, { id, allow });
+  return () => { leaveGuards.delete(key); };
+}
+
 let sidebarTab: SidebarTab = initialUi.sidebarTab;
 let libraryEpoch = 0;
 let profileEpoch = 0;
@@ -257,16 +265,20 @@ export function getSelectedContentId(): string | null {
   return selectedId;
 }
 
-export function setSelectedContentId(id: string | null): void {
+export function setSelectedContentId(id: string | null): boolean {
   if (selectedId === id) {
     if (id === null) clearConversationInset();
-    return;
+    return true;
+  }
+  for (const guard of leaveGuards.values()) {
+    if (guard.id === selectedId && !guard.allow()) return false;
   }
   selectedId = id;
   const state = loadCreatorUiState(browserCreatorStorage());
   saveCreatorUiState(browserCreatorStorage(), { ...state, selectedId });
   if (id === null) clearConversationInset();
   emit();
+  return true;
 }
 
 export function subscribeSelectedContentId(listener: Listener): () => void {
@@ -276,7 +288,7 @@ export function subscribeSelectedContentId(listener: Listener): () => void {
   };
 }
 
-export function useSelectedContentId(): [string | null, (id: string | null) => void] {
+export function useSelectedContentId(): [string | null, (id: string | null) => boolean] {
   const [selectedId, setSelectedId] = useState(getSelectedContentId);
   useEffect(() => subscribeSelectedContentId(() => {
     setSelectedId(getSelectedContentId());

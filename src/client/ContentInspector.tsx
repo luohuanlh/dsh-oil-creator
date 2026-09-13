@@ -765,7 +765,6 @@ export function ContentInspector({
                   <label className="articleMetaField">
                     <span className="articleMetaHeader">
                       <span>{t("inspector.asset.title")}</span>
-                      <span>{articleTitle.length}/{ARTICLE_META_MAX}</span>
                     </span>
                     <input
                       className="articleMetaInput"
@@ -929,8 +928,7 @@ export function ContentInspector({
               className="close"
               aria-label={t("inspector.close")}
               onClick={() => {
-                if (articleDirty && !window.confirm(t("inspector.article.discardConfirm"))) return;
-                setSelectedId(null);
+                if (!setSelectedId(null)) return;
                 closeDetails();
               }}
             >
