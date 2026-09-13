@@ -618,10 +618,21 @@ describe("OilCreatorService.startDrafts", () => {
       .toMatchObject({
         "wechat-mp": { draftState: "running", draftPid: 54321 },
         baijiahao: { draftState: "running", draftPid: 54322 },
-        zhihu: { draftState: "running" },
+        zhihu: { draftState: "queued" },
       });
     expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.zhihu)
       .not.toHaveProperty("draftPid");
+
+    // 走真实目录刷新路径，覆盖排队任务的中断恢复检查。
+    service.ensureWatch = vi.fn();
+    await service.listContents({ query: "", filter: "all" }, new AbortController().signal);
+    expect((await loadOverlay(root)).items["2026-08-21_demo"]?.publish?.zhihu)
+      .toMatchObject({ draftState: "queued" });
+    await expect(service.startDrafts(
+      { id: "2026-08-21_demo", platforms: ["zhihu"] },
+      new AbortController().signal,
+    )).resolves.toMatchObject({ started: false });
+    expect(articleDraft.start).toHaveBeenCalledTimes(2);
 
     articleDraft.finishes.get("wechat-mp")?.({
       ok: true,

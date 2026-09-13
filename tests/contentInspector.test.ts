@@ -53,7 +53,7 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).toContain('t("inspector.distribution.invert")');
     expect(implementation).toContain('disabled={!supportsDraft}');
     expect(implementation).toContain('t("inspector.draft.unsupported")');
-    expect(implementation).toContain("selectedPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");
+    expect(implementation).toContain("selectedPlatforms.some((platform) => detail.publish[platform].draftState === \"running\" || detail.publish[platform].draftState === \"queued\")");
     expect(implementation).toContain("&& !queued");
     expect(implementation).not.toContain("queueTimeout");
     expect(implementation).not.toContain("120_000");
@@ -62,7 +62,7 @@ describe("content inspector distribution workbench", () => {
     expect(implementation).toContain("getArticleMedia={getArticleMedia}");
     expect(implementation).toContain("saveArticle={saveArticle}");
     expect(implementation).toContain("prepareArticleImageUpload={prepareArticleImageUpload}");
-    expect(implementation).not.toContain("enabledPlatforms.some((platform) => detail.publish[platform].draftState === \"running\")");
+    expect(implementation).not.toContain("enabledPlatforms.some((platform) => detail.publish[platform].draftState === \"running\" || detail.publish[platform].draftState === \"queued\")");
     expect(implementation).not.toContain("publish-package.json");
   });
 

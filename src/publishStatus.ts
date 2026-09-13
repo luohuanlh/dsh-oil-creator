@@ -196,7 +196,8 @@ export function decodeOverlayPublish(raw: unknown): OverlayItem["publish"] {
     if (typeof record.syncedAt === "number" && Number.isFinite(record.syncedAt)) {
       entry.syncedAt = record.syncedAt;
     }
-    if (record.draftState === "running"
+    if (record.draftState === "queued"
+      || record.draftState === "running"
       || record.draftState === "ready"
       || record.draftState === "error") {
       entry.draftState = record.draftState;

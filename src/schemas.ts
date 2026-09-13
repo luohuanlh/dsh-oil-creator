@@ -70,6 +70,7 @@ const platformPublishSchema = z.object({
   comments: z.number().optional(),
   syncedAt: z.number().optional(),
   draftState: z.union([
+    z.literal("queued"),
     z.literal("running"),
     z.literal("ready"),
     z.literal("error"),

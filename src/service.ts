@@ -59,6 +59,7 @@ import {
   supportsAutoDraft,
   type PublishPlatform,
 } from "./platforms.ts";
+import { draftOutcomeRow, draftPendingRow, reconcileInterruptedDrafts } from "./draftState.ts";
 import { pidAlive } from "./processAlive.ts";
 import { coverThumb } from "./thumbs.ts";
 import { startArticleServer } from "./articleServe.ts";
@@ -181,7 +182,7 @@ export class OilCreatorService extends TypertRemoteService {
   async scanned() {
     return withOverlayLock(this.dataDir, async () => {
       let overlay = await loadOverlay(this.dataDir);
-      const reconciled = reconcileInterruptedDrafts(overlay);
+      const reconciled = reconcileInterruptedDrafts(overlay, this.draftStarts, pidAlive);
       if (reconciled) {
         await saveOverlay(this.dataDir, overlay);
         this.invalidateCatalog();
@@ -597,91 +598,17 @@ export class OilCreatorService extends TypertRemoteService {
       result: VideoDraftOutcome,
     ): Promise<void> => {
       await this.patchDraftRows(item.id, [platform], (current) => {
-        if (result.ok) {
-          if ("staged" in result && result.staged === true) {
-            const next: OverlayPublish = {
-              ...current,
-              draftState: "ready",
-            };
-            delete next.draftError;
-            delete next.draftPid;
-            return next;
-          }
-          const url = "url" in result ? result.url.trim() : "";
-          const remoteId = "remoteId" in result && typeof result.remoteId === "string"
-            ? result.remoteId.trim()
-            : "";
-          const draftReceipt = "draftReceipt" in result && typeof result.draftReceipt === "string"
-            ? result.draftReceipt.trim()
-            : "";
-          const draftStorage = "draftStorage" in result
-            && (result.draftStorage === "remote" || result.draftStorage === "browser-local")
-            ? result.draftStorage
-            : undefined;
-          if (url === "" || (remoteId === "" && draftReceipt === "")) {
-            const next: OverlayPublish = {
-              ...current,
-              draftState: "error",
-              draftError: "草稿运行器未返回远端 ID/动作回执与回读 URL，拒绝标记为草稿",
-            };
-            delete next.draftPid;
-            return next;
-          }
-          const next: OverlayPublish = {
-            ...current,
-            status: "draft",
-            url,
-            ...(remoteId === "" ? {} : { remoteId }),
-            ...(draftReceipt === "" ? {} : { draftReceipt }),
-            ...(draftStorage === undefined ? {} : { draftStorage }),
-          };
-          if (remoteId === "") delete next.remoteId;
-          if (draftReceipt === "") delete next.draftReceipt;
-          if (draftStorage === undefined) delete next.draftStorage;
-          delete next.draftState;
-          delete next.draftError;
-          delete next.draftPid;
-          return next;
-        }
-        const next: OverlayPublish = {
-          ...current,
-          draftState: "error",
-          draftError: result.error,
-        };
-        delete next.draftPid;
-        return next;
+        return draftOutcomeRow(current, result);
       });
     };
     const markRunning = async (
       targets: readonly PublishPlatform[],
       pid: number,
     ): Promise<void> => {
-      const startedAt = Date.now();
-      await this.patchDraftRows(item.id, targets, (current) => {
-        const next: OverlayPublish = {
-          ...current,
-          status: current.status,
-          draftState: "running",
-          draftStartedAt: startedAt,
-          draftPid: pid,
-        };
-        delete next.draftError;
-        return next;
-      });
+      await this.patchDraftRows(item.id, targets, (current) => draftPendingRow(current, pid));
     };
     const markQueued = async (targets: readonly PublishPlatform[]): Promise<void> => {
-      const queuedAt = Date.now();
-      await this.patchDraftRows(item.id, targets, (current) => {
-        const next: OverlayPublish = {
-          ...current,
-          status: current.status,
-          draftState: "running",
-          draftStartedAt: queuedAt,
-        };
-        delete next.draftError;
-        delete next.draftPid;
-        return next;
-      });
+      await this.patchDraftRows(item.id, targets, (current) => draftPendingRow(current));
     };
     try {
       const videoPlatforms = platforms.filter((platform) =>
@@ -856,7 +783,7 @@ export class OilCreatorService extends TypertRemoteService {
 
     const hasRunningJob = [item.burn, item.subtitleJob, item.coverJob]
       .some((job) => job.status === "running")
-      || Object.values(item.publish).some((row) => row.draftState === "running")
+      || Object.values(item.publish).some((row) => row.draftState === "running" || row.draftState === "queued")
       || [...this.draftStarts].some((key) => key.startsWith(`${item.id}:`));
     if (hasRunningJob || this.assetUploads.size > 0) {
       throw new Error("内容任务仍在运行，完成或停止后才能删除");
@@ -944,22 +871,6 @@ export class OilCreatorService extends TypertRemoteService {
       this.invalidateCatalog();
     });
   }
-}
-
-function reconcileInterruptedDrafts(overlay: OverlayStore): boolean {
-  let changed = false;
-  for (const item of Object.values(overlay.items)) {
-    if (item.publish === undefined) continue;
-    for (const row of Object.values(item.publish)) {
-      if (row?.draftState !== "running") continue;
-      if (row.draftPid !== undefined && pidAlive(row.draftPid)) continue;
-      row.draftState = "error";
-      row.draftError = "上次草稿任务已中断，请重新启动";
-      delete row.draftPid;
-      changed = true;
-    }
-  }
-  return changed;
 }
 
 function resolveUserPath(path: string): string {

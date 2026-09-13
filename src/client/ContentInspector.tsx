@@ -106,7 +106,7 @@ function friendlyError(cause: unknown, t: (key: CreatorKey) => string): string {
 
 function draftTone(detail: ContentDetail, platform: PublishPlatform): StatusTone {
   const row = detail.publish[platform];
-  if (row.draftState === "running") return "active";
+  if (row.draftState === "running" || row.draftState === "queued") return "active";
   if (row.draftState === "ready") return "pending";
   if (row.draftState === "error") return "error";
   if (row.status === "draft") return "success";
@@ -119,6 +119,7 @@ function draftLabel(
   t: (key: CreatorKey) => string,
 ): string {
   const row = detail.publish[platform];
+  if (row.draftState === "queued") return t("inspector.draft.waiting");
   if (row.draftState === "running") return t("inspector.draft.running");
   if (row.draftState === "ready") return t("inspector.draft.staged");
   if (row.draftState === "error") return t("inspector.draft.failed");
@@ -253,7 +254,7 @@ export function ContentInspector({
   ]);
 
   const hasRunningDraft = detail !== undefined
-    && selectedPlatforms.some((platform) => detail.publish[platform].draftState === "running");
+    && selectedPlatforms.some((platform) => detail.publish[platform].draftState === "running" || detail.publish[platform].draftState === "queued");
 
   useEffect(() => {
     if (!hasRunningDraft || selectedId === null || !ready()) return;
@@ -269,7 +270,8 @@ export function ContentInspector({
   const queueReachedRunner = queued && detail !== undefined
     && selectedPlatforms.some((platform) => {
       const row = detail.publish[platform];
-      return row.draftState === "running"
+      return row.draftState === "queued"
+        || row.draftState === "running"
         || row.draftState === "ready"
         || row.draftState === "error"
         || row.status === "draft";
