@@ -6,6 +6,7 @@ import type { Context } from "@deepseek-ai/cordis";
 import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 
 import {
+  applyCatalogOverlay,
   countsOf,
   coverPathOf,
   createContentFolder,
@@ -42,6 +43,7 @@ import { creatorGuideText } from "./guide.ts";
 import { startLibraryWatch } from "./libraryWatch.ts";
 import {
   accountsFromOverlay,
+  emptyOverlay,
   emptyProfile,
   loadOverlay,
   normalizeEnabledPlatforms,
@@ -114,7 +116,7 @@ export class OilCreatorService extends TypertRemoteService {
   // Gateway 会通过 Cordis proxy 调用方法，因此这里不用 #private 字段。
   libraryRoot: string;
   readonly dataDir: string;
-  cache: { libraryRoot: string; items: Awaited<ReturnType<typeof scanLibrary>> } | undefined;
+  cache: { libraryRoot: string; items: ReturnType<typeof scanLibrary> } | undefined;
   cachedEnabledPlatforms: string[] | undefined;
   catalogRevision = 0;
   watchClose: (() => void) | undefined;
@@ -149,6 +151,10 @@ export class OilCreatorService extends TypertRemoteService {
 
   invalidateCatalog(): void {
     this.cache = undefined;
+    this.notifyCatalogChanged();
+  }
+
+  notifyCatalogChanged(): void {
     this.catalogRevision += 1;
   }
 
@@ -176,27 +182,48 @@ export class OilCreatorService extends TypertRemoteService {
       libraryRoot,
       overlayPath: overlayPath(this.dataDir),
       onChange: () => { this.invalidateCatalog(); },
+      onOverlayChange: () => { this.notifyCatalogChanged(); },
     }).close;
   }
 
-  async scanned() {
+  async readCatalogOverlay(): Promise<OverlayStore> {
     return withOverlayLock(this.dataDir, async () => {
-      let overlay = await loadOverlay(this.dataDir);
-      const reconciled = reconcileInterruptedDrafts(overlay, this.draftStarts, pidAlive);
-      if (reconciled) {
+      const overlay = await loadOverlay(this.dataDir);
+      if (reconcileInterruptedDrafts(overlay, this.draftStarts, pidAlive)) {
         await saveOverlay(this.dataDir, overlay);
-        this.invalidateCatalog();
+        this.notifyCatalogChanged();
       }
-      const libraryRoot = overlay.libraryRoot ?? this.libraryRoot;
-      this.rememberOverlay(overlay);
-      this.ensureWatch(libraryRoot);
-      if (this.cache?.libraryRoot === libraryRoot) {
-        return { overlay, libraryRoot, items: this.cache.items };
-      }
-      const items = await scanLibrary(libraryRoot, overlay);
-      this.cache = { libraryRoot, items };
-      return { overlay, libraryRoot, items };
+      return overlay;
     });
+  }
+
+  async scanned() {
+    for (;;) {
+      const before = await this.readCatalogOverlay();
+      const libraryRoot = before.libraryRoot ?? this.libraryRoot;
+      this.ensureWatch(libraryRoot);
+      // 并发读请求复用同一次磁盘扫描，扫描期间不占用状态文件锁。
+      if (this.cache?.libraryRoot !== libraryRoot) {
+        this.cache = { libraryRoot, items: scanLibrary(libraryRoot, emptyOverlay()) };
+      }
+      const cache = this.cache;
+      let baseItems: Awaited<ReturnType<typeof scanLibrary>>;
+      try {
+        baseItems = await cache.items;
+      } catch (cause) {
+        if (this.cache === cache) this.cache = undefined;
+        throw cause;
+      }
+      const overlay = await this.readCatalogOverlay();
+      // 扫描期间素材变化或切换目录时，丢弃过期结果并读取新快照。
+      if (this.cache !== cache || (overlay.libraryRoot ?? this.libraryRoot) !== libraryRoot) continue;
+      this.rememberOverlay(overlay);
+      return {
+        overlay,
+        libraryRoot,
+        items: baseItems.map((item) => applyCatalogOverlay(item, overlay.items[item.id])),
+      };
+    }
   }
 
   async getRevision(
@@ -422,7 +449,7 @@ export class OilCreatorService extends TypertRemoteService {
       };
       await saveOverlay(this.dataDir, overlay);
       this.rememberOverlay(overlay);
-      this.invalidateCatalog();
+      this.notifyCatalogChanged();
       return this.settingsOf(overlay.libraryRoot ?? this.libraryRoot, overlay);
     });
   }
@@ -848,7 +875,7 @@ export class OilCreatorService extends TypertRemoteService {
       mutate(next);
       overlay.items[id] = next;
       await saveOverlay(this.dataDir, overlay);
-      this.invalidateCatalog();
+      this.notifyCatalogChanged();
     });
     return this.getContent({ id }, signal);
   }
@@ -868,7 +895,7 @@ export class OilCreatorService extends TypertRemoteService {
       item.publish = publish;
       overlay.items[id] = item;
       await saveOverlay(this.dataDir, overlay);
-      this.invalidateCatalog();
+      this.notifyCatalogChanged();
     });
   }
 }

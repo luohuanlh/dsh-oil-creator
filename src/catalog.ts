@@ -206,7 +206,6 @@ function contentTypeField(value: unknown): ContentType | undefined {
 async function scanFolder(
   libraryRoot: string,
   folderName: string,
-  overlay: OverlayStore,
 ): Promise<ContentSummary | undefined> {
   const folderPath = join(libraryRoot, folderName);
   const info = await stat(folderPath).catch(() => undefined);
@@ -268,8 +267,7 @@ async function scanFolder(
     folderPath,
     distributionPackage,
   );
-  const overlayTitle = overlay.items[folderName]?.title;
-  const title = overlayTitle ?? folderTitle;
+  const title = folderTitle;
 
   const tags = [
     ...stringArrayField(packageJson, "xhsTopics"),
@@ -291,11 +289,9 @@ async function scanFolder(
       ? createdMs
       : folderDate;
 
-  const overlayItem = overlay.items[folderName];
   const studioInFolder = names.find((name) => name.toLowerCase().endsWith(".screenstudio"))
     ?? names.find((name) => name.toLowerCase().endsWith(".openscreen"));
-  const studioPath = overlayItem?.studioPath
-    ?? (studioInFolder === undefined ? undefined : join(folderPath, studioInFolder));
+  const studioPath = studioInFolder === undefined ? undefined : join(folderPath, studioInFolder);
 
   let articlePath: string | undefined;
   if (names.includes(ARTICLE_DIR)) {
@@ -323,25 +319,41 @@ async function scanFolder(
     hasPublishPackage: packageJson !== undefined,
     hasDistributionPackage: distributionPackageFresh,
     hasArticle: articlePath !== undefined,
-    waitingForExport: overlayItem?.waitingForExport === true,
-    ...(overlayItem?.exportTimedOut === true ? { exportTimedOut: true } : {}),
+    waitingForExport: false,
     tags,
     ...(date === undefined ? {} : { date }),
     ...(videoRaw === undefined ? {} : { videoRaw }),
     ...(videoSubtitled === undefined ? {} : { videoSubtitled }),
     ...(studioPath === undefined ? {} : { studioPath }),
     ...(articlePath === undefined ? {} : { articlePath }),
-    publish: mergePublish(await readFolderPublish(folderPath, names), overlayItem?.publish),
-    burn: overlayItem?.burn ?? emptyBurn(),
-    subtitleJob: overlayItem?.subtitleJob ?? emptyBurn(),
-    coverJob: overlayItem?.coverJob ?? emptyBurn(),
+    publish: await readFolderPublish(folderPath, names),
+    burn: emptyBurn(),
+    subtitleJob: emptyBurn(),
+    coverJob: emptyBurn(),
   };
 
   return {
     ...draft,
     pipeline: pipelineOf(draft),
-    workflow: workflowOf(draft, overlay.items[folderName]),
+    workflow: workflowOf(draft),
   };
+}
+
+// base 必须来自磁盘扫描，避免删除 overlay 字段后仍残留旧的覆盖值。
+export function applyCatalogOverlay(base: ContentSummary, overlay?: OverlayItem): ContentSummary {
+  if (overlay === undefined) return base;
+  const item: ContentSummary = {
+    ...base,
+    title: overlay.title ?? base.title,
+    ...(overlay.studioPath === undefined ? {} : { studioPath: overlay.studioPath }),
+    waitingForExport: overlay.waitingForExport === true,
+    ...(overlay.exportTimedOut === true ? { exportTimedOut: true } : {}),
+    publish: mergePublish(base.publish, overlay.publish),
+    burn: overlay.burn ?? base.burn,
+    subtitleJob: overlay.subtitleJob ?? base.subtitleJob,
+    coverJob: overlay.coverJob ?? base.coverJob,
+  };
+  return { ...item, pipeline: pipelineOf(item), workflow: workflowOf(item, overlay) };
 }
 
 async function fileExists(path: string): Promise<boolean> {
@@ -370,8 +382,8 @@ export async function scanLibrary(
   const items: ContentSummary[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const item = await scanFolder(libraryRoot, entry.name, overlay);
-    if (item !== undefined) items.push(item);
+    const item = await scanFolder(libraryRoot, entry.name);
+    if (item !== undefined) items.push(applyCatalogOverlay(item, overlay.items[item.id]));
   }
   items.sort((left, right) => {
     if (left.recordedAt !== right.recordedAt) return right.recordedAt - left.recordedAt;

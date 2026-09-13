@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -45,6 +45,55 @@ describe("createDebounced", () => {
 });
 
 describe("startLibraryWatch", () => {
+  it("原生监听分别通知素材和状态变化", async () => {
+    vi.useFakeTimers();
+    const listeners: Array<(event: string, name: string) => void> = [];
+    const watchFileSystem = vi.fn((_path, _options, listener) => {
+      listeners.push(listener);
+      return { on: vi.fn(), close: vi.fn() };
+    }) as unknown as typeof import("node:fs").watch;
+    const onChange = vi.fn();
+    const onOverlayChange = vi.fn();
+    const handle = startLibraryWatch({
+      libraryRoot: "/library", overlayPath: "/data/overlay.json",
+      onChange, onOverlayChange, watchFileSystem,
+      fingerprint: async () => "same", debounceMs: 20,
+    });
+    try {
+      await handle.ready;
+      listeners[2]!("rename", "overlay.json");
+      await vi.advanceTimersByTimeAsync(20);
+      expect(onOverlayChange).toHaveBeenCalledTimes(1);
+      expect(onChange).not.toHaveBeenCalled();
+      listeners[0]!("change", "demo/video.mp4");
+      listeners[2]!("rename", "overlay.json");
+      await vi.advanceTimersByTimeAsync(20);
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onOverlayChange).toHaveBeenCalledTimes(2);
+    } finally { handle.close(); vi.useRealTimers(); }
+  });
+
+  it("轮询兜底也不会将 overlay 更新视为素材变化", async () => {
+    const root = await mkdtemp(join(tmpdir(), "oil-watch-overlay-"));
+    const libraryRoot = join(root, "library");
+    await mkdir(libraryRoot);
+    const overlayPath = join(root, "overlay.json");
+    await writeFile(overlayPath, "{}");
+    const onChange = vi.fn();
+    const onOverlayChange = vi.fn();
+    const handle = startLibraryWatch({
+      libraryRoot, overlayPath, onChange, onOverlayChange,
+      watchFileSystem: (() => { throw new Error("unsupported"); }) as typeof import("node:fs").watch,
+      debounceMs: 10, fallbackMs: 30,
+    });
+    try {
+      await handle.ready;
+      await writeFile(overlayPath, '{"items":{}}');
+      await vi.waitFor(() => expect(onOverlayChange).toHaveBeenCalled());
+      expect(onChange).not.toHaveBeenCalled();
+    } finally { handle.close(); }
+  });
+
   it("stops polling after the startup safety check when recursive watching is available", async () => {
     vi.useFakeTimers();
     const watcher = {

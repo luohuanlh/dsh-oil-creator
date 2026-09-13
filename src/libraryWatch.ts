@@ -44,12 +44,14 @@ export function startLibraryWatch(options: {
   libraryRoot: string;
   overlayPath: string;
   onChange: () => void;
+  onOverlayChange?: () => void;
   debounceMs?: number;
   fallbackMs?: number;
   watchFileSystem?: typeof watch;
   fingerprint?: (libraryRoot: string, overlayPath: string) => Promise<string>;
 }): { ready: Promise<void>; close: () => void } {
   const debounce = createDebounced(options.onChange, options.debounceMs ?? WATCH_DEBOUNCE_MS);
+  const overlayDebounce = createDebounced(options.onOverlayChange ?? options.onChange, options.debounceMs ?? WATCH_DEBOUNCE_MS);
   const watchers: FSWatcher[] = [];
   const watchFileSystem = options.watchFileSystem ?? watch;
   const fingerprintOf = options.fingerprint ?? libraryFingerprint;
@@ -57,6 +59,7 @@ export function startLibraryWatch(options: {
   let closed = false;
   let polling = false;
   let fingerprint: string | undefined;
+  let overlayFingerprint: string | undefined;
   let fallback: ReturnType<typeof setInterval> | undefined;
   let startupCheck: ReturnType<typeof setTimeout> | undefined;
   let ready = Promise.resolve();
@@ -65,6 +68,11 @@ export function startLibraryWatch(options: {
     polling = true;
     try {
       const next = await fingerprintOf(options.libraryRoot, options.overlayPath);
+      const info = await stat(options.overlayPath).catch(() => undefined);
+      const nextOverlay = `${info?.size ?? -1}:${info?.mtimeMs ?? -1}`;
+      if (closed) return;
+      if (overlayFingerprint !== undefined && nextOverlay !== overlayFingerprint) overlayDebounce.trigger();
+      overlayFingerprint = nextOverlay;
       if (fingerprint !== undefined && next !== fingerprint) debounce.trigger();
       fingerprint = next;
     } finally {
@@ -84,13 +92,14 @@ export function startLibraryWatch(options: {
     recursive: boolean,
     accept?: (filename: string | null) => boolean,
     onError?: () => void,
+    trigger = debounce.trigger,
   ): boolean => {
     try {
       const watcher = watchFileSystem(path, { persistent: false, recursive }, (_event, filename) => {
         const name = typeof filename === "string" ? filename : null;
         if (accept !== undefined && !accept(name)) return;
         if (shouldIgnoreWatchName(name)) return;
-        debounce.trigger();
+        trigger();
       });
       watcher.on("error", () => { onError?.(); });
       watchers.push(watcher);
@@ -101,17 +110,19 @@ export function startLibraryWatch(options: {
     }
   };
 
-  const recursiveLibraryWatch = attach(options.libraryRoot, true, undefined, startFallback);
+  const acceptLibrary = (name: string | null): boolean => name === null || join(options.libraryRoot, name) !== options.overlayPath;
+  const recursiveLibraryWatch = attach(options.libraryRoot, true, acceptLibrary, startFallback);
   // macOS FSEvents can occasionally miss a file created in the watched root
   // immediately after a recursive subscription. A second non-recursive watch
   // closes that root-level gap; duplicate events are collapsed by debounce.
-  attach(options.libraryRoot, false);
+  attach(options.libraryRoot, false, acceptLibrary);
   const overlayName = basename(options.overlayPath);
   const overlayWatch = attach(
     dirname(options.overlayPath),
     false,
     (filename) => filename === null || filename === overlayName,
     startFallback,
+    overlayDebounce.trigger,
   );
   if (!recursiveLibraryWatch || !overlayWatch) {
     startFallback();
@@ -134,6 +145,7 @@ export function startLibraryWatch(options: {
     close() {
       closed = true;
       debounce.cancel();
+      overlayDebounce.cancel();
       if (fallback !== undefined) clearInterval(fallback);
       if (startupCheck !== undefined) clearTimeout(startupCheck);
       for (const watcher of watchers) watcher.close();
@@ -150,6 +162,7 @@ async function libraryFingerprint(libraryRoot: string, overlayPath: string): Pro
       const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
       if (shouldIgnoreWatchName(relative)) continue;
       const path = join(directory, entry.name);
+      if (path === overlayPath) continue;
       if (entry.isDirectory()) {
         await visit(path, relative);
         continue;
@@ -159,7 +172,6 @@ async function libraryFingerprint(libraryRoot: string, overlayPath: string): Pro
     }
   };
   await visit(libraryRoot, "");
-  const overlay = await stat(overlayPath).catch(() => undefined);
-  rows.push(`overlay:${overlay?.size ?? -1}:${overlay?.mtimeMs ?? -1}`);
+
   return rows.join("|");
 }
