@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, readdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -111,4 +111,41 @@ describe("ArticleDocument", () => {
     expect(target.name).toMatch(/^盘面-图-1-[a-f0-9]{8}\.png$/);
     expect(target.markdownPrefix).toBe("images/");
   });
+
+  it("同一版本的并发保存只允许一个成功，其余明确报冲突", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-article-concurrent-"));
+    const article = join(folder, "article.md");
+    await writeFile(article, "共同初稿");
+    const loaded = await readArticleDocument(folder, article);
+    const results = await Promise.allSettled(Array.from({ length: 8 }, (_, index) =>
+      saveArticleDocument(folder, {
+        path: article, text: `编辑窗口 ${index}`, expectedRevision: loaded.revision,
+      }),
+    ));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const winner = results.findIndex((result) => result.status === "fulfilled");
+    expect(await readFile(article, "utf8")).toBe(`编辑窗口 ${winner}`);
+    for (const result of results) {
+      if (result.status === "rejected") expect(result.reason.message).toContain("外部修改");
+    }
+    const latest = await readArticleDocument(folder, article);
+    await saveArticleDocument(folder, { path: article, text: "再次保存", expectedRevision: latest.revision });
+    expect(await readFile(article, "utf8")).toBe("再次保存");
+    expect(await readdir(folder)).toEqual(["article.md"]);
+  });
+
+  it("同一文章的软链接入口共享保存锁", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "oil-article-alias-"));
+    const article = join(folder, "article.md");
+    const alias = join(folder, "alias.md");
+    await writeFile(article, "初稿");
+    await symlink(article, alias);
+    const loaded = await readArticleDocument(folder, article);
+    const results = await Promise.allSettled([article, alias].map((path, index) =>
+      saveArticleDocument(folder, { path, text: `版本 ${index}`, expectedRevision: loaded.revision }),
+    ));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(await readFile(alias, "utf8")).toBe(await readFile(article, "utf8"));
+  });
+
 });

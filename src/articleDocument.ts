@@ -115,29 +115,49 @@ export async function readArticleDocument(
   };
 }
 
+const articleSaveTails = new Map<string, Promise<void>>();
+
 export async function saveArticleDocument(
   folderPath: string,
   input: SaveArticleDocumentInput,
 ): Promise<SaveArticleDocumentResult> {
-  const current = await readArticleDocument(folderPath, input.path);
-  if (!current.editable) throw new Error("只支持保存 Markdown 文章，HTML 文章保持只读");
-  if (current.revision !== input.expectedRevision) {
-    throw new Error("文章已被外部修改，请重新载入磁盘版本后再编辑");
-  }
+  const path = await validateLocalContentAsset(folderPath, input.path, "article");
+  if (!editableArticle(path)) throw new Error("只支持保存 Markdown 文章，HTML 文章保持只读");
   if (Buffer.byteLength(input.text, "utf8") > ARTICLE_MAX_BYTES) {
     throw new Error("Markdown 文章不能超过 2 MB");
   }
 
+  // 同一 Host 内按真实路径串行校验和写入，软链接入口也共享同一个锁。
+  const previous = articleSaveTails.get(path) ?? Promise.resolve();
+  const run = previous.then(() => saveValidatedArticle(path, input));
+  const tail = run.then(() => undefined, () => undefined);
+  articleSaveTails.set(path, tail);
+  try {
+    return await run;
+  } finally {
+    if (articleSaveTails.get(path) === tail) articleSaveTails.delete(path);
+  }
+}
+
+async function saveValidatedArticle(
+  path: string,
+  input: SaveArticleDocumentInput,
+): Promise<SaveArticleDocumentResult> {
+  // 保存只需要原文及版本，不必扫描同目录的富文本预览副本。
+  const currentText = await readFile(path, "utf8");
+  if (articleRevision(currentText) !== input.expectedRevision) {
+    throw new Error("文章已被外部修改，请重新载入磁盘版本后再编辑");
+  }
   const revision = articleRevision(input.text);
   if (revision === input.expectedRevision) return { revision, savedAt: Date.now() };
 
   const temporaryPath = join(
-    current.root,
-    `.${basename(current.path)}.${process.pid}.${randomUUID()}.tmp`,
+    dirname(path),
+    `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`,
   );
   try {
     await writeFile(temporaryPath, input.text, { encoding: "utf8", flag: "wx" });
-    await rename(temporaryPath, current.path);
+    await rename(temporaryPath, path);
   } catch (cause) {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
     throw cause;
