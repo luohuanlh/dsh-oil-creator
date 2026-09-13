@@ -35,6 +35,7 @@ import {
   invertDistributionPlatforms,
   visibleDistributionPlatforms,
 } from "./distributionSelection.ts";
+import { startSerialPolling } from "./serialPolling.ts";
 import { remoteDraftProgress } from "./draftProgress.ts";
 import { ACCOUNT_PLATFORM_MARKS } from "./accountPlatformMarks.ts";
 import type { CreatorKey } from "./locales.ts";
@@ -157,6 +158,8 @@ export function ContentInspector({
   const libraryEpoch = useLibraryEpoch();
   const profileEpoch = useProfileEpoch();
   const [detail, setDetail] = useState<ContentDetail>();
+  const detailRequestVersion = useRef(0);
+  const contentScope = useRef({ active: false });
   const [accounts, setAccounts] = useState<PlatformAccount[]>([]);
   const [enabledPlatforms, setEnabledPlatforms] = useState<PublishPlatform[]>([]);
   const [selectedPlatforms, setSelectedPlatforms] = useState<PublishPlatform[]>([]);
@@ -187,6 +190,10 @@ export function ContentInspector({
   const mode: AssetSelection["mode"] = contentType === "article" ? "article" : "video";
 
   useEffect(() => {
+    const scope = { active: true };
+    contentScope.current = scope;
+    detailRequestVersion.current += 1;
+    setBusy(false);
     setDetail(undefined);
     setError(undefined);
     setActionError(undefined);
@@ -198,6 +205,7 @@ export function ContentInspector({
     setVideoSrc(undefined);
     setVideoReady(false);
     setArticleDirty(false);
+    return () => { scope.active = false; };
   }, [selectedId]);
 
   useEffect(() => {
@@ -221,9 +229,17 @@ export function ContentInspector({
   useEffect(() => {
     if (selectedId === null || !ready()) return;
     let cancelled = false;
+    const version = ++detailRequestVersion.current;
     void getContent(selectedId).then(
-      (next) => { if (!cancelled) setDetail(next); },
-      (cause) => { if (!cancelled) setError(friendlyError(cause, t)); },
+      (next) => {
+        if (!cancelled && version === detailRequestVersion.current) {
+          setDetail(next);
+          setError(undefined);
+        }
+      },
+      (cause) => {
+        if (!cancelled && version === detailRequestVersion.current) setError(friendlyError(cause, t));
+      },
     );
     return () => { cancelled = true; };
   }, [selectedId, libraryEpoch, getContent, ready, t]);
@@ -258,13 +274,22 @@ export function ContentInspector({
 
   useEffect(() => {
     if (!hasRunningDraft || selectedId === null || !ready()) return;
-    const timer = window.setInterval(() => {
-      void getContent(selectedId).then(
-        (next) => { setDetail(next); },
-        (cause) => { setActionError(friendlyError(cause, t)); },
-      );
-    }, 3000);
-    return () => { window.clearInterval(timer); };
+    let version = 0;
+    return startSerialPolling({
+      intervalMs: 3000,
+      read: () => {
+        version = ++detailRequestVersion.current;
+        return getContent(selectedId);
+      },
+      onValue: (next) => {
+        if (version !== detailRequestVersion.current) return;
+        setDetail(next);
+        setError(undefined);
+      },
+      onError: (cause) => {
+        if (version === detailRequestVersion.current) setActionError(friendlyError(cause, t));
+      },
+    });
   }, [hasRunningDraft, selectedId, getContent, ready, t]);
 
   const queueReachedRunner = queued && detail !== undefined
@@ -285,6 +310,7 @@ export function ContentInspector({
     if (contentType !== "video" || selectedId === null || videoPath === "" || !ready()) return;
     let cancelled = false;
     setVideoReady(false);
+    setVideoSrc(undefined);
     void getVideoPlayback(selectedId, videoPath).then((next: VideoPlaybackResult) => {
       if (cancelled) return;
       setVideoSrc(next.found ? next.url : undefined);
@@ -374,6 +400,7 @@ export function ContentInspector({
 
   const onStartDrafts = () => {
     if (detail === undefined || selection === undefined || !canStart) return;
+    const scope = contentScope.current;
     setBusy(true);
     setQueued(false);
     setActionError(undefined);
@@ -382,9 +409,11 @@ export function ContentInspector({
       selection,
       platforms: selectedPlatforms,
     }).then(() => {
+      if (!scope.active) return;
       setQueued(true);
       setBusy(false);
     }, (cause) => {
+      if (!scope.active) return;
       setActionError(friendlyError(cause, t));
       setBusy(false);
     });
@@ -392,6 +421,7 @@ export function ContentInspector({
 
   const onImportAsset = async (kind: AssetImportKind, file: File): Promise<void> => {
     if (detail === undefined || importingAsset !== undefined) return;
+    const scope = contentScope.current;
     setImportingAsset(kind);
     setAssetError(undefined);
     setQueued(false);
@@ -432,15 +462,17 @@ export function ContentInspector({
           base64: await fileBase64(file, kind),
         });
       }
+      if (!scope.active) return;
+      detailRequestVersion.current += 1;
       setDetail(imported.detail);
       if (kind === "video") setVideoPath(imported.asset.path);
       else if (kind === "subtitle") setSubtitlePath(imported.asset.path);
       else if (kind === "article") setArticlePath(imported.asset.path);
       else setCoverPath(imported.asset.path);
     } catch (cause) {
-      setAssetError(friendlyError(cause, t));
+      if (scope.active) setAssetError(friendlyError(cause, t));
     } finally {
-      setImportingAsset(undefined);
+      if (scope.active) setImportingAsset(undefined);
     }
   };
 
@@ -464,6 +496,7 @@ export function ContentInspector({
 
   const renderWorkflow = (workflowMode: AssetSelection["mode"]) => {
     if (detail === undefined) return null;
+    const scope = contentScope.current;
     const workflowPlatforms = visibleDistributionPlatforms(workflowMode, enabledPlatforms);
     const previewAuthor = accountMap.get("wechat-mp")?.nickname;
     const previewDate = wechatPreviewDate(detail.date);
@@ -502,6 +535,8 @@ export function ContentInspector({
             prepareArticleImageUpload={prepareArticleImageUpload}
             onDirtyChange={setArticleDirty}
             onSaved={() => {
+              if (!scope.active) return;
+              detailRequestVersion.current += 1;
               setQueued(false);
               setDetail((current) => current === undefined
                 ? current
