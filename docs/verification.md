@@ -42,7 +42,7 @@
 | 一点号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 新注册账号审核中；Adapter 使用 `POST /model/Article`、`status=0` 和 `#/Writing/{id}`，审核通过后复测 |
 | 大鱼号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 新注册账号审核中；Adapter 使用 `globalConfig.utoken`、`/dashboard/save-draft` 和 `draft_id`，审核通过后复测 |
 | 顶端新闻 | `REMOTE_VERIFIED` | 真实 `save_type=1` 草稿 `nd_id=3204434`；`/api/draft/show`、编辑 URL 与标题回读一致 |
-| 同顺号 | `LOCAL_TESTED + BLOCKED_ONBOARDING` | 手机绑定完成，实名入驻审核中；未进入编辑器或执行草稿保存 |
+| 同顺号 | `REMOTE_VERIFIED` | 审核通过后新站点正式草稿 `131fa72e1b9b48f2a3b94597a14964f3`；封面、标题、正文、摘要、`draft_status=0` 和 `is_original=0` 从详情与编辑页回读一致 |
 | 维科网 | `REMOTE_VERIFIED` | 审核通过后专用 Adapter 调用页面官方 `/home/news/ajax_add` 且固定 `is_draf=1`；草稿列表返回 `id=2186865`，编辑页标题、ID、关键字、行业和正文回读一致 |
 | 老虎财经 | `LOCAL_TESTED + WEB_LIMITED` | 境内 Web 端只展示服务调整页，没有登录、创作或草稿入口；不绕过地区限制 |
 | 富途牛牛 | `LOCAL_TESTED + WEB_LIMITED` | 境内 Web 页面明确暂停服务，仅提供存量客户 App 通道；没有 Web 创作或草稿入口 |
@@ -91,7 +91,7 @@
 - 新增企鹅号、网易号、一点号、大鱼号、顶端新闻、同顺号、维科网、老虎财经、富途牛牛九个三阶段 Adapter；manifest 和生成后的自包含 bundle 统一注册，不向 Dispatcher 增加平台分支。
 - 网易号协议来自当前官方 `index.html` bundle/source map：草稿使用 `/wemedia/article/status/api/publish.do` 且固定 `operation=saveDraft`，随后从 `/wemedia/content/manage/list.do` 取 `articleId`，再用 `/wemedia/article/editpage.do` 回读标题。
 - 顶端新闻协议来自当前官方动态 chunk：`save_type=1` 调用 `https://resource.topnews.cn/api/article/add`，草稿库返回 `nd_id`，`/api/draft/show?id=` 回读标题；请求复用页面自己的 Axios 签名拦截器，不复制或绕过登录安全逻辑。
-- 一点号和大鱼号分别基于可审计的 Wechatsync 草稿协议实现；同顺号、维科、老虎和富途使用共同的浏览器表单安全门禁，只匹配“保存草稿”“存草稿”“保存”，显式排除“发布”“发表”“提交审核”“上线”“群发”。企鹅号在真实回归后改为专用 Adapter，增加封面上传、自主声明、`omSave` 响应 ID 和编辑页回读。
+- 一点号和大鱼号分别基于可审计的 Wechatsync 草稿协议实现；批量编码时同顺号、维科、老虎和富途使用共同的浏览器表单安全门禁，只匹配“保存草稿”“存草稿”“保存”，显式排除“发布”“发表”“提交审核”“上线”“群发”。企鹅号、维科网和同顺号在后续真实回归中改为专用 Adapter。
 - 九个平台均完成成功、登录失效、保存失败和回读失败的 fixture 回归；批量编码阶段全部保持 `draftRunner=null`。后续顶端新闻和企鹅号分别取得真实草稿 ID 与标题证据并开放，其余七个平台继续保持禁用。
 - 只读浏览器探针没有保存或发布内容：企鹅、网易、一点、大鱼、顶端、维科均确认未登录；同顺号确认独立创作平台但未登录；老虎和富途确认境内 Web 服务限制。
 - `pnpm check` 通过：51 个测试文件、334 项测试，TypeScript 与 Host/Client/Typert 构建全部成功。
@@ -112,18 +112,26 @@
 - 重新打开 `contentStatus=2&id=1068016625` 的编辑页后，URL ID 与标题“测试文章 001”同时回读一致；搜狐号升级为 `remote-verified`、配置 `article-ego` 并开放工作台 checkbox。
 - `pnpm check` 通过：55 个测试文件、373 项测试，TypeScript 与 Host/Client/Typert 构建全部成功；浏览器重载后工作台显示 12 个可勾选图文 Adapter，并确认搜狐号账号为“已绑定”。
 
+## 2026-09-16 同顺号真实草稿回归
+
+- 审核通过并由用户登录后，正式编辑器位于 `mp.10jqka.com.cn/creation-editor/editor/`，与旧的 `t.10jqka.com.cn` 注册入口不同。页面只有“草稿将自动保存”和单独“发布”按钮；自动保存请求为 `POST /lgt/article_publish/auth/api/draft/v1/save`，发布使用另一端点，自动化从未调用。
+- 原“测试文章 001”文件夹已从当前内容目录移除，因此本次使用明确标注的短文和应用自带 PNG 图标作诊断输入，不把其他文章冒充原文件。先以页面自动保存得到草稿 `4e95c5b27fb443e0bcbcb54ce2b29c87`，草稿箱和详情接口回读标题、正文、摘要及 `draft_status=0`。
+- 官方新草稿默认 `is_original=1`；诊断更新显式传 `is_original=0` 后，详情回读为 `0`。专用 Adapter 固定该安全值，同时使用官方图片上传接口 `/newupload/base64upload/` 与草稿保存接口，重新打开详情和编辑页核对封面、标题、正文、摘要、草稿状态及 `info_source={"none":{}}`。
+- 生产脚本在同一 Ego 任务空间得到第二份未发布草稿 `131fa72e1b9b48f2a3b94597a14964f3`，全部回读通过；这证明平台草稿链路，不代表已用原文章全文复测。两个诊断草稿均未发布，供用户后续人工复核或清理。
+- 同顺号升级为 `remote-verified`、配置 `article-ego` 并开放工作台 checkbox；本地 fixture 覆盖登录、封面或保存拒绝、详情回读不一致，且没有发布调用。
+- `pnpm typecheck` 与 `pnpm build` 通过；全量测试复跑通过 60 个文件、410 项测试。浏览器重载后，同顺号工作台卡片显示“已绑定 / 自动草稿”，checkbox 可勾选。
+
 ## Remaining Verification Queue
 
 1. **网易号**：完成实名认证后执行一次 `operation=saveDraft`，从内容管理列表回读 `articleId`，再打开编辑页核对标题。
 2. **一点号、大鱼号**：账号审核通过后分别验证 `/model/Article` 的 `status=0` 与 `/dashboard/save-draft` 的 `_id`，再核对编辑页标题。
-3. **同顺号**：实名审核通过后核对真实编辑器与明确草稿控件；若页面只有发布动作，继续保持阻塞。
-4. **老虎财经、富途牛牛**：只有平台在允许的账号/地域环境提供 Web 草稿能力时才复测；不绕过境内服务限制。
+3. **老虎财经、富途牛牛**：只有平台在允许的账号/地域环境提供 Web 草稿能力时才复测；不绕过境内服务限制。
 
 ## Remaining Platform Audit
 
 | 平台 | 状态 | 阻塞证据与下一步 |
 |---|---|---|
-| 网易号、一点号、大鱼号、同顺号 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
+| 网易号、一点号、大鱼号 | `LOCAL_TESTED / BLOCKED_ONBOARDING` | Adapter 与 fixture 已完成；等待实名认证或账号审核通过后继续真实回归。 |
 | 老虎财经、富途牛牛 | `LOCAL_TESTED / WEB_LIMITED` | 安全表单 Adapter 已编码，但境内 Web 环境受限；不绕过地域、登录、风控或 App 限制。 |
 | 网易云音乐、喜马拉雅听 | `UNSUPPORTED` | 属于音频平台，不在 Article Publisher 范围。 |
 

@@ -194,7 +194,7 @@ async function runWeiboFixture(
 
 async function runExtendedPlatformFixture(
   platform: ExtendedArticlePlatform,
-  scenario: "success" | "login" | "verification-failure" | "save-failure",
+  scenario: "success" | "login" | "verification-failure" | "save-failure" | "cover-failure",
 ): Promise<FixtureRun> {
   try {
     const result = await execFileAsync(process.execPath, [
@@ -872,7 +872,14 @@ const extendedPlatformCases = [
   {
     platform: "10jqka",
     name: "同顺号",
-    markers: ["newcircle/creation/adviserEnterGuide", "saveBrowserDraftForm", "保存草稿"],
+    markers: [
+      "mp.10jqka.com.cn/creation-editor/editor/",
+      "/newupload/base64upload/",
+      "/lgt/article_publish/auth/api/draft/v1/save",
+      "/lgt/article_publish/auth/api/draft/v1/detail",
+      "is_original: 0",
+      "draft_status_desc === '草稿'",
+    ],
   },
   {
     platform: "ofweek",
@@ -955,5 +962,22 @@ describe.each(extendedPlatformCases)("$name Article Adapter", ({ platform, name,
     expect(verificationFailure.code, verificationFailure.stderr).toBe(4);
     expect(jsonLines(verificationFailure.stdout).find((line) => line.platform === platform))
       .toMatchObject({ ok: false, status: "REMOTE_UNVERIFIED" });
+  });
+});
+
+describe("同顺号封面与原创安全门禁", () => {
+  it("封面上传失败时拒绝标记远端草稿", async () => {
+    const result = await runExtendedPlatformFixture("10jqka", "cover-failure");
+    expect(result.code).toBe(3);
+    expect(jsonLines(result.stdout).find((line) => line.platform === "10jqka"))
+      .toMatchObject({ ok: false, status: "BLOCKED_PLATFORM" });
+  });
+
+  it("生产 Adapter 不调用最终发布端点", () => {
+    const source = readFileSync(resolve(process.cwd(), "scripts/article/platforms/10jqka.mjs"), "utf8");
+    expect(source).toContain("is_original: 0");
+    expect(source).toContain("info_source: JSON.stringify({ none: {} })");
+    expect(source).not.toContain("/draft/v1/publish");
+    expect(source).not.toContain("定时发布");
   });
 });

@@ -134,9 +134,9 @@ export const PUBLISH_PLATFORM_DEFINITIONS = {
     name: "同顺号",
     kind: "article",
     loginUrl: "https://t.10jqka.com.cn/",
-    workspaceUrl: "https://t.10jqka.com.cn/newcircle/creation/adviserEnterGuide/",
-    draftRunner: null,
-    draftCapability: "local-tested",
+    workspaceUrl: "https://mp.10jqka.com.cn/creation-editor/editor/",
+    draftRunner: "article-ego",
+    draftCapability: "remote-verified",
   },
   sohu: {
     name: "搜狐号",

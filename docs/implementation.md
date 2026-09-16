@@ -97,9 +97,9 @@ Ego 图文运行器由轻量平台注册表驱动。每个平台注册一个且�
 
 源文件在构建时拼成单个自包含 Ego bundle，避免 stdin 执行环境依赖相对模块解析。bundle 一致性、每个 Adapter 的三阶段契约、core/dispatch 不含平台分支均有自动回归。
 
-微信公众号、百家号、企鹅号、知乎、雪球号、东方财富号、微博、顶端新闻和头条号已在 2026-08-23 用“测试文章 001”完成真实远端保存、ID 和标题回读；维科网在 2026-08-24、搜狐号在 2026-08-26 审核通过后完成同一闭环。头条号观察官方 `save=0` 自动保存回执并从草稿列表核对封面、`is_draft` 和非首发状态；搜狐号调用官方 draft v2 接口并固定 `declareOriginal=false`；维科网只调用 `/home/news/ajax_add` 的 `is_draf=1`，从 `/article/ajax_articles.html` 取草稿 ID，再打开编辑页核对标题与必填字段；小红书图文笔记使用独立平台目标，执行“上传图片 → 填写标题正文 → 暂存离开”，再从 `draft-database-v1/image-draft` 回读本地草稿。其余六个 Adapter 继续为 `local-tested` 且 `draftRunner=null`。
+微信公众号、百家号、企鹅号、知乎、雪球号、东方财富号、微博、顶端新闻和头条号已在 2026-08-23 用“测试文章 001”完成真实远端保存、ID 和标题回读；维科网在 2026-08-24、搜狐号在 2026-08-26 审核通过后完成同一闭环。同顺号在 2026-09-16 审核通过后，因原测试文章文件已不在内容目录，使用明确标注的诊断短文与应用图标验证新站点草稿接口、封面上传和详情回读。头条号观察官方 `save=0` 自动保存回执并从草稿列表核对封面、`is_draft` 和非首发状态；同顺号只调用 `/lgt/article_publish/auth/api/draft/v1/save`，固定 `is_original=0`，不调用 `/publish`；搜狐号调用官方 draft v2 接口并固定 `declareOriginal=false`；维科网只调用 `/home/news/ajax_add` 的 `is_draf=1`，从 `/article/ajax_articles.html` 取草稿 ID，再打开编辑页核对标题与必填字段；小红书图文笔记使用独立平台目标，执行“上传图片 → 填写标题正文 → 暂存离开”，再从 `draft-database-v1/image-draft` 回读本地草稿。其余五个 Adapter 继续为 `local-tested` 且 `draftRunner=null`。
 
-平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手和十一个已验证图文平台为 `remote-verified`；小红书图文笔记为 `local-verified`；小红书视频和视频号为 `page-ready`；六个未开放 Adapter 为 `local-tested`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
+平台定义中的 `draftCapability` 是 UI 与账号接口共享的证据真相来源：B站、抖音、快手和十二个已验证图文平台为 `remote-verified`；小红书图文笔记为 `local-verified`；小红书视频和视频号为 `page-ready`；五个未开放 Adapter 为 `local-tested`；两个音频入口为 `unsupported`。是否可以自动勾选仍由非空 `draftRunner` 独立决定。
 
 ## Ego Browser 会话
 

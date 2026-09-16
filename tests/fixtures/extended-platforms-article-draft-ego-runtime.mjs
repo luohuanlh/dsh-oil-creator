@@ -36,7 +36,7 @@ const workspaceUrls = {
   yidian: "https://mp.yidianzixun.com/#/Writing",
   dayu: "https://mp.dayu.com/dashboard/article/write",
   dingduan: "https://mp.topnews.cn/#/scriptWrite",
-  "10jqka": "https://t.10jqka.com.cn/newcircle/creation/adviserEnterGuide/",
+  "10jqka": "https://mp.10jqka.com.cn/creation-editor/editor/",
   ofweek: "https://mp.ofweek.com/article/publish.html",
   laohu: "https://www.laohu8.com/",
   futu: "https://www.futunn.com/",
@@ -48,7 +48,7 @@ const draftUrls = {
   yidian: "https://mp.yidianzixun.com/#/Writing/yidian-draft-42",
   dayu: "https://mp.dayu.com/dashboard/article/write?draft_id=dayu-draft-42",
   dingduan: "https://mp.topnews.cn/#/scriptWrite?draftId=dingduan-draft-42",
-  "10jqka": "https://t.10jqka.com.cn/newcircle/creation/editor?draftId=10jqka-draft-42",
+  "10jqka": "https://mp.10jqka.com.cn/creation-editor/editor/?draftId=10jqka-draft-42",
   ofweek: "https://mp.ofweek.com/article/edit/id/ofweek-draft-42.html",
   laohu: "https://www.laohu8.com/editor?draftId=laohu-draft-42",
   futu: "https://www.futunn.com/community/editor?draftId=futu-draft-42",
@@ -60,7 +60,7 @@ const loginStates = {
   yidian: { url: "https://mp.yidianzixun.com/", text: "注册登录 注册一点号" },
   dayu: { url: "https://mp.dayu.com/?redirect_url=%2Fdashboard%2Findex", text: "扫码登录 密码登录" },
   dingduan: { url: "https://mp.topnews.cn/#/login", text: "扫码登录 扫描二维码登录" },
-  "10jqka": { url: workspaceUrls["10jqka"], text: "未登录 登录" },
+  "10jqka": { url: "https://upass.10jqka.com.cn/login", text: "手机号登录 账号登录" },
   ofweek: { url: "https://mp.ofweek.com/index/login_member.html", text: "账号密码登录 入驻维科号" },
   laohu: { url: "https://www.laohu8.com/login", text: "登录后可发布" },
   futu: { url: "https://www.futunn.com/login", text: "登录/注册" },
@@ -95,6 +95,9 @@ async function js(source) {
     "OIL_DINGDUAN_INSPECT",
     "OIL_DINGDUAN_SAVE",
     "OIL_DINGDUAN_VERIFY",
+    "OIL_JQKA_INSPECT",
+    "OIL_JQKA_SAVE",
+    "OIL_JQKA_VERIFY",
     "OIL_OFWEEK_INSPECT",
     "OIL_OFWEEK_SAVE",
     "OIL_OFWEEK_VERIFY",
@@ -103,6 +106,7 @@ async function js(source) {
   state.stages.push(stage);
 
   if (stage.endsWith("INSPECT")) {
+    if (platform === "10jqka") return scenario === "login" ? { ok: false } : { ok: true };
     if (stage === "OIL_BROWSER_FORM_INSPECT") {
       if (scenario === "login") return { titleSelector: "", contentSelector: "", url: state.href };
       return { titleSelector: "#title", contentSelector: "#content", url: state.href };
@@ -123,6 +127,9 @@ async function js(source) {
   }
 
   if (stage.endsWith("SAVE")) {
+    if (scenario === "cover-failure" && platform === "10jqka") {
+      return { ok: false, error: "同顺号封面上传失败", evidence: { coverUploaded: false } };
+    }
     if (scenario === "save-failure") {
       return { ok: false, error: `${platformNames[platform]}保存草稿失败` };
     }
@@ -132,6 +139,11 @@ async function js(source) {
       draftUrl: draftUrls[platform],
       evidence: {
         finalPublishBlocked: true,
+        ...(platform === "10jqka" ? {
+          coverUrl: "https://u.thsi.cn/imgsrc/sns/fixture-cover.png",
+          coverUploaded: true,
+          originalDisabled: true,
+        } : {}),
         fixtureProtocol: stage,
       },
     };

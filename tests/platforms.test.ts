@@ -41,9 +41,11 @@ describe("platform catalog", () => {
       .toBe("https://mp.topnews.cn/#/scriptWrite");
     expect(PUBLISH_PLATFORM_DEFINITIONS.ofweek.workspaceUrl)
       .toBe("https://mp.ofweek.com/article/publish.html");
+    expect(PUBLISH_PLATFORM_DEFINITIONS["10jqka"].workspaceUrl)
+      .toBe("https://mp.10jqka.com.cn/creation-editor/editor/");
   });
 
-  it("只把十七个真实运行器平台标为自动草稿", () => {
+  it("只把十八个真实运行器平台标为自动草稿", () => {
     expect(AUTO_DRAFT_PLATFORMS).toEqual([
       "bilibili",
       "douyin",
@@ -57,6 +59,7 @@ describe("platform catalog", () => {
       "dingduan",
       "xueqiu",
       "eastmoney",
+      "10jqka",
       "sohu",
       "weibo",
       "zhihu",
@@ -78,6 +81,7 @@ describe("platform catalog", () => {
       "dingduan",
       "xueqiu",
       "eastmoney",
+      "10jqka",
       "sohu",
       "weibo",
       "zhihu",
@@ -90,6 +94,7 @@ describe("platform catalog", () => {
     expect(isArticleDraftPlatform("xiaohongshu-note")).toBe(true);
     expect(isArticleDraftPlatform("ofweek")).toBe(true);
     expect(isArticleDraftPlatform("sohu")).toBe(true);
+    expect(isArticleDraftPlatform("10jqka")).toBe(true);
     expect(draftCapability("bilibili")).toBe("remote-verified");
     expect(draftCapability("wechat-mp")).toBe("remote-verified");
     expect(draftCapability("baijiahao")).toBe("remote-verified");
@@ -109,7 +114,7 @@ describe("platform catalog", () => {
     expect(draftCapability("yidian")).toBe("local-tested");
     expect(draftCapability("dayu")).toBe("local-tested");
     expect(draftCapability("dingduan")).toBe("remote-verified");
-    expect(draftCapability("10jqka")).toBe("local-tested");
+    expect(draftCapability("10jqka")).toBe("remote-verified");
     expect(draftCapability("ofweek")).toBe("remote-verified");
     expect(draftCapability("laohu")).toBe("local-tested");
     expect(draftCapability("futu")).toBe("local-tested");
@@ -117,7 +122,6 @@ describe("platform catalog", () => {
       "netease",
       "yidian",
       "dayu",
-      "10jqka",
       "laohu",
       "futu",
     ] as const;
@@ -125,6 +129,7 @@ describe("platform catalog", () => {
     expect(supportsAutoDraft("penguin")).toBe(true);
     expect(supportsAutoDraft("ofweek")).toBe(true);
     expect(supportsAutoDraft("sohu")).toBe(true);
+    expect(supportsAutoDraft("10jqka")).toBe(true);
   });
 
   it("迁移旧版 wechat id 并过滤无效值", () => {
